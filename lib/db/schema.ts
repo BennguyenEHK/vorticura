@@ -1,0 +1,435 @@
+/**
+ * Database Schema Definitions using Drizzle ORM
+ * Generated from quoteflow_database_schema.sql
+ *
+ * This file contains all table definitions for the QuoteFlow application
+ * Total Tables: 13
+ */
+
+import {
+  pgTable,
+  serial,
+  integer,
+  varchar,
+  text,
+  timestamp,
+  numeric,
+  date,
+  bigint,
+  bytea,
+  inet,
+  primaryKey,
+} from 'drizzle-orm/pg-core';
+
+// ============================================
+// 1. CLIENT_COMPANY TABLE
+// ============================================
+export const clientCompany = pgTable('client_company', {
+  // Primary key - Auto-incrementing company ID
+  companyId: serial('company_id').primaryKey(),
+
+  // Company information
+  companyName: text('company_name'),
+  companyNumber: varchar('company_number', { length: 50 }),
+  companyAddress: text('company_address'),
+  companyFax: varchar('company_fax', { length: 50 }),
+  companyEmail: varchar('company_email', { length: 60 }),
+
+  // Timestamps
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+});
+
+// ============================================
+// 2. CLIENT_INFO TABLE
+// ============================================
+export const clientInfo = pgTable('client_info', {
+  // Primary key - Auto-incrementing client ID
+  clientId: serial('client_id').primaryKey(),
+
+  // Foreign key reference to company
+  companyId: integer('company_id'),
+
+  // Authentication credentials
+  username: varchar('username', { length: 50 }).notNull(),
+  passwordHash: varchar('password_hash', { length: 255 }).notNull(),
+  email: varchar('email', { length: 255 }),
+
+  // User role and permissions
+  clientRole: varchar('client_role', { length: 30 }).default('user'),
+  permissions: text('permissions'),
+
+  // Session tracking
+  lastLogin: timestamp('last_login', { withTimezone: false }),
+
+  // User status
+  clientStatus: varchar('client_status', { length: 20 }).default('active'),
+
+  // Timestamps
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+});
+
+// ============================================
+// 3. CUSTOMERS TABLE
+// ============================================
+export const customers = pgTable('customers', {
+  // Primary key - Quotation ID (acts as customer identifier)
+  quotationId: serial('quotation_id').primaryKey(),
+
+  // Foreign keys
+  companyId: integer('company_id'),
+  clientId: integer('client_id'),
+
+  // Customer company information
+  companyName: varchar('company_name', { length: 255 }).notNull(),
+  attentionPerson: text('attention_person'),
+  carbonCopyPerson: text('carbon_copy_person').array(), // Array of text
+
+  // Contact information
+  email: varchar('email', { length: 255 }),
+  customerAddress: text('customer_address'),
+  phone: varchar('phone', { length: 50 }),
+  faxNumber: varchar('fax_number', { length: 60 }),
+
+  // Customer status
+  costumerStatus: varchar('costumer_status', { length: 20 }).default('active'),
+
+  // Timestamps
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+});
+
+// ============================================
+// 4. EMAIL_TABLE
+// ============================================
+export const emailTable = pgTable('email_table', {
+  // Primary key - Auto-incrementing email ID
+  emailId: serial('email_id').primaryKey(),
+
+  // Foreign keys
+  companyId: integer('company_id'),
+  quotationId: integer('quotation_id'),
+
+  // Email metadata
+  rfqReference: varchar('rfq_reference', { length: 100 }),
+  recipientEmail: varchar('recipient_email', { length: 255 }),
+  subject: text('subject'),
+
+  // Email content
+  emailContent: text('email_content'),
+
+  // Email status and tracking
+  emailStatus: varchar('email_status', { length: 30 }).default('draft'),
+  sentAt: timestamp('sent_at', { withTimezone: false }),
+
+  // Timestamps
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+});
+
+// ============================================
+// 5. FILE_METADATA TABLE
+// ============================================
+export const fileMetadata = pgTable('file_metadata', {
+  // Primary key - Auto-incrementing file ID
+  fileId: serial('file_id').primaryKey(),
+
+  // Foreign keys
+  companyId: integer('company_id'),
+  clientId: integer('client_id'),
+
+  // File information
+  fileName: varchar('file_name', { length: 255 }).notNull(),
+  fileType: varchar('file_type', { length: 50 }),
+
+  // File content (stored as binary/HTML)
+  fileImage: bytea('file_image'),
+  fileHtml: text('file_html'),
+
+  // File metadata
+  fileSize: bigint('file_size', { mode: 'number' }),
+  uploadDate: timestamp('upload_date', { withTimezone: false }).defaultNow(),
+  uploadedBy: varchar('uploaded_by', { length: 100 }),
+
+  // File categorization
+  fileCategory: varchar('file_category', { length: 50 }),
+  fileStatus: varchar('file_status', { length: 20 }).default('active'),
+});
+
+// ============================================
+// 6. QUOTATION_ITEMS TABLE
+// ============================================
+export const quotationItems = pgTable('quotation_items', {
+  // Primary key - Auto-incrementing item ID
+  itemId: serial('item_id').primaryKey(),
+
+  // Foreign keys
+  companyId: integer('company_id'),
+  quotationId: integer('quotation_id').notNull(),
+  clientId: integer('client_id'),
+
+  // Item descriptions
+  companyDescription: text('company_description'),
+  bidderDescription: text('bidder_description'),
+
+  // Quantity and pricing
+  qty: numeric('qty', { precision: 10, scale: 0 }),
+  bidderUnitPrice: numeric('bidder_unit_price', { precision: 12, scale: 2 }),
+
+  // Unit of measure and delivery
+  uom: varchar('uom', { length: 20 }),
+  deliveryTime: varchar('delivery_time', { length: 50 }),
+
+  // Compliance and currency
+  complianceDeviation: text('compliance_deviation'),
+  currencyCode: varchar('currency_code', { length: 3 }),
+
+  // Timestamps
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+});
+
+// ============================================
+// 7. QUOTATION_PRICING TABLE
+// ============================================
+export const quotationPricing = pgTable('quotation_pricing', {
+  // Primary key - Item ID (linked to quotation_items)
+  itemId: serial('item_id').primaryKey(),
+
+  // Foreign keys
+  companyId: integer('company_id'),
+  quotationId: integer('quotation_id').notNull(),
+  clientId: integer('client_id'),
+
+  // Pricing calculations
+  shippingCost: numeric('shipping_cost', { precision: 15, scale: 2 }),
+  exchangeCurrency: varchar('exchange_currency', { length: 3 }),
+
+  // Rates (stored as decimals, e.g., 0.0750 for 7.5%)
+  taxRate: numeric('tax_rate', { precision: 5, scale: 4 }),
+  profitRate: numeric('profit_rate', { precision: 5, scale: 4 }),
+  discountRate: numeric('discount_rate', { precision: 5, scale: 4 }),
+
+  // Calculated prices
+  salesUnitPrice: numeric('sales_unit_price', { precision: 15, scale: 2 }),
+  extPrice: numeric('ext_price', { precision: 15, scale: 2 }),
+  potentialProfit: numeric('potential_profit', { precision: 12, scale: 2 }),
+
+  // Exchange rate (6 decimal places for precision)
+  exchangeRate: numeric('exchange_rate', { precision: 15, scale: 6 }),
+
+  // Timestamps
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+});
+
+// ============================================
+// 8. QUOTATIONS TABLE
+// ============================================
+export const quotations = pgTable('quotations', {
+  // Primary key - Auto-incrementing quotation ID
+  quotationId: serial('quotation_id').primaryKey(),
+
+  // Foreign keys
+  companyId: integer('company_id'),
+  clientId: integer('client_id'),
+
+  // Quotation identification
+  rfqReference: varchar('rfq_reference', { length: 100 }),
+  quotationName: text('quotation_name'),
+
+  // Generated HTML content
+  quotationHtml: text('quotation_html'),
+
+  // Quotation status and versioning
+  quotationStatus: varchar('quotation_status', { length: 30 }).default('draft'),
+  versionNumber: integer('version_number').default(1),
+
+  // Financial summary
+  totalAmount: numeric('total_amount', { precision: 15, scale: 2 }),
+  transferCurrencyCode: varchar('transfer_currency_code', { length: 3 }),
+
+  // Commercial terms
+  commercialTerms: text('commercial_terms'),
+
+  // Metadata
+  generatedDay: date('generated_day'),
+  createdBy: varchar('created_by', { length: 100 }),
+
+  // Timestamps
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+});
+
+// ============================================
+// 9. RFQ_ANALYSIS TABLE
+// ============================================
+export const rfqAnalysis = pgTable('rfq_analysis', {
+  // Primary key - Auto-incrementing analysis ID
+  analysisId: serial('analysis_id').primaryKey(),
+
+  // Foreign keys
+  companyId: integer('company_id'),
+  quotationId: integer('quotation_id'),
+
+  // RFQ identification
+  rfqReference: varchar('rfq_reference', { length: 100 }),
+  subject: text('subject'),
+
+  // Analysis content
+  analysisContent: text('analysis_content'),
+
+  // Analysis status
+  analysisStatus: varchar('analysis_status', { length: 30 }).default('completed'),
+
+  // Timestamps
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+});
+
+// ============================================
+// 10. SESSIONS TABLE
+// ============================================
+export const sessions = pgTable('sessions', {
+  // Primary key - Session ID (string-based UUID)
+  sessionId: varchar('session_id', { length: 255 }).primaryKey(),
+
+  // Foreign key
+  companyId: integer('company_id'),
+
+  // Session metadata
+  sessionName: varchar('session_name', { length: 100 }),
+  processPid: integer('process_pid'),
+
+  // Session lifecycle
+  startTime: timestamp('start_time', { withTimezone: false }).defaultNow(),
+  endTime: timestamp('end_time', { withTimezone: false }),
+  sessionStatus: varchar('session_status', { length: 20 }).default('active'),
+
+  // Server configuration
+  serverPort: integer('server_port'),
+  ngrokUrl: varchar('ngrok_url', { length: 500 }),
+
+  // Session data and creator
+  createdBy: varchar('created_by', { length: 100 }),
+  sessionData: text('session_data'),
+});
+
+// ============================================
+// 11. SSE_CONNECTIONS TABLE
+// ============================================
+export const sseConnections = pgTable('sse_connections', {
+  // Primary key - Auto-incrementing connection ID
+  connectionId: serial('connection_id').primaryKey(),
+
+  // Foreign keys
+  companyId: integer('company_id'),
+  sessionId: varchar('session_id', { length: 255 }),
+
+  // Connection metadata
+  clientIp: inet('client_ip'),
+  userAgent: text('user_agent'),
+
+  // Connection lifecycle
+  connectionTime: timestamp('connection_time', { withTimezone: false }).defaultNow(),
+  disconnectTime: timestamp('disconnect_time', { withTimezone: false }),
+  connectionStatus: varchar('connection_status', { length: 20 }).default('connected'),
+
+  // Heartbeat tracking
+  lastHeartbeat: timestamp('last_heartbeat', { withTimezone: false }).defaultNow(),
+});
+
+// ============================================
+// 12. SUPPLIER_SEARCH TABLE
+// ============================================
+export const supplierSearch = pgTable('supplier_search', {
+  // Primary key - Auto-incrementing search ID
+  searchId: serial('search_id').primaryKey(),
+
+  // Foreign keys
+  companyId: integer('company_id'),
+  quotationId: integer('quotation_id'),
+
+  // Search identification
+  rfqReference: varchar('rfq_reference', { length: 100 }),
+  subject: text('subject'),
+
+  // Search content
+  searchContent: text('search_content'),
+
+  // Search status
+  searchStatus: varchar('search_status', { length: 30 }).default('completed'),
+
+  // Timestamps
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+});
+
+// ============================================
+// 13. USER_SESSIONS TABLE
+// ============================================
+export const userSessions = pgTable(
+  'user_sessions',
+  {
+    // Composite primary key (company_id, client_id)
+    companyId: integer('company_id').notNull(),
+    clientId: integer('client_id').notNull(),
+
+    // Last viewed item tracking
+    lastViewedItemId: integer('last_viewed_item_id'),
+    lastViewedType: varchar('last_viewed_type', { length: 50 }).default('quotation'),
+    lastViewedTypeId: integer('last_viewed_type_id'),
+    lastViewedTimestamp: timestamp('last_viewed_timestamp', { withTimezone: false }).defaultNow(),
+
+    // Timestamps
+    createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+  },
+  (table) => ({
+    // Composite primary key definition
+    pk: primaryKey({ columns: [table.companyId, table.clientId] }),
+  })
+);
+
+// ============================================
+// TYPE EXPORTS
+// ============================================
+// Export inferred types for TypeScript usage
+export type ClientCompany = typeof clientCompany.$inferSelect;
+export type NewClientCompany = typeof clientCompany.$inferInsert;
+
+export type ClientInfo = typeof clientInfo.$inferSelect;
+export type NewClientInfo = typeof clientInfo.$inferInsert;
+
+export type Customer = typeof customers.$inferSelect;
+export type NewCustomer = typeof customers.$inferInsert;
+
+export type Email = typeof emailTable.$inferSelect;
+export type NewEmail = typeof emailTable.$inferInsert;
+
+export type FileMetadata = typeof fileMetadata.$inferSelect;
+export type NewFileMetadata = typeof fileMetadata.$inferInsert;
+
+export type QuotationItem = typeof quotationItems.$inferSelect;
+export type NewQuotationItem = typeof quotationItems.$inferInsert;
+
+export type QuotationPricing = typeof quotationPricing.$inferSelect;
+export type NewQuotationPricing = typeof quotationPricing.$inferInsert;
+
+export type Quotation = typeof quotations.$inferSelect;
+export type NewQuotation = typeof quotations.$inferInsert;
+
+export type RfqAnalysis = typeof rfqAnalysis.$inferSelect;
+export type NewRfqAnalysis = typeof rfqAnalysis.$inferInsert;
+
+export type Session = typeof sessions.$inferSelect;
+export type NewSession = typeof sessions.$inferInsert;
+
+export type SseConnection = typeof sseConnections.$inferSelect;
+export type NewSseConnection = typeof sseConnections.$inferInsert;
+
+export type SupplierSearch = typeof supplierSearch.$inferSelect;
+export type NewSupplierSearch = typeof supplierSearch.$inferInsert;
+
+export type UserSession = typeof userSessions.$inferSelect;
+export type NewUserSession = typeof userSessions.$inferInsert;
