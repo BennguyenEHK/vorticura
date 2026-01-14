@@ -179,7 +179,7 @@ quoteflow_ai/
 │   ├── db/                                # Database Layer
 │   │   ├── client.ts ✓                    # Drizzle client instance
 │   │   ├── schema.ts ✓                    # Drizzle schema definitions
-│   │   ├── queries.ts                     # Reusable database queries
+│   │   ├── queries.ts ✓                   # Reusable database queries
 │   │   ├── workspace-helper.ts ✓          # Workspace-aware database wrapper
 │   │   └── migrations/
 │   │       └── migrate.ts ✓               # Migration runner
