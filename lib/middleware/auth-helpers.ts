@@ -7,10 +7,16 @@ import { jwtVerify, SignJWT } from 'jose';
 import { WorkspaceContext } from './workspace-context';
 
 // JWT secret key (from environment or default)
-// WARNING: Change this in production!
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'quoteflow-ai-secret-key-change-in-production'
-);
+// Fail fast in production if secret is missing; allow dev fallback with warning
+const rawJwtSecret = process.env.JWT_SECRET;
+if (!rawJwtSecret && process.env.NODE_ENV === 'production') {
+  throw new Error('JWT_SECRET environment variable is required in production');
+}
+if (!rawJwtSecret && process.env.NODE_ENV !== 'production') {
+  // eslint-disable-next-line no-console
+  console.warn('⚠️ Using development fallback JWT_SECRET. Do NOT use this in production.');
+}
+const JWT_SECRET = new TextEncoder().encode(rawJwtSecret || 'quoteflow-ai-secret-key-change-in-production');
 
 /**
  * JWTPayload - JWT token payload structure

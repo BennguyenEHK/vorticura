@@ -11,7 +11,7 @@ import { db, pool } from '../client';
  * Applies all pending migrations from drizzle/migrations folder
  * @returns Promise that resolves when migrations complete
  */
-export async function runMigrations() {
+export async function runMigrations(shutdownPool: boolean = false) {
   try {
     console.log('🚀 Starting database migrations...');
 
@@ -23,15 +23,18 @@ export async function runMigrations() {
     console.error('❌ Migration failed:', error);
     throw error;
   } finally {
-    // Always close the connection pool after migrations
-    await pool.end();
+    // Close the pool only when explicitly requested to avoid shutting a shared pool
+    if (shutdownPool) {
+      await pool.end();
+    }
   }
 }
 
 // Run migrations if this file is executed directly
 // Usage: node lib/db/migrations/migrate.ts
 if (require.main === module) {
-  runMigrations()
+  // When executed directly we should shutdown the pool after migrations
+  runMigrations(true)
     .then(() => process.exit(0)) // Exit with success code
     .catch(() => process.exit(1)); // Exit with error code
 }

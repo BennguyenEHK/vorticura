@@ -93,7 +93,7 @@ export const customers = pgTable('customers', {
   faxNumber: varchar('fax_number', { length: 60 }),
 
   // Customer status
-  costumerStatus: varchar('costumer_status', { length: 20 }).default('active'),
+  customerStatus: varchar('customer_status', { length: 20 }).default('active'),
 
   // Timestamps
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),

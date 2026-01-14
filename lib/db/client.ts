@@ -12,10 +12,15 @@ import * as schema from './schema';
 // 📊 DATABASE CONFIGURATION
 // =============================================
 
-// Build connection string from environment variables with fallback defaults
+// Build connection string from environment variables
+// Require explicit credentials when DATABASE_URL is not provided to fail fast
+if (!process.env.DATABASE_URL && !process.env.POSTGRES_PASSWORD) {
+  throw new Error('POSTGRES_PASSWORD environment variable is required when DATABASE_URL is not set');
+}
+
 const connectionString =
   process.env.DATABASE_URL ||
-  `postgresql://${process.env.POSTGRES_USER || 'postgres'}:${process.env.POSTGRES_PASSWORD || '1234'}@${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || '5432'}/${process.env.POSTGRES_DB || 'sse_data'}`;
+  `postgresql://${process.env.POSTGRES_USER || 'postgres'}:${process.env.POSTGRES_PASSWORD}@${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || '5432'}/${process.env.POSTGRES_DB || 'sse_data'}`;
 
 // =============================================
 // 🔌 CONNECTION POOL
@@ -105,5 +110,24 @@ export async function closeDatabase() {
 }
 
 // Handle process termination signals for graceful shutdown
-process.on('SIGTERM', closeDatabase);
-process.on('SIGINT', closeDatabase);
+process.on('SIGTERM', async () => {
+  try {
+    await closeDatabase();
+    process.exit(0);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('Error during SIGTERM shutdown:', err);
+    process.exit(1);
+  }
+});
+
+process.on('SIGINT', async () => {
+  try {
+    await closeDatabase();
+    process.exit(0);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('Error during SIGINT shutdown:', err);
+    process.exit(1);
+  }
+});

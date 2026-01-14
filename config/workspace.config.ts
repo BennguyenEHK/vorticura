@@ -23,7 +23,19 @@ class WorkspaceConfig {
    * @returns 'shared' or 'individual'
    */
   getWorkspaceMode(): WorkspaceMode {
-    return (process.env.WORKSPACE_MODE as WorkspaceMode) || this.WORKSPACE_MODE;
+    const allowedModes: WorkspaceMode[] = ['shared', 'individual'];
+    const envMode = process.env.WORKSPACE_MODE;
+
+    if (envMode && allowedModes.includes(envMode as WorkspaceMode)) {
+      return envMode as WorkspaceMode;
+    }
+
+    if (envMode && !allowedModes.includes(envMode as WorkspaceMode)) {
+      // eslint-disable-next-line no-console
+      console.warn(`Invalid WORKSPACE_MODE value: ${envMode}. Falling back to default.`);
+    }
+
+    return this.WORKSPACE_MODE;
   }
 
   /**

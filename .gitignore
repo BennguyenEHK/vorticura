@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Temporary files created by local tooling (Claude/tmp scripts)
+tmpclaude-*

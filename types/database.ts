@@ -48,8 +48,8 @@ export interface DatabaseResult<T> {
  * Used for automatic workspace isolation in queries
  */
 export interface WorkspaceFilter {
-  company_id: number;       // Always required for tenant isolation
-  client_id?: number;       // Optional, included when client isolation enabled
+  companyId: number;        // Always required for tenant isolation
+  clientId?: number;        // Optional, included when client isolation enabled
 }
 
 /**

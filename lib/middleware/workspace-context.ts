@@ -28,8 +28,8 @@ export class WorkspaceContext {
     username?: string;
     role?: string;
   }) {
-    // Validate required fields for tenant isolation
-    if (!user.client_id || !user.company_id) {
+    // Validate required fields for tenant isolation (allow falsy but valid ids like 0)
+    if (user.client_id == null || user.company_id == null) {
       throw new Error('WorkspaceContext requires client_id and company_id');
     }
 
