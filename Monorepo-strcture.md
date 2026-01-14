@@ -180,7 +180,7 @@ quoteflow_ai/
 │   │   ├── client.ts ✓                    # Drizzle client instance
 │   │   ├── schema.ts ✓                    # Drizzle schema definitions
 │   │   ├── queries.ts                     # Reusable database queries
-│   │   ├── workspace-helper.ts            # Workspace-aware database wrapper
+│   │   ├── workspace-helper.ts ✓          # Workspace-aware database wrapper
 │   │   └── migrations/
 │   │       └── migrate.ts ✓               # Migration runner
 │   │
