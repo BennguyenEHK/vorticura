@@ -1,0 +1,145 @@
+// =============================================
+// 🔐 WORKSPACE CONTEXT MANAGER
+// =============================================
+// Purpose: Manage user workspace context for tenant isolation
+// Replaces: utils/auth_account/workspace-context.js
+
+import { workspaceConfig } from '@/config/workspace.config';
+
+/**
+ * WorkspaceContext Class
+ * Encapsulates user authentication and workspace information
+ * Provides methods to generate database filters based on workspace mode
+ */
+export class WorkspaceContext {
+  public readonly client_id: number;
+  public readonly company_id: number;
+  public readonly username: string;
+  public readonly role: string;
+  public readonly created_at: Date;
+
+  /**
+   * Constructor - Initialize workspace context with user data
+   * @param user - User object with tenant identifiers
+   */
+  constructor(user: {
+    client_id: number;
+    company_id: number;
+    username?: string;
+    role?: string;
+  }) {
+    // Validate required fields for tenant isolation
+    if (!user.client_id || !user.company_id) {
+      throw new Error('WorkspaceContext requires client_id and company_id');
+    }
+
+    this.client_id = user.client_id;
+    this.company_id = user.company_id;
+    this.username = user.username || 'Unknown';
+    this.role = user.role || 'user';
+    this.created_at = new Date();
+  }
+
+  /**
+   * Build database filter conditions based on workspace mode
+   * Phase 1 (Shared): Returns { company_id: 1 }
+   * Phase 2 (Individual): Returns { company_id: 1, client_id: 5 }
+   * @returns Filter object for database queries
+   */
+  getDatabaseFilter(): { company_id: number; client_id?: number } {
+    const filter: { company_id: number; client_id?: number } = {
+      company_id: this.company_id,
+    };
+
+    // Add client_id when isolation is enabled (Phase 2)
+    if (workspaceConfig.isClientIsolationEnabled()) {
+      filter.client_id = this.client_id;
+    }
+
+    return filter;
+  }
+
+  /**
+   * Inject workspace context into data for INSERT operations
+   * Always adds both company_id and client_id to ensure proper tenant tracking
+   * @param data - Data object to inject context into
+   * @returns Data object with workspace context injected
+   */
+  injectWorkspaceContext<T extends Record<string, unknown>>(data: T): T & { company_id: number; client_id: number } {
+    return {
+      ...data,
+      company_id: this.company_id,
+      client_id: this.client_id,
+    };
+  }
+
+  /**
+   * Get workspace information for frontend/API responses
+   * @returns Workspace information object
+   */
+  getWorkspaceInfo() {
+    return {
+      type: workspaceConfig.getWorkspaceMode(),
+      company_id: this.company_id,
+      client_id: this.client_id,
+      isolation_enabled: workspaceConfig.isClientIsolationEnabled(),
+      user: {
+        username: this.username,
+        role: this.role,
+      },
+    };
+  }
+
+  /**
+   * Check if user has permission for a specific action
+   * Changed from 'quotation' to 'records' as per requirement
+   * @param action - Permission action to check
+   * @returns Boolean indicating if user has permission
+   */
+  hasPermission(action: string): boolean {
+    // Admin has all permissions
+    if (this.role === 'admin') return true;
+
+    // Define role-based permissions (using 'records' instead of 'quotation')
+    const permissions: Record<string, string[]> = {
+      user: ['view_records', 'create_records', 'update_records'],
+      manager: ['view_records', 'create_records', 'update_records', 'delete_records'],
+      admin: ['*'], // Wildcard permission for admin
+    };
+
+    const userPermissions = permissions[this.role] || [];
+    return userPermissions.includes(action) || userPermissions.includes('*');
+  }
+
+  /**
+   * Verify if data belongs to user's workspace
+   * Ensures tenant isolation by checking ownership
+   * @param data - Data object with tenant identifiers
+   * @returns Boolean indicating if data belongs to workspace
+   */
+  verifyOwnership(data: { company_id: number; client_id?: number }): boolean {
+    // Always check company_id
+    if (data.company_id !== this.company_id) return false;
+
+    // Check client_id if isolation enabled and client_id exists in data
+    if (workspaceConfig.isClientIsolationEnabled() && data.client_id) {
+      return data.client_id === this.client_id;
+    }
+
+    return true;
+  }
+
+  /**
+   * Get context summary for logging/debugging
+   * @returns String representation of workspace context
+   */
+  toString(): string {
+    const mode = workspaceConfig.getWorkspaceMode();
+    const filter = this.getDatabaseFilter();
+    const filterStr = Object.entries(filter)
+      .map(([key, val]) => `${key}=${val}`)
+      .join(', ');
+
+    return `WorkspaceContext[${mode}](user=${this.username}, ${filterStr})`;
+  }
+}

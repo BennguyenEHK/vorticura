@@ -177,16 +177,16 @@ quoteflow_ai/
 │   │       └── config-loader.ts           # Load configuration files
 │   │
 │   ├── db/                                # Database Layer
-│   │   ├── client.ts                      # Drizzle client instance
-│   │   ├── schema.ts                      # Drizzle schema definitions ✓
+│   │   ├── client.ts ✓                    # Drizzle client instance
+│   │   ├── schema.ts ✓                    # Drizzle schema definitions
 │   │   ├── queries.ts                     # Reusable database queries
 │   │   ├── workspace-helper.ts            # Workspace-aware database wrapper
 │   │   └── migrations/
-│   │       └── migrate.ts                 # Migration runner
+│   │       └── migrate.ts ✓               # Migration runner
 │   │
 │   ├── middleware/                        # Custom Middleware Helpers
-│   │   ├── workspace-context.ts           # Workspace context creation
-│   │   └── auth-helpers.ts                # Authentication helper functions
+│   │   ├── workspace-context.ts ✓         # Workspace context creation
+│   │   └── auth-helpers.ts ✓              # Authentication helper functions
 │   │
 │   └── auth.ts                            # NextAuth configuration
 │
@@ -197,9 +197,9 @@ quoteflow_ai/
 │   ├── suppliers.ts                       # Suppliers search types
 │   ├── session.ts                         # Session types
 │   ├── user.ts                            # User types
-│   ├── workspace.ts                       # Workspace types
+│   ├── workspace.ts ✓                     # Workspace types
 │   ├── api.ts                             # API request/response types
-│   └── database.ts                        # Database schema types
+│   └── database.ts ✓                      # Database schema types
 │
 ├── public/                                # Static Assets
 │   ├── templates/
@@ -235,12 +235,12 @@ quoteflow_ai/
 ├── config/                                # Configuration Files
 │   ├── environments.json                  # Multi-environment settings
 │   ├── demo-users.json                    # Demo user data
-│   └── workspace.config.ts                # Workspace isolation settings
+│   └── workspace.config.ts ✓              # Workspace isolation settings
 │
 ├── .env.example                           # Environment variables template
 ├── .eslintrc.json                         # ESLint config
 ├── .prettierrc                            # Prettier config
-├── drizzle.config.ts                      # Drizzle configuration
+├── drizzle.config.ts ✓                    # Drizzle configuration
 ├── middleware.ts                          # Global Next.js middleware
 ├── next.config.ts                         # Next.js configuration
 ├── package.json                           # Dependencies

@@ -16,10 +16,10 @@ import {
   numeric,
   date,
   bigint,
-  bytea,
   inet,
   primaryKey,
 } from 'drizzle-orm/pg-core';
+import { customType } from 'drizzle-orm/pg-core';
 
 // ============================================
 // 1. CLIENT_COMPANY TABLE
@@ -110,7 +110,7 @@ export const emailTable = pgTable('email_table', {
   // Foreign keys
   companyId: integer('company_id'),
   quotationId: integer('quotation_id'),
-
+  clientId: integer('client_id'),
   // Email metadata
   rfqReference: varchar('rfq_reference', { length: 100 }),
   recipientEmail: varchar('recipient_email', { length: 255 }),
@@ -131,6 +131,12 @@ export const emailTable = pgTable('email_table', {
 // ============================================
 // 5. FILE_METADATA TABLE
 // ============================================
+export const bytea = customType<{ data: Buffer }>({
+  dataType() {
+    return 'bytea';
+  },
+});
+
 export const fileMetadata = pgTable('file_metadata', {
   // Primary key - Auto-incrementing file ID
   fileId: serial('file_id').primaryKey(),
@@ -271,6 +277,7 @@ export const rfqAnalysis = pgTable('rfq_analysis', {
   // Foreign keys
   companyId: integer('company_id'),
   quotationId: integer('quotation_id'),
+  clientId: integer('client_id'),
 
   // RFQ identification
   rfqReference: varchar('rfq_reference', { length: 100 }),
@@ -349,6 +356,7 @@ export const supplierSearch = pgTable('supplier_search', {
   // Foreign keys
   companyId: integer('company_id'),
   quotationId: integer('quotation_id'),
+  clientId: integer('client_id'),
 
   // Search identification
   rfqReference: varchar('rfq_reference', { length: 100 }),
