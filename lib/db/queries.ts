@@ -1,554 +1,400 @@
-// =============================================
-// 📊 TYPE-SAFE QUERY BUILDERS
-// =============================================
-// Purpose: Reusable database queries with automatic workspace filtering
-// Provides both generic CRUD functions and specialized query builders
+/**
+ * =============================================
+ * 🔍 GENERIC DATABASE QUERIES
+ * =============================================
+ * Purpose: Reusable CRUD operations with workspace isolation
+ *
+ * Features:
+ * - insertData: Generic insert with workspace context injection
+ * - getData: Generic select with automatic leftJoin for multi-table queries
+ * - updateData: Generic update with multiple column where conditions
+ * - deleteData: Generic delete with multiple column where conditions
+ *
+ * All functions enforce workspace isolation using WorkspaceDatabaseHelper
+ */
 
-import { eq, and, desc, asc, SQL } from 'drizzle-orm';
+import { eq, SQL, and } from 'drizzle-orm';
 import { PgTable } from 'drizzle-orm/pg-core';
-import { db } from './client';
-import {
-  // Tenant & User Tables
-  clientCompany,
-  clientInfo,
-
-  // Quotation System Tables
-  quotations,
-  quotationItems,
-  quotationPricing,
-  customers,
-
-  // Workflow Tables
-  emailTable,
-  rfqAnalysis,
-  supplierSearch,
-
-  // File Management Tables
-  fileMetadata,
-
-  // Session & Connection Tables
-  userSessions,
-  sseConnections,
-  sessions,
-} from './schema';
 import { WorkspaceDatabaseHelper } from './workspace-helper';
 import { WorkspaceContext } from '@/lib/middleware/workspace-context';
+import { db } from './client';
 
-// Import types for better type safety
-import type {
-  Quotation,
-  NewQuotation,
-  QuotationItem,
-  NewQuotationItem,
-  QuotationPricing,
-  NewQuotationPricing,
+// Import all essential tables from schema.ts
+import {
+  clientCompany,
+  clientInfo,
+  customers,
+  emailTable,
+  fileMetadata,
+  quotationItems,
+  quotationPricing,
+  quotations,
+  rfqAnalysis,
+  sessions,
+  sseConnections,
+  supplierSearch,
+  userSessions,
 } from './schema';
 
 // =============================================
-// 🛠️ GENERIC CRUD FUNCTIONS
+// HELPER FUNCTIONS
 // =============================================
 
 /**
- * 1️⃣ insertData - Generic INSERT with workspace context injection
+ * Build multiple column conditions for WHERE clause
+ * Supports dynamic column filtering (e.g., quotation_id AND user_id)
  *
  * @param table - Drizzle table definition
- * @param columns - Columns object (used for type checking, can be empty {})
- * @param dataPayload - Data to insert
- * @param workspace - WorkspaceContext for tenant isolation
- * @returns Inserted record with all fields
+ * @param columns - Object with column names and values { quotation_id: 1, user_id: 2 }
+ * @returns Array of SQL conditions to be combined with AND
  *
- * Usage Example:
+ * Example:
  * ```typescript
- * const newQuotation = await insertData(
- *   quotations,
- *   {},
- *   { quotation_name: 'Q-001', rfq_reference: 'RFQ-001' },
- *   workspace
- * );
+ * multipleCol(quotations, { quotation_id: 1, rfq_reference: 'RFQ-001' })
+ * // Returns: [eq(quotations.quotation_id, 1), eq(quotations.rfq_reference, 'RFQ-001')]
  * ```
  */
-export async function insertData<T extends PgTable>(
-  table: T,
-  columns: Record<string, unknown>, // Column filters (not used for INSERT, kept for API consistency)
-  dataPayload: Partial<T['$inferInsert']>,
-  workspace: WorkspaceContext
-): Promise<T['$inferSelect']> {
-  // Create workspace helper for context injection
-  const helper = new WorkspaceDatabaseHelper(workspace);
-
-  // Inject workspace context (company_id + client_id)
-  const dataWithContext = helper.injectContext(dataPayload as Record<string, unknown>);
-
-  console.log(`📝 INSERT into ${table} with workspace context:`, {
-    company_id: dataWithContext.company_id,
-    client_id: dataWithContext.client_id,
-  });
-
-  // Execute INSERT with workspace context
-  const result = await db
-    .insert(table)
-    .values(dataWithContext as T['$inferInsert'])
-    .returning();
-
-  return result[0] as T['$inferSelect'];
-}
-
-/**
- * 2️⃣ getData - Generic SELECT with workspace filtering and optional JOIN support
- *
- * @param table - Drizzle table definition (can be array for JOIN operations)
- * @param columns - WHERE clause columns as key-value pairs
- * @param workspace - WorkspaceContext for tenant isolation
- * @returns Array of records matching the criteria
- *
- * Usage Examples:
- *
- * Simple SELECT:
- * ```typescript
- * const allQuotations = await getData(quotations, {}, workspace);
- * ```
- *
- * SELECT with WHERE:
- * ```typescript
- * const draft = await getData(
- *   quotations,
- *   { quotation_status: 'draft' },
- *   workspace
- * );
- * ```
- *
- * SELECT with JOIN (when table is array with length >= 2):
- * ```typescript
- * const withItems = await getData(
- *   [quotations, quotationItems],
- *   { quotation_id: 123 },
- *   workspace
- * );
- * ```
- */
-export async function getData<T extends PgTable>(
-  table: T | T[], // Support single table or array for JOINs
-  columns: Record<string, unknown>, // WHERE clause columns
-  workspace: WorkspaceContext
-): Promise<any[]> { // Using 'any[]' for flexibility with JOINs
-  // Create workspace helper
-  const helper = new WorkspaceDatabaseHelper(workspace);
-
-  // Check if JOIN operation is needed (table length >= 2)
-  if (Array.isArray(table) && table.length >= 2) {
-    // JOIN operation
-    const [primaryTable, ...joinTables] = table;
-
-    console.log(`📊 SELECT with JOIN from table with ${joinTables.length} join(s)`);
-
-    // Build WHERE filters from columns
-    const additionalFilters: SQL[] = Object.entries(columns).map(([key, value]) =>
-      eq((primaryTable as any)[key], value)
-    );
-
-    // Execute query with LEFT JOIN
-    // Note: Due to Drizzle's complex JOIN typing, we use 'as any' for dynamic joins
-    let query: any = db
-      .select()
-      .from(primaryTable as any)
-      .$dynamic();
-
-    // Add LEFT JOINs for additional tables
-    for (const joinTable of joinTables) {
-      // Assume join on common columns (quotation_id, company_id, etc.)
-      // This is a simplified join - customize based on your schema relationships
-      query = query.leftJoin(
-        joinTable as any,
-        and(
-          eq((primaryTable as any).quotationId, (joinTable as any).quotationId),
-          eq((primaryTable as any).companyId, (joinTable as any).companyId)
-        )
-      );
-    }
-
-    // Apply WHERE clause with workspace filtering
-    const results = await query.where(
-      helper.buildWhereClause(primaryTable, additionalFilters)
-    );
-
-    return results;
-  } else {
-    // Simple SELECT operation
-    const targetTable = Array.isArray(table) ? table[0] : table;
-
-    console.log(`📊 SELECT from table with filters:`, columns);
-
-    // Build WHERE filters from columns
-    const additionalFilters: SQL[] = Object.entries(columns).map(([key, value]) =>
-      eq((targetTable as any)[key], value)
-    );
-
-    // Execute query with workspace filtering
-    const results = await db
-      .select()
-      .from(targetTable as any)
-      .where(helper.buildWhereClause(targetTable, additionalFilters));
-
-    return results;
-  }
-}
-
-/**
- * 3️⃣ updateData - Generic UPDATE with workspace filtering and multiple column support
- *
- * @param table - Drizzle table definition
- * @param columns - WHERE clause columns as key-value pairs (supports multiple columns)
- * @param dataPayload - Data to update
- * @param workspace - WorkspaceContext for tenant isolation
- * @returns Updated records
- *
- * Usage Examples:
- *
- * Update with single column:
- * ```typescript
- * const updated = await updateData(
- *   quotations,
- *   { quotation_id: 1 },
- *   { quotation_status: 'approved' },
- *   workspace
- * );
- * ```
- *
- * Update with multiple columns:
- * ```typescript
- * const updated = await updateData(
- *   quotationItems,
- *   { quotation_id: 1, item_id: 5 },
- *   { qty: 100, bidder_unit_price: 50.00 },
- *   workspace
- * );
- * ```
- */
-export async function updateData<T extends PgTable>(
-  table: T,
-  columns: Record<string, unknown>, // WHERE clause columns (supports multiple)
-  dataPayload: Partial<T['$inferInsert']>,
-  workspace: WorkspaceContext
-): Promise<T['$inferSelect'][]> {
-  // Create workspace helper
-  const helper = new WorkspaceDatabaseHelper(workspace);
-
-  console.log(`✏️ UPDATE ${table} with filters:`, columns);
-
-  // Build WHERE filters from columns (support multiple columns)
-  const additionalFilters: SQL[] = buildMultipleColumnFilters(table, columns);
-
-  // Execute UPDATE with workspace filtering
-  const results = await db
-    .update(table)
-    .set(dataPayload as Partial<T['$inferInsert']>)
-    .where(helper.buildWhereClause(table, additionalFilters))
-    .returning();
-
-  return results as T['$inferSelect'][];
-}
-
-/**
- * 4️⃣ deleteData - Generic DELETE with workspace filtering and multiple column support
- *
- * @param table - Drizzle table definition
- * @param columns - WHERE clause columns as key-value pairs (supports multiple columns)
- * @param dataPayload - Not used for DELETE (kept for API consistency, can be empty {})
- * @param workspace - WorkspaceContext for tenant isolation
- * @returns Deleted records
- *
- * Usage Examples:
- *
- * Delete with single column:
- * ```typescript
- * const deleted = await deleteData(
- *   quotations,
- *   { quotation_id: 1 },
- *   {},
- *   workspace
- * );
- * ```
- *
- * Delete with multiple columns:
- * ```typescript
- * const deleted = await deleteData(
- *   quotationItems,
- *   { quotation_id: 1, item_id: 5 },
- *   {},
- *   workspace
- * );
- * ```
- */
-export async function deleteData<T extends PgTable>(
-  table: T,
-  columns: Record<string, unknown>, // WHERE clause columns (supports multiple)
-  dataPayload: Record<string, unknown>, // Not used for DELETE
-  workspace: WorkspaceContext
-): Promise<T['$inferSelect'][]> {
-  // Create workspace helper
-  const helper = new WorkspaceDatabaseHelper(workspace);
-
-  console.log(`🗑️ DELETE from ${table} with filters:`, columns);
-
-  // Build WHERE filters from columns (support multiple columns)
-  const additionalFilters: SQL[] = buildMultipleColumnFilters(table, columns);
-
-  // Execute DELETE with workspace filtering
-  const results = await db
-    .delete(table)
-    .where(helper.buildWhereClause(table, additionalFilters))
-    .returning();
-
-  return results as T['$inferSelect'][];
-}
-
-// =============================================
-// 🔧 HELPER FUNCTIONS
-// =============================================
-
-/**
- * Build multiple column filters for WHERE clause
- * Supports injecting multiple columns (len >= 2)
- *
- * @param table - Drizzle table definition
- * @param columns - Columns object with key-value pairs
- * @returns Array of SQL filter conditions
- */
-function buildMultipleColumnFilters<T extends PgTable>(
+function multipleCol<T extends PgTable>(
   table: T,
   columns: Record<string, unknown>
 ): SQL[] {
-  const filters: SQL[] = [];
+  const conditions: SQL[] = [];
 
-  // Iterate through all columns and create eq() conditions
+  // Iterate through each column in the columns object
   for (const [key, value] of Object.entries(columns)) {
-    if (value !== undefined && key in table) {
-      filters.push(eq((table as any)[key], value));
+    // Check if the column exists in the table
+    if (key in table) {
+      // Add eq condition for each column-value pair
+      conditions.push(eq((table as any)[key], value as any));
+    } else {
+      console.warn(`Column "${key}" does not exist in table, skipping...`);
     }
   }
 
-  return filters;
-}
-
-// =============================================
-// 📄 SPECIALIZED QUOTATION QUERIES (Examples)
-// =============================================
-
-/**
- * Get all quotations for workspace (type-safe)
- */
-export async function getQuotations(workspace: WorkspaceContext) {
-  const helper = new WorkspaceDatabaseHelper(workspace);
-
-  return await db
-    .select()
-    .from(quotations)
-    .where(helper.buildWhereClause(quotations)) // ✅ Auto workspace filter
-    .orderBy(desc(quotations.createdAt));
+  return conditions;
 }
 
 /**
- * Get quotation by ID with workspace filtering (type-safe)
+ * Get table reference by name
+ * Maps string table names to actual Drizzle table objects
+ *
+ * @param tableName - Name of the table as string
+ * @returns Drizzle table object or throws error if not found
  */
-export async function getQuotationById(
-  quotationId: number,
-  workspace: WorkspaceContext
-) {
-  const helper = new WorkspaceDatabaseHelper(workspace);
-
-  const results = await db
-    .select()
-    .from(quotations)
-    .where(
-      helper.buildWhereClause(quotations, [
-        eq(quotations.quotationId, quotationId) // ✅ Type-safe column reference
-      ])
-    );
-
-  return results[0] || null;
-}
-
-/**
- * Get quotation with all related data (type-safe)
- */
-export async function getQuotationWithItems(
-  quotationId: number,
-  workspace: WorkspaceContext
-) {
-  const helper = new WorkspaceDatabaseHelper(workspace);
-
-  // Get quotation
-  const quotation = await getQuotationById(quotationId, workspace);
-  if (!quotation) return null;
-
-  // Get items (fully type-safe)
-  const items = await db
-    .select()
-    .from(quotationItems)
-    .where(
-      helper.buildWhereClause(quotationItems, [
-        eq(quotationItems.quotationId, quotationId)
-      ])
-    )
-    .orderBy(asc(quotationItems.itemId));
-
-  // Get pricing (fully type-safe)
-  const pricing = await db
-    .select()
-    .from(quotationPricing)
-    .where(
-      helper.buildWhereClause(quotationPricing, [
-        eq(quotationPricing.quotationId, quotationId)
-      ])
-    );
-
-  return {
-    ...quotation,
-    items, // ✅ Typed as QuotationItem[]
-    pricing, // ✅ Typed as QuotationPricing[]
+function getTableByName(tableName: string): PgTable {
+  const tableMap: Record<string, PgTable> = {
+    clientCompany,
+    clientInfo,
+    customers,
+    emailTable,
+    fileMetadata,
+    quotationItems,
+    quotationPricing,
+    quotations,
+    rfqAnalysis,
+    sessions,
+    sseConnections,
+    supplierSearch,
+    userSessions,
   };
-}
 
-/**
- * Insert new quotation (type-safe)
- */
-export async function createQuotation(
-  data: Partial<NewQuotation>,
-  workspace: WorkspaceContext
-) {
-  const helper = new WorkspaceDatabaseHelper(workspace);
-
-  // Inject workspace context
-  const quotationData = helper.injectContext(data as Record<string, unknown>);
-
-  const result = await db
-    .insert(quotations)
-    .values(quotationData as NewQuotation) // ✅ Type-checked against schema
-    .returning();
-
-  return result[0];
-}
-
-/**
- * Update quotation (type-safe)
- */
-export async function updateQuotation(
-  quotationId: number,
-  data: Partial<NewQuotation>,
-  workspace: WorkspaceContext
-) {
-  const helper = new WorkspaceDatabaseHelper(workspace);
-
-  const results = await db
-    .update(quotations)
-    .set(data) // ✅ Type-checked
-    .where(
-      helper.buildWhereClause(quotations, [
-        eq(quotations.quotationId, quotationId)
-      ])
-    )
-    .returning();
-
-  return results[0] || null;
-}
-
-/**
- * Delete quotation (type-safe)
- */
-export async function deleteQuotation(
-  quotationId: number,
-  workspace: WorkspaceContext
-) {
-  const helper = new WorkspaceDatabaseHelper(workspace);
-
-  const results = await db
-    .delete(quotations)
-    .where(
-      helper.buildWhereClause(quotations, [
-        eq(quotations.quotationId, quotationId)
-      ])
-    )
-    .returning();
-
-  return results[0] || null;
-}
-
-// =============================================
-// 📧 EMAIL QUERIES
-// =============================================
-
-/**
- * Get emails by quotation ID
- */
-export async function getEmailsByQuotation(
-  quotationId: number,
-  workspace: WorkspaceContext
-) {
-  const helper = new WorkspaceDatabaseHelper(workspace);
-
-  return await db
-    .select()
-    .from(emailTable)
-    .where(
-      helper.buildWhereClause(emailTable, [
-        eq(emailTable.quotationId, quotationId)
-      ])
-    )
-    .orderBy(desc(emailTable.createdAt));
-}
-
-// =============================================
-// 🗂️ FILE QUERIES
-// =============================================
-
-/**
- * Get active files by category
- */
-export async function getActiveFiles(
-  workspace: WorkspaceContext,
-  category?: string
-) {
-  const helper = new WorkspaceDatabaseHelper(workspace);
-
-  const additionalFilters: SQL[] = [
-    eq(fileMetadata.fileStatus, 'active')
-  ];
-
-  // Add category filter if provided
-  if (category) {
-    additionalFilters.push(eq(fileMetadata.fileCategory, category));
+  const table = tableMap[tableName];
+  if (!table) {
+    throw new Error(`Table "${tableName}" not found. Available tables: ${Object.keys(tableMap).join(', ')}`);
   }
 
-  return await db
-    .select()
-    .from(fileMetadata)
-    .where(helper.buildWhereClause(fileMetadata, additionalFilters))
-    .orderBy(desc(fileMetadata.uploadDate));
+  return table;
 }
 
 // =============================================
-// 💾 SESSION QUERIES
+// 1️⃣ INSERT DATA
 // =============================================
 
 /**
- * Get user session by session ID
+ * Generic INSERT function with workspace context injection
+ * Automatically adds company_id and client_id from workspace context
+ *
+ * @param tableName - Name of the table (e.g., 'quotations', 'quotationItems')
+ * @param columns - Column names to insert (not used in current implementation, reserved for future)
+ * @param dataPayload - Data object to insert
+ * @param workspace - WorkspaceContext for tenant isolation
+ * @returns Inserted record or null
+ *
+ * Example:
+ * ```typescript
+ * const newQuotation = await insertData(
+ *   'quotations',
+ *   {},
+ *   { quotation_name: 'Q-001', rfq_reference: 'RFQ-2024-001' },
+ *   workspace
+ * );
+ * ```
  */
-export async function getUserSession(
-  companyId: number,
-  clientId: number,
+export async function insertData<T extends Record<string, unknown>>(
+  tableName: string,
+  _columns: Record<string, unknown>, // Reserved for future column filtering (prefixed with _ to mark as intentionally unused)
+  dataPayload: T,
   workspace: WorkspaceContext
-) {
-  const helper = new WorkspaceDatabaseHelper(workspace);
+): Promise<any> {
+  try {
+    // Initialize workspace database helper
+    const helper = new WorkspaceDatabaseHelper(workspace);
 
-  const results = await db
-    .select()
-    .from(userSessions)
-    .where(
-      helper.buildWhereClause(userSessions, [
-        eq(userSessions.companyId, companyId),
-        eq(userSessions.clientId, clientId)
-      ])
-    );
+    // Get the actual table object
+    const table = getTableByName(tableName);
 
-  return results[0] || null;
+    // Inject workspace context (company_id, client_id) into data payload
+    const dataWithContext = helper.injectContext(dataPayload);
+
+    // Execute INSERT query with workspace context
+    const results = await db
+      .insert(table as any)
+      .values(dataWithContext) // ✅ Type-checked with workspace context
+      .returning();
+
+    // Return the first inserted record or null (explicit type assertion to fix type error)
+    return (results as any[])[0] || null;
+  } catch (error) {
+    // Log error for debugging but sanitize message for security
+    console.error('Database insert operation failed:', error);
+    throw new Error('Failed to insert data. Please check your input and try again.');
+  }
 }
+
+// =============================================
+// 2️⃣ GET DATA
+// =============================================
+
+/**
+ * Generic SELECT function with optional LEFT JOIN support
+ * Automatically applies workspace filtering (company_id, client_id)
+ *
+ * LEFT JOIN logic: If table array length >= 2, performs leftJoin on quotation_id
+ *
+ * @param tableNames - Single table name OR array of table names for JOIN
+ * @param columns - Where conditions { quotation_id: 1, status: 'active' }
+ * @param workspace - WorkspaceContext for tenant isolation
+ * @returns Array of matching records
+ *
+ * Example 1 (Single Table):
+ * ```typescript
+ * const quotations = await getData('quotations', { quotation_id: 1 }, workspace);
+ * ```
+ *
+ * Example 2 (Multiple Tables with LEFT JOIN):
+ * ```typescript
+ * const quotationsWithItems = await getData(
+ *   ['quotations', 'quotationItems'],
+ *   { quotation_id: 1 },
+ *   workspace
+ * );
+ * // Performs: SELECT * FROM quotations LEFT JOIN quotationItems ON quotations.quotation_id = quotationItems.quotation_id
+ * ```
+ */
+export async function getData(
+  tableNames: string | string[],
+  columns: Record<string, unknown>,
+  workspace: WorkspaceContext
+): Promise<any[]> {
+  try {
+    // Initialize workspace database helper
+    const helper = new WorkspaceDatabaseHelper(workspace);
+
+    // Convert single table name to array for uniform processing
+    const tables = Array.isArray(tableNames) ? tableNames : [tableNames];
+
+    // Get the primary table (first table in array)
+    const primaryTable = getTableByName(tables[0]);
+
+    // Build WHERE conditions (workspace filters + user-provided columns)
+    const whereConditions = multipleCol(primaryTable, columns);
+    const whereClause = helper.buildWhereClause(primaryTable, whereConditions);
+
+    // CASE 1: Single table query (no JOIN)
+    if (tables.length === 1) {
+      const results = await db
+        .select()
+        .from(primaryTable as any)
+        .where(whereClause);
+
+      return results;
+    }
+
+    // CASE 2: Multiple tables - perform LEFT JOIN on quotation_id with workspace isolation
+    if (tables.length >= 2) {
+      // Get the secondary table for LEFT JOIN
+      const secondaryTable = getTableByName(tables[1]);
+
+      // Get workspace filter for security (company_id and optional client_id)
+      const workspaceFilter = helper.getWorkspaceFilter();
+
+      // Build JOIN conditions with workspace filtering on BOTH tables (CRITICAL for security)
+      const joinConditions: SQL[] = [
+        eq((primaryTable as any).quotationId, (secondaryTable as any).quotationId), // Join on quotation_id
+      ];
+
+      // Add company_id filter to secondary table (prevents cross-tenant data leakage)
+      if ('company_id' in secondaryTable) {
+        joinConditions.push(eq((secondaryTable as any).companyId, workspaceFilter.company_id));
+      }
+
+      // Add client_id filter to secondary table if workspace isolation is enabled
+      if (workspaceFilter.client_id !== undefined && 'client_id' in secondaryTable) {
+        joinConditions.push(eq((secondaryTable as any).clientId, workspaceFilter.client_id));
+      }
+
+      // Execute LEFT JOIN with workspace-filtered secondary table
+      const results = await db
+        .select()
+        .from(primaryTable as any)
+        .leftJoin(
+          secondaryTable as any,
+          and(...joinConditions) // ✅ Workspace filters applied to JOIN condition
+        )
+        .where(whereClause); // Primary table workspace filters
+
+      return results;
+    }
+
+    return [];
+  } catch (error) {
+    // Log error for debugging but sanitize message for security
+    console.error('Database select operation failed:', error);
+    throw new Error('Failed to retrieve data. Please check your query and try again.');
+  }
+}
+
+// =============================================
+// 3️⃣ UPDATE DATA
+// =============================================
+
+/**
+ * Generic UPDATE function with multiple column WHERE conditions
+ * Supports updating records filtered by multiple columns
+ *
+ * @param tableName - Name of the table to update
+ * @param columns - Where conditions { quotation_id: 1, user_id: 1 }
+ * @param dataPayload - Data to update { quotation_name: 'Updated Name' }
+ * @param workspace - WorkspaceContext for tenant isolation
+ * @returns Updated record or null
+ *
+ * Example:
+ * ```typescript
+ * const updated = await updateData(
+ *   'quotations',
+ *   { quotation_id: 1, client_id: 5 },
+ *   { quotation_status: 'completed', total_amount: 5000 },
+ *   workspace
+ * );
+ * ```
+ */
+export async function updateData<T extends Record<string, unknown>>(
+  tableName: string,
+  columns: Record<string, unknown>,
+  dataPayload: T,
+  workspace: WorkspaceContext
+): Promise<any> {
+  try {
+    // Initialize workspace database helper
+    const helper = new WorkspaceDatabaseHelper(workspace);
+
+    // Get the actual table object
+    const table = getTableByName(tableName);
+
+    // Build WHERE conditions using multipleCol helper
+    const whereConditions = multipleCol(table, columns);
+
+    // Execute UPDATE query with workspace filtering
+    const results = await db
+      .update(table as any)
+      .set(dataPayload) // ✅ Type-checked update data
+      .where(
+        helper.buildWhereClause(table, whereConditions) // Combine workspace filters + user conditions
+      )
+      .returning();
+
+    // Return the first updated record or null (explicit type assertion to fix type error)
+    return (results as any[])[0] || null;
+  } catch (error) {
+    // Log error for debugging but sanitize message for security
+    console.error('Database update operation failed:', error);
+    throw new Error('Failed to update data. Please check your input and try again.');
+  }
+}
+
+// =============================================
+// 4️⃣ DELETE DATA
+// =============================================
+
+/**
+ * Generic DELETE function with multiple column WHERE conditions
+ * Supports deleting records filtered by multiple columns
+ *
+ * @param tableName - Name of the table to delete from
+ * @param columns - Where conditions { quotation_id: 1, status: 'draft' }
+ * @param dataPayload - Reserved for future use (currently unused)
+ * @param workspace - WorkspaceContext for tenant isolation
+ * @returns Deleted record or null
+ *
+ * Example:
+ * ```typescript
+ * const deleted = await deleteData(
+ *   'quotations',
+ *   { quotation_id: 1, quotation_status: 'draft' },
+ *   {},
+ *   workspace
+ * );
+ * ```
+ */
+export async function deleteData(
+  tableName: string,
+  columns: Record<string, unknown>,
+  _dataPayload: Record<string, unknown>, // Reserved for future use (prefixed with _ to mark as intentionally unused)
+  workspace: WorkspaceContext
+): Promise<any> {
+  try {
+    // Initialize workspace database helper
+    const helper = new WorkspaceDatabaseHelper(workspace);
+
+    // Get the actual table object
+    const table = getTableByName(tableName);
+
+    // Build WHERE conditions using multipleCol helper
+    const whereConditions = multipleCol(table, columns);
+
+    // Execute DELETE query with workspace filtering
+    const results = await db
+      .delete(table as any)
+      .where(
+        helper.buildWhereClause(table, whereConditions) // Combine workspace filters + user conditions
+      )
+      .returning();
+
+    // Return the first deleted record or null (explicit type assertion to fix type error)
+    return (results as any[])[0] || null;
+  } catch (error) {
+    // Log error for debugging but sanitize message for security
+    console.error('Database delete operation failed:', error);
+    throw new Error('Failed to delete data. Please check your input and try again.');
+  }
+}
+
+// =============================================
+// EXPORT TABLE REFERENCES
+// =============================================
+// Export all tables for direct access if needed
+export {
+  clientCompany,
+  clientInfo,
+  customers,
+  emailTable,
+  fileMetadata,
+  quotationItems,
+  quotationPricing,
+  quotations,
+  rfqAnalysis,
+  sessions,
+  sseConnections,
+  supplierSearch,
+  userSessions,
+};
