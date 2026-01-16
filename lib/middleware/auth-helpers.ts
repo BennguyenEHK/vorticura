@@ -97,3 +97,49 @@ export async function getWorkspaceFromToken(token: string): Promise<WorkspaceCon
     return null;
   }
 }
+
+// =============================================
+// 🍪 COOKIE UTILITIES
+// =============================================
+// Purpose: Cookie configuration and management for auth tokens
+// Corresponds to: api/auth/login.js:88-93
+
+/**
+ * Cookie configuration for auth token
+ * Defines security settings for HTTP-only authentication cookie
+ */
+export const AUTH_COOKIE_CONFIG = {
+  name: 'auth_token',
+  options: {
+    httpOnly: true,                                    // Cannot be accessed by JavaScript (XSS protection)
+    secure: process.env.NODE_ENV === 'production',     // HTTPS only in production
+    sameSite: 'strict' as const,                       // CSRF protection
+    maxAge: 7 * 24 * 60 * 60,                          // 7 days in seconds
+    path: '/',                                         // Available on all paths
+  },
+};
+
+/**
+ * Set auth cookie on response
+ * Use this for manual cookie setting on Response objects
+ * @param response - Response object to add cookie header to
+ * @param token - JWT token string to set as cookie value
+ */
+export function setAuthCookie(response: Response, token: string): void {
+  // Build cookie string manually for Response.headers
+  const cookieValue = `${AUTH_COOKIE_CONFIG.name}=${token}; Path=${AUTH_COOKIE_CONFIG.options.path}; Max-Age=${AUTH_COOKIE_CONFIG.options.maxAge}; ${AUTH_COOKIE_CONFIG.options.httpOnly ? 'HttpOnly;' : ''} ${AUTH_COOKIE_CONFIG.options.secure ? 'Secure;' : ''} SameSite=${AUTH_COOKIE_CONFIG.options.sameSite}`;
+
+  // Append to Set-Cookie header
+  response.headers.append('Set-Cookie', cookieValue);
+}
+
+/**
+ * Clear auth cookie on response
+ * Use this for logout functionality
+ * @param response - Response object to clear cookie on
+ */
+export function clearAuthCookie(response: Response): void {
+  // Set cookie with Max-Age=0 to delete it
+  const cookieValue = `${AUTH_COOKIE_CONFIG.name}=; Path=/; Max-Age=0; HttpOnly; SameSite=strict`;
+  response.headers.append('Set-Cookie', cookieValue);
+}

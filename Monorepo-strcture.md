@@ -22,8 +22,16 @@ quoteflow_ai/
 │   │
 │   ├── api/                               # API Routes (Controllers)
 │   │   ├── auth/
-│   │   │   └── [...nextauth]/
-│   │   │       └── route.ts               # NextAuth handler
+│   │   │   ├── signup/
+│   │   │   │   └── route.ts ✓             # POST /api/auth/signup
+│   │   │   ├── login/
+│   │   │   │   └── route.ts ✓             # POST /api/auth/login
+│   │   │   ├── logout/
+│   │   │   │   └── route.ts ✓             # POST /api/auth/logout
+│   │   │   ├── me/
+│   │   │   │   └── route.ts ✓             # GET /api/auth/me
+│   │   │   └── verify/
+│   │   │       └── route.ts ✓             # GET /api/auth/verify
 │   │   │
 │   │   ├── webhooks/
 │   │   │   ├── module-update/
@@ -173,8 +181,11 @@ quoteflow_ai/
 │   │   │   ├── id-generator.ts            # Generate unique IDs
 │   │   │   └── token-generator.ts         # Generate tokens
 │   │   │
-│   │   └── config/
-│   │       └── config-loader.ts           # Load configuration files
+│   │   ├── config/
+│   │   │   └── config-loader.ts           # Load configuration files
+│   │   │
+│   │   └── api/
+│   │       └── get-workspace.ts           # Extract workspace from API request
 │   │
 │   ├── db/                                # Database Layer
 │   │   ├── client.ts ✓                    # Drizzle client instance
@@ -184,11 +195,9 @@ quoteflow_ai/
 │   │   └── migrations/
 │   │       └── migrate.ts ✓               # Migration runner
 │   │
-│   ├── middleware/                        # Custom Middleware Helpers
-│   │   ├── workspace-context.ts ✓         # Workspace context creation
-│   │   └── auth-helpers.ts ✓              # Authentication helper functions
-│   │
-│   └── auth.ts                            # NextAuth configuration
+│   └── middleware/                        # Custom Middleware Helpers
+│       ├── workspace-context.ts ✓         # Workspace context creation
+│       └── auth-helpers.ts ✓              # Authentication helper functions (JWT + cookies)
 │
 ├── types/                                 # TypeScript Type Definitions
 │   ├── quotation.ts                       # Quotation DTOs and types
