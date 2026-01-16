@@ -139,7 +139,21 @@ export function setAuthCookie(response: Response, token: string): void {
  * @param response - Response object to clear cookie on
  */
 export function clearAuthCookie(response: Response): void {
-  // Set cookie with Max-Age=0 to delete it
-  const cookieValue = `${AUTH_COOKIE_CONFIG.name}=; Path=/; Max-Age=0; HttpOnly; SameSite=strict`;
+  // Build deletion cookie using same attributes as original cookie
+  const cookieParts = [
+    `${AUTH_COOKIE_CONFIG.name}=`,
+    `Path=${AUTH_COOKIE_CONFIG.options.path}`,
+    'Max-Age=0',
+  ];
+
+  if (AUTH_COOKIE_CONFIG.options.httpOnly) {
+    cookieParts.push('HttpOnly');
+  }
+  if (AUTH_COOKIE_CONFIG.options.secure) {
+    cookieParts.push('Secure');
+  }
+  cookieParts.push(`SameSite=${AUTH_COOKIE_CONFIG.options.sameSite}`);
+
+  const cookieValue = cookieParts.join('; ');
   response.headers.append('Set-Cookie', cookieValue);
 }

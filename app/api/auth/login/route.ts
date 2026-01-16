@@ -75,6 +75,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Defensive check: verify user.companyId is present
+    if (!user.companyId) {
+      return NextResponse.json(
+        { error: 'User company context is missing' },
+        { status: 400 }
+      );
+    }
+
     // Get company information for workspace context
     const companies = await db
       .select({
@@ -82,7 +90,7 @@ export async function POST(request: NextRequest) {
         companyName: clientCompany.companyName,
       })
       .from(clientCompany)
-      .where(eq(clientCompany.companyId, user.companyId!))
+      .where(eq(clientCompany.companyId, user.companyId))
       .limit(1);
 
     const company = companies[0];
@@ -96,7 +104,7 @@ export async function POST(request: NextRequest) {
     // Generate JWT token with workspace context
     const token = await generateJWT({
       client_id: user.clientId,
-      company_id: user.companyId!,
+      company_id: user.companyId,
       username: user.username,
       role: user.role || 'user',
     });

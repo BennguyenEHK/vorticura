@@ -78,30 +78,46 @@ export async function POST(request: NextRequest) {
     // Hash password with bcrypt (10 rounds)
     const passwordHash = await hash(body.password, 10);
 
-    // Create company first (company must exist before user)
-    const [newCompany] = await db
-      .insert(clientCompany)
-      .values({
-        companyName: body.company_name,
-        companyEmail: body.company_email || null,
-        companyAddress: body.company_address || null,
-        companyNumber: body.company_number || null,
-      })
-      .returning();
+    // Wrap company and user creation in a single transaction
+    let newCompany: typeof clientCompany.$inferInsert & { companyId: number };
+    let newUser: typeof clientInfo.$inferInsert & { clientId: number };
 
-    // Create user with company reference (first user becomes admin)
-    const [newUser] = await db
-      .insert(clientInfo)
-      .values({
-        companyId: newCompany.companyId,
-        username: body.username,
-        passwordHash: passwordHash,
-        email: body.email || null,
-        clientRole: 'admin', // First user of company is admin
-        clientStatus: 'active',
-        lastLogin: new Date(),
-      })
-      .returning();
+    try {
+      [newCompany, newUser] = await db.transaction(async (tx) => {
+        // Create company first (company must exist before user)
+        const [company] = await tx
+          .insert(clientCompany)
+          .values({
+            companyName: body.company_name,
+            companyEmail: body.company_email || null,
+            companyAddress: body.company_address || null,
+            companyNumber: body.company_number || null,
+          })
+          .returning();
+
+        // Create user with company reference (first user becomes admin)
+        const [user] = await tx
+          .insert(clientInfo)
+          .values({
+            companyId: company.companyId,
+            username: body.username,
+            passwordHash: passwordHash,
+            email: body.email || null,
+            clientRole: 'admin', // First user of company is admin
+            clientStatus: 'active',
+            lastLogin: new Date(),
+          })
+          .returning();
+
+        return [company, user];
+      });
+    } catch (error) {
+      console.error('Transaction failed during signup:', error);
+      return NextResponse.json(
+        { error: 'Failed to create account. Please try again.' },
+        { status: 500 }
+      );
+    }
 
     // Generate JWT token for auto-login after signup
     const token = await generateJWT({

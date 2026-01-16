@@ -24,7 +24,7 @@
   │    "password": "alice123"                  "password": "bob456"             │
   │  }                                       }                                  │
   │                                                                             │
-  │  📁 File: app/api/auth/login/route.ts (PLANNED - from AUTHENTICATION_REFRACTOR.md)
+  │  📁 File: app/api/auth/login/route.ts (PLANNED - from AUTHENTICATION_REFACTOR.md)
   │  📍 Lines: 635-637 (Extract credentials from request body)                  │
   └─────────────────────────────────────────────────────────────────────────────┘
 

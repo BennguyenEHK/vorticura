@@ -17,8 +17,16 @@ import { eq } from 'drizzle-orm';
  */
 export async function GET(request: NextRequest) {
   try {
-    // Get token from cookie (primary auth method)
-    const token = request.cookies.get('auth_token')?.value;
+    // Get token from cookie (primary) or Authorization header (fallback)
+    let token = request.cookies.get('auth_token')?.value;
+
+    // Fallback to Authorization header if cookie not present
+    if (!token) {
+      const authHeader = request.headers.get('authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.slice(7); // Strip 'Bearer ' prefix
+      }
+    }
 
     // Check if token exists
     if (!token) {

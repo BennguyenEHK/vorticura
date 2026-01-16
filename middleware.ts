@@ -9,10 +9,16 @@ import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 
 // JWT secret for verification (must match auth-helpers.ts)
-// Uses environment variable with fallback for development
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'quoteflow-ai-secret-key-change-in-production'
-);
+// Throws error in production if secret is missing; allows dev fallback only
+const rawJwtSecret = process.env.JWT_SECRET;
+if (!rawJwtSecret && process.env.NODE_ENV === 'production') {
+  throw new Error('JWT_SECRET environment variable is required in production');
+}
+if (!rawJwtSecret && process.env.NODE_ENV !== 'production') {
+  // eslint-disable-next-line no-console
+  console.warn('⚠️ Using development fallback JWT_SECRET. Do NOT use this in production.');
+}
+const JWT_SECRET = new TextEncoder().encode(rawJwtSecret || 'quoteflow-ai-secret-key-change-in-production');
 
 // =============================================
 // ROUTE CONFIGURATION
@@ -110,21 +116,33 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith('/api/')) {
     // Handle preflight OPTIONS request (CORS)
     if (request.method === 'OPTIONS') {
+      const originHeader: Record<string, string> = {};
+      if (process.env.ALLOWED_ORIGIN) {
+        originHeader['Access-Control-Allow-Origin'] = process.env.ALLOWED_ORIGIN;
+        originHeader['Access-Control-Allow-Credentials'] = 'true';
+      } else {
+        originHeader['Access-Control-Allow-Origin'] = '*';
+      }
+
       return new NextResponse(null, {
         status: 204,
         headers: {
-          'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || '*',
+          ...originHeader,
           'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-          'Access-Control-Allow-Credentials': 'true',
           'Access-Control-Max-Age': '86400', // Cache preflight for 24 hours
         },
       });
     }
 
     // Add CORS headers to all API responses
-    response.headers.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
-    response.headers.set('Access-Control-Allow-Credentials', 'true');
+    if (process.env.ALLOWED_ORIGIN) {
+      response.headers.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN);
+      response.headers.set('Access-Control-Allow-Credentials', 'true');
+    } else {
+      response.headers.set('Access-Control-Allow-Origin', '*');
+      // Note: credentials cannot be used with wildcard origin
+    }
   }
 
   // =============================================
@@ -136,59 +154,62 @@ export async function middleware(request: NextRequest) {
   }
 
   // =============================================
-  // PROTECTED ROUTES (AUTH REQUIRED)
+  // PROTECTED ROUTES AND DEFAULT AUTH ENFORCEMENT
   // =============================================
 
-  if (matchesRoute(pathname, PROTECTED_ROUTES)) {
-    // Get token from cookie (primary) or Authorization header (fallback)
-    const token =
-      request.cookies.get('auth_token')?.value ||
-      request.headers.get('Authorization')?.replace('Bearer ', '');
+  // If not a public route, treat as protected and require authentication
+  // Get token from cookie (primary) or Authorization header (fallback)
+  const token =
+    request.cookies.get('auth_token')?.value ||
+    request.headers.get('Authorization')?.replace('Bearer ', '');
 
-    // No token provided
-    if (!token) {
-      // Redirect to login for page requests
-      if (!pathname.startsWith('/api/')) {
-        return NextResponse.redirect(new URL('/login', request.url));
-      }
-      // Return 401 for API requests
-      return NextResponse.json(
-        { error: 'Authentication required', code: 'AUTH_REQUIRED' },
-        { status: 401 }
-      );
+  // No token provided
+  if (!token) {
+    // Redirect to login for page requests
+    if (!pathname.startsWith('/api/')) {
+      return NextResponse.redirect(new URL('/login', request.url));
     }
-
-    // Verify token and extract payload
-    const payload = await verifyToken(token);
-
-    // Token invalid or expired
-    if (!payload) {
-      // Redirect to login and clear invalid cookie for page requests
-      if (!pathname.startsWith('/api/')) {
-        const redirectResponse = NextResponse.redirect(new URL('/login', request.url));
-        redirectResponse.cookies.delete('auth_token'); // Clear invalid token
-        return redirectResponse;
-      }
-      // Return 401 for API requests
-      return NextResponse.json(
-        { error: 'Invalid or expired token', code: 'INVALID_TOKEN' },
-        { status: 401 }
-      );
-    }
-
-    // =============================================
-    // INJECT WORKSPACE CONTEXT INTO HEADERS
-    // =============================================
-
-    // Add workspace context as headers for API route handlers
-    // These headers can be read by API routes for workspace-aware operations
-    response.headers.set('x-client-id', String(payload.client_id));
-    response.headers.set('x-company-id', String(payload.company_id));
-    response.headers.set('x-username', payload.username);
-    response.headers.set('x-user-role', payload.role);
+    // Return 401 for API requests
+    return NextResponse.json(
+      { error: 'Authentication required', code: 'AUTH_REQUIRED' },
+      { status: 401 }
+    );
   }
 
-  return response;
+  // Verify token and extract payload
+  const payload = await verifyToken(token);
+
+  // Token invalid or expired
+  if (!payload) {
+    // Redirect to login and clear invalid cookie for page requests
+    if (!pathname.startsWith('/api/')) {
+      const redirectResponse = NextResponse.redirect(new URL('/login', request.url));
+      redirectResponse.cookies.delete('auth_token'); // Clear invalid token
+      return redirectResponse;
+    }
+    // Return 401 for API requests
+    return NextResponse.json(
+      { error: 'Invalid or expired token', code: 'INVALID_TOKEN' },
+      { status: 401 }
+    );
+  }
+
+  // =============================================
+  // INJECT WORKSPACE CONTEXT INTO REQUEST HEADERS
+  // =============================================
+
+  // Create new headers from request and add workspace context
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-client-id', String(payload.client_id));
+  requestHeaders.set('x-company-id', String(payload.company_id));
+  requestHeaders.set('x-username', payload.username);
+  requestHeaders.set('x-user-role', payload.role);
+
+  return NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
 }
 
 // =============================================

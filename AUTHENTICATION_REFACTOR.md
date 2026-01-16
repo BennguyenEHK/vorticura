@@ -1,8 +1,17 @@
-# AUTHENTICATION REFRACTOR - Implementation Guide
+# AUTHENTICATION REFACTOR - Implementation Guide
 
-## Overview Install npm dependencies (next-auth, bcryptjs)
+## Overview
 
-This document contains the complete code implementation for the authentication and workspace context system in `quoteflow_ai`, corresponding to the old `make_sales_sse_sever` structure.
+This refactor integrates bcryptjs and JWT (jose) for secure authentication and workspace context management in `quoteflow_ai`, corresponding to the old `make_sales_sse_sever` structure.
+
+## Prerequisites
+
+Install npm dependencies:
+
+```bash
+npm install bcryptjs jose
+npm install -D @types/bcryptjs
+```
 
 ---
 
@@ -19,15 +28,6 @@ This document contains the complete code implementation for the authentication a
 | 7 | `lib/services/auth/workspace-service.ts` | Extended workspace logic | **CREATE** |
 | 8 | `lib/utils/api/get-workspace.ts` | `auth-middleware.js:24-91` | **CREATE** |
 | 9 | `lib/middleware/auth-helpers.ts` | Add cookie utilities | **UPDATE** |
-
----
-
-## Dependencies to Install
-
-```bash
-npm install bcryptjs jose
-npm install -D @types/bcryptjs
-```
 
 ---
 
