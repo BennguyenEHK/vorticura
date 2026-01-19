@@ -166,6 +166,23 @@ export class WorkspaceContext {
     const filters: SQL[] = [];
     const baseFilter = this.getDatabaseFilter(); // Get workspace filter { company_id, client_id? }
 
+    // Validate that tenant columns exist on the provided table
+    if (baseFilter.company_id !== undefined && !('company_id' in table)) {
+      console.warn(
+        `buildWhereClause: table is missing 'company_id' column required by workspace filter. ` +
+        `Table must include company_id for proper tenant isolation. ` +
+        `Check getDatabaseFilter() and ensure the table schema defines company_id.`
+      );
+    }
+    
+    if (baseFilter.client_id !== undefined && !('client_id' in table)) {
+      console.warn(
+        `buildWhereClause: table is missing 'client_id' column required by workspace filter. ` +
+        `Table must include client_id for client-level tenant isolation. ` +
+        `Check getDatabaseFilter() and ensure the table schema defines client_id.`
+      );
+    }
+
     // Add company_id filter (required for all tenant tables)
     if ('company_id' in table) {
       filters.push(eq((table as Record<string, unknown>).company_id as Parameters<typeof eq>[0], baseFilter.company_id));

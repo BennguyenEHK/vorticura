@@ -37,7 +37,9 @@ export const clientCompany = pgTable('client_company', {
 
   // Timestamps
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false })
+    .defaultNow()
+    .$onUpdate(() => new Date()),
 });
 
 // ============================================
@@ -67,7 +69,9 @@ export const clientInfo = pgTable('client_info', {
 
   // Timestamps
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false })
+    .defaultNow()
+    .$onUpdate(() => new Date()),
 });
 
 // ============================================
@@ -97,7 +101,9 @@ export const customers = pgTable('customers', {
 
   // Timestamps
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false })
+    .defaultNow()
+    .$onUpdate(() => new Date()),
 });
 
 // ============================================
@@ -125,7 +131,9 @@ export const emailTable = pgTable('email_table', {
 
   // Timestamps
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false })
+    .defaultNow()
+    .$onUpdate(() => new Date()),
 });
 
 // ============================================
@@ -226,7 +234,9 @@ export const quotationPricing = pgTable('quotation_pricing', {
 
   // Timestamps
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false })
+    .defaultNow()
+    .$onUpdate(() => new Date()),
 });
 
 // ============================================
@@ -264,7 +274,9 @@ export const quotations = pgTable('quotations', {
 
   // Timestamps
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false })
+    .defaultNow()
+    .$onUpdate(() => new Date()),
 });
 
 // ============================================
@@ -291,7 +303,9 @@ export const rfqAnalysis = pgTable('rfq_analysis', {
 
   // Timestamps
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false })
+    .defaultNow()
+    .$onUpdate(() => new Date()),
 });
 
 // ============================================
@@ -370,7 +384,9 @@ export const supplierSearch = pgTable('supplier_search', {
 
   // Timestamps
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false })
+    .defaultNow()
+    .$onUpdate(() => new Date()),
 });
 
 // ============================================
@@ -391,7 +407,9 @@ export const userSessions = pgTable(
 
     // Timestamps
     createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: false })
+      .defaultNow()
+      .$onUpdate(() => new Date()),
   },
   (table) => ({
     // Composite primary key definition

@@ -11,7 +11,9 @@
       "Bash(grep:*)",
       "Bash(git rm:*)",
       "Bash(npx tsc:*)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(cd:*)",
+      "Bash(findstr:*)"
     ]
   }
 }

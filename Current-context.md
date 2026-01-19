@@ -660,3 +660,134 @@
 
   This is the complete dataflow showing how two users from the same company are isolated through JWT tokens, workspace contexts, and enforced database    
   filters.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+● Now I have a complete picture. Let me give you an accurate and thorough answer.                                                  
+  ---                                                                                                                              ✅ CONFIRMATION OF YOUR UNDERSTANDING
+                                                                                                                                 
+  1. JWT Storage in httpOnly Cookies - CONFIRMED
+
+  Looking at app/api/auth/login/route.ts:132-139:
+
+  response.cookies.set('auth_token', token, {
+    httpOnly: true,                                    // Cannot be accessed by JavaScript
+    secure: process.env.NODE_ENV === 'production',     // HTTPS only in production
+    sameSite: 'strict',                                // CSRF protection
+    maxAge: 7 * 24 * 60 * 60,                          // 7 days expiration
+    path: '/',                                         // Available on all paths
+  });
+
+  YES - After successful login, the JWT is stored in an httpOnly cookie named auth_token which is stored in the browser but      
+  cannot be accessed by JavaScript (XSS protection).
+
+  ---
+  2. Middleware.ts Receives Requests First - CONFIRMED
+
+  YES - In Next.js, middleware.ts at the project root is Edge Middleware that runs BEFORE any route handler. It's the first code 
+  that processes incoming requests.
+
+  Flow:
+  Browser Request → middleware.ts → API Route Handler (e.g., /api/database)
+
+  ---
+  3. About getWorkspaceFromToken - HERE'S THE KEY INSIGHT
+
+  You're asking whether getWorkspaceFromToken should be in middleware.ts. Let me explain the current architecture:
+
+  Current Two-Layer Design:
+  ┌─────────┬─────────────────┬─────────────────────────┬───────────────────────────────────────────┐
+  │  Layer  │      File       │        Function         │                  Purpose                  │
+  ├─────────┼─────────────────┼─────────────────────────┼───────────────────────────────────────────┤
+  │ Layer 1 │ middleware.ts   │ verifyToken()           │ Lightweight verification, injects headers │
+  ├─────────┼─────────────────┼─────────────────────────┼───────────────────────────────────────────┤
+  │ Layer 2 │ auth-helpers.ts │ getWorkspaceFromToken() │ Creates full WorkspaceContext instance    │
+  └─────────┴─────────────────┴─────────────────────────┴───────────────────────────────────────────┘
+  What middleware.ts Does (lines 179-212):
+
+  // Verify token
+  const payload = await verifyToken(token);
+
+  // Inject context into REQUEST HEADERS (not WorkspaceContext class)
+  requestHeaders.set('x-client-id', String(payload.client_id));
+  requestHeaders.set('x-company-id', String(payload.company_id));
+  requestHeaders.set('x-username', payload.username);
+  requestHeaders.set('x-user-role', payload.role);
+
+  What getWorkspaceFromToken Does (auth-helpers.ts:82-99):
+
+  export async function getWorkspaceFromToken(token: string): Promise<WorkspaceContext | null> {
+    const payload = await verifyJWT(token);   // RE-VERIFIES token
+    return new WorkspaceContext({              // Creates CLASS instance
+      client_id: payload.client_id,
+      company_id: payload.company_id,
+      username: payload.username,
+      role: payload.role,
+    });
+  }
+
+  ---
+  �� THE ANSWER TO YOUR QUESTION
+
+  getWorkspaceFromToken is NOT in middleware.ts and that's intentional. Here's why:
+
+  Reason 1: Edge Runtime Limitations
+
+  Middleware runs at the Edge Runtime which has restrictions. Creating complex class instances with methods is heavier than just 
+  passing primitive values via headers.
+
+  Reason 2: Separation of Concerns
+
+  - Middleware = Gatekeeper (verify, reject bad requests, pass data)
+  - API Routes = Business logic (use WorkspaceContext class for database operations)
+
+  Reason 3: Current Flow
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  1. User logs in → JWT generated → stored in httpOnly cookie            │
+  │     (route.ts:132-139)                                                  │
+  └─────────────────────────────────────────────────────────────────────────┘
+                                      ↓
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  2. User makes request → Cookie sent automatically                      │
+  │     (Browser behavior)                                                  │
+  └─────────────────────────────────────────────────────────────────────────┘
+                                      ↓
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  3. middleware.ts → verifyToken() → Injects x-client-id, x-company-id   │
+  │     (middleware.ts:162-212)                                             │
+  └─────────────────────────────────────────────────────────────────────────┘
+                                      ↓
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  4. API Route → getWorkspaceFromRequest() → Creates WorkspaceContext    │
+  │     (get-workspace.ts:32-54 → auth-helpers.ts:82-99)                    │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  ---
+  ⚠️ ONE ISSUE WITH CURRENT DESIGN
+
+  There's redundant token verification:
+  1. middleware.ts verifies the token via verifyToken()
+  2. getWorkspaceFromRequest() verifies AGAIN via getWorkspaceFromToken() → verifyJWT()
+
+  A more efficient design would be: API routes should trust the headers injected by middleware and just construct
+  WorkspaceContext from headers (without re-verifying). But the current approach is safer (defense in depth) at the cost of      
+  slight performance overhead.
+
+  ---
+  Summary: Your understanding is correct. The placement of getWorkspaceFromToken in auth-helpers.ts (not middleware.ts) is       
+  intentional - middleware does lightweight verification and header injection, while API routes use getWorkspaceFromToken to     
+  construct the full WorkspaceContext class when needed

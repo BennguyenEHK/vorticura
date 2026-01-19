@@ -61,7 +61,20 @@ import { jwtVerify } from 'jose';
 
 // JWT secret for verification (must match auth-helpers.ts)
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'quoteflow-ai-secret-key-change-in-production'
+  (() => {
+    const secret = process.env.JWT_SECRET;
+    if (process.env.NODE_ENV === 'production') {
+      if (!secret || secret.trim() === '') {
+        throw new Error(
+          'FATAL: JWT_SECRET environment variable is required in production. ' +
+          'Please set process.env.JWT_SECRET before starting the application.'
+        );
+      }
+      return secret;
+    }
+    // Non-production (dev/test): use provided secret or fallback
+    return secret || 'quoteflow-ai-secret-key-change-in-production';
+  })()
 );
 
 // Routes that don't require authentication
@@ -291,30 +304,35 @@ export async function POST(request: NextRequest) {
     // Hash password (corresponds to signup.js:173-174)
     const passwordHash = await hash(body.password, 10);
 
-    // Create company first (corresponds to signup.js:~100)
-    const [newCompany] = await db
-      .insert(clientCompany)
-      .values({
-        companyName: body.company_name,
-        companyEmail: body.company_email || null,
-        companyAddress: body.company_address || null,
-        companyNumber: body.company_number || null,
-      })
-      .returning();
+    // Create company and user inside a transaction to ensure both succeed or both fail
+    const [newUser] = await db.transaction(async (tx) => {
+      // Create company first (corresponds to signup.js:~100)
+      const [newCompany] = await tx
+        .insert(clientCompany)
+        .values({
+          companyName: body.company_name,
+          companyEmail: body.company_email || null,
+          companyAddress: body.company_address || null,
+          companyNumber: body.company_number || null,
+        })
+        .returning();
 
-    // Create user with company reference (corresponds to signup.js:~150)
-    const [newUser] = await db
-      .insert(clientInfo)
-      .values({
-        companyId: newCompany.companyId,
-        username: body.username,
-        passwordHash: passwordHash,
-        email: body.email || null,
-        clientRole: 'admin', // First user of company is admin
-        clientStatus: 'active',
-        lastLogin: new Date(),
-      })
-      .returning();
+      // Create user with company reference (corresponds to signup.js:~150)
+      const [createdUser] = await tx
+        .insert(clientInfo)
+        .values({
+          companyId: newCompany.companyId,
+          username: body.username,
+          passwordHash: passwordHash,
+          email: body.email || null,
+          clientRole: 'admin', // First user of company is admin
+          clientStatus: 'active',
+          lastLogin: new Date(),
+        })
+        .returning();
+
+      return [createdUser];
+    });
 
     // Generate JWT token for auto-login (corresponds to signup.js:~200)
     const token = await generateJWT({

@@ -65,6 +65,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Defensive check: verify user.passwordHash exists before comparing
+    if (!user.passwordHash) {
+      console.warn(`Login attempt for user ${user.clientId}: missing passwordHash`);
+      return NextResponse.json(
+        { error: 'Invalid username or password' },
+        { status: 401 }
+      );
+    }
+
     // Verify password using bcrypt compare
     const isValidPassword = await compare(password, user.passwordHash);
 

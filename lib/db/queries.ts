@@ -227,12 +227,12 @@ export async function getData(
       ];
 
       // Add company_id filter to secondary table (prevents cross-tenant data leakage)
-      if ('company_id' in secondaryTable) {
+      if ('companyId' in secondaryTable) {
         joinConditions.push(eq((secondaryTable as any).companyId, workspaceFilter.company_id));
       }
 
       // Add client_id filter to secondary table if workspace isolation is enabled
-      if (workspaceFilter.client_id !== undefined && 'client_id' in secondaryTable) {
+      if (workspaceFilter.client_id !== undefined && 'clientId' in secondaryTable) {
         joinConditions.push(eq((secondaryTable as any).clientId, workspaceFilter.client_id));
       }
 

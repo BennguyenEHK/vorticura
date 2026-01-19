@@ -22,20 +22,6 @@ const PUBLIC_ROUTES = [
   '/favicon.ico',     // Favicon
 ];
 
-// Routes that require authentication (protected)
-const PROTECTED_ROUTES = [
-  '/dashboard',       // Dashboard pages
-  '/quotations',      // Quotation pages
-  '/workflow',        // Workflow pages
-  '/files',           // File management pages
-  '/chat',            // Chat pages
-  '/api/database',    // Database API endpoints
-  '/api/quotations',  // Quotation API endpoints
-  '/api/sessions',    // Session API endpoints
-  '/api/events',      // SSE events endpoint
-  '/api/stats',       // Statistics endpoint
-];
-
 // =============================================
 // HELPER FUNCTIONS
 // =============================================
@@ -68,7 +54,7 @@ export async function middleware(request: NextRequest) {
   if (
     pathname.startsWith('/_next/static') ||
     pathname.startsWith('/_next/image') ||
-    pathname.includes('.')  // Files with extensions (images, css, etc.)
+    /\.[a-zA-Z0-9]+$/.test(pathname) // Match file extensions (e.g., .css, .js, .png)
   ) {
     return NextResponse.next();
   }
@@ -103,13 +89,15 @@ export async function middleware(request: NextRequest) {
     }
 
     // Add CORS headers to all API responses
+    // In production, fail closed: only set CORS headers if ALLOWED_ORIGIN is explicitly configured
     if (process.env.ALLOWED_ORIGIN) {
       response.headers.set('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN);
       response.headers.set('Access-Control-Allow-Credentials', 'true');
-    } else {
+    } else if (process.env.NODE_ENV !== 'production') {
+      // Non-production environments can use wildcard for development/testing
       response.headers.set('Access-Control-Allow-Origin', '*');
-      // Note: credentials cannot be used with wildcard origin
     }
+    // Production without ALLOWED_ORIGIN: omit CORS headers (fail closed)
   }
 
   // =============================================
