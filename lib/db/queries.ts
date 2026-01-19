@@ -10,13 +10,12 @@
  * - updateData: Generic update with multiple column where conditions
  * - deleteData: Generic delete with multiple column where conditions
  *
- * All functions enforce workspace isolation using WorkspaceDatabaseHelper
+ * All functions enforce workspace isolation using WorkspaceContext directly
  */
 
 import { eq, SQL, and } from 'drizzle-orm';
 import { PgTable } from 'drizzle-orm/pg-core';
-import { WorkspaceDatabaseHelper } from './workspace-helper';
-import { WorkspaceContext } from '@/lib/middleware/workspace-context';
+import { WorkspaceContext } from '@/lib/middleware/workspace-context'; // Direct usage, no helper wrapper
 import { db } from './client';
 
 // Import all essential tables from schema.ts
@@ -137,22 +136,19 @@ export async function insertData<T extends Record<string, unknown>>(
   workspace: WorkspaceContext
 ): Promise<any> {
   try {
-    // Initialize workspace database helper
-    const helper = new WorkspaceDatabaseHelper(workspace);
-
-    // Get the actual table object
+    // Get the actual table object from table map
     const table = getTableByName(tableName);
 
-    // Inject workspace context (company_id, client_id) into data payload
-    const dataWithContext = helper.injectContext(dataPayload);
+    // Inject workspace context (company_id, client_id) directly using WorkspaceContext
+    const dataWithContext = workspace.injectWorkspaceContext(dataPayload);
 
-    // Execute INSERT query with workspace context
+    // Execute INSERT query with workspace context injected
     const results = await db
       .insert(table as any)
       .values(dataWithContext) // ✅ Type-checked with workspace context
       .returning();
 
-    // Return the first inserted record or null (explicit type assertion to fix type error)
+    // Return the first inserted record or null
     return (results as any[])[0] || null;
   } catch (error) {
     // Log error for debugging but sanitize message for security
@@ -197,9 +193,6 @@ export async function getData(
   workspace: WorkspaceContext
 ): Promise<any[]> {
   try {
-    // Initialize workspace database helper
-    const helper = new WorkspaceDatabaseHelper(workspace);
-
     // Convert single table name to array for uniform processing
     const tables = Array.isArray(tableNames) ? tableNames : [tableNames];
 
@@ -208,7 +201,7 @@ export async function getData(
 
     // Build WHERE conditions (workspace filters + user-provided columns)
     const whereConditions = multipleCol(primaryTable, columns);
-    const whereClause = helper.buildWhereClause(primaryTable, whereConditions);
+    const whereClause = workspace.buildWhereClause(primaryTable, whereConditions); // Direct usage
 
     // CASE 1: Single table query (no JOIN)
     if (tables.length === 1) {
@@ -226,7 +219,7 @@ export async function getData(
       const secondaryTable = getTableByName(tables[1]);
 
       // Get workspace filter for security (company_id and optional client_id)
-      const workspaceFilter = helper.getWorkspaceFilter();
+      const workspaceFilter = workspace.getDatabaseFilter(); // Direct usage
 
       // Build JOIN conditions with workspace filtering on BOTH tables (CRITICAL for security)
       const joinConditions: SQL[] = [
@@ -295,25 +288,22 @@ export async function updateData<T extends Record<string, unknown>>(
   workspace: WorkspaceContext
 ): Promise<any> {
   try {
-    // Initialize workspace database helper
-    const helper = new WorkspaceDatabaseHelper(workspace);
-
-    // Get the actual table object
+    // Get the actual table object from table map
     const table = getTableByName(tableName);
 
     // Build WHERE conditions using multipleCol helper
     const whereConditions = multipleCol(table, columns);
 
-    // Execute UPDATE query with workspace filtering
+    // Execute UPDATE query with workspace filtering (direct WorkspaceContext usage)
     const results = await db
       .update(table as any)
       .set(dataPayload) // ✅ Type-checked update data
       .where(
-        helper.buildWhereClause(table, whereConditions) // Combine workspace filters + user conditions
+        workspace.buildWhereClause(table, whereConditions) // Combine workspace filters + user conditions
       )
       .returning();
 
-    // Return the first updated record or null (explicit type assertion to fix type error)
+    // Return the first updated record or null
     return (results as any[])[0] || null;
   } catch (error) {
     // Log error for debugging but sanitize message for security
@@ -353,24 +343,21 @@ export async function deleteData(
   workspace: WorkspaceContext
 ): Promise<any> {
   try {
-    // Initialize workspace database helper
-    const helper = new WorkspaceDatabaseHelper(workspace);
-
-    // Get the actual table object
+    // Get the actual table object from table map
     const table = getTableByName(tableName);
 
     // Build WHERE conditions using multipleCol helper
     const whereConditions = multipleCol(table, columns);
 
-    // Execute DELETE query with workspace filtering
+    // Execute DELETE query with workspace filtering (direct WorkspaceContext usage)
     const results = await db
       .delete(table as any)
       .where(
-        helper.buildWhereClause(table, whereConditions) // Combine workspace filters + user conditions
+        workspace.buildWhereClause(table, whereConditions) // Combine workspace filters + user conditions
       )
       .returning();
 
-    // Return the first deleted record or null (explicit type assertion to fix type error)
+    // Return the first deleted record or null
     return (results as any[])[0] || null;
   } catch (error) {
     // Log error for debugging but sanitize message for security

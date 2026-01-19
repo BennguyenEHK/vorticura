@@ -2,9 +2,12 @@
 // 🔐 WORKSPACE CONTEXT MANAGER
 // =============================================
 // Purpose: Manage user workspace context for tenant isolation
-// Replaces: utils/auth_account/workspace-context.js
+// Provides: getDatabaseFilter, injectWorkspaceContext, buildWhereClause
+// Replaces: utils/auth_account/workspace-context.js + workspace-helper.ts
 
 import { workspaceConfig } from '@/config/workspace.config';
+import { and, eq, SQL } from 'drizzle-orm'; // Drizzle ORM for SQL building
+import { PgTable } from 'drizzle-orm/pg-core'; // PostgreSQL table type
 
 /**
  * WorkspaceContext Class
@@ -141,5 +144,44 @@ export class WorkspaceContext {
       .join(', ');
 
     return `WorkspaceContext[${mode}](user=${this.username}, ${filterStr})`;
+  }
+
+  /**
+   * Build workspace WHERE clause for Drizzle queries
+   * Combines workspace filters (company_id, client_id) with additional conditions
+   * @param table - Drizzle table definition to build WHERE clause for
+   * @param additionalFilters - Optional array of additional SQL conditions
+   * @returns Combined SQL filter or undefined if no filters
+   *
+   * @example
+   * const whereClause = workspace.buildWhereClause(quotations, [
+   *   eq(quotations.quotation_id, 123)
+   * ]);
+   * const results = await db.select().from(quotations).where(whereClause);
+   */
+  buildWhereClause<T extends PgTable>(
+    table: T,
+    additionalFilters?: SQL[]
+  ): SQL | undefined {
+    const filters: SQL[] = [];
+    const baseFilter = this.getDatabaseFilter(); // Get workspace filter { company_id, client_id? }
+
+    // Add company_id filter (required for all tenant tables)
+    if ('company_id' in table) {
+      filters.push(eq((table as Record<string, unknown>).company_id as Parameters<typeof eq>[0], baseFilter.company_id));
+    }
+
+    // Add client_id filter if isolation is enabled (Phase 2)
+    if (baseFilter.client_id !== undefined && 'client_id' in table) {
+      filters.push(eq((table as Record<string, unknown>).client_id as Parameters<typeof eq>[0], baseFilter.client_id));
+    }
+
+    // Add user-provided additional filters
+    if (additionalFilters && additionalFilters.length > 0) {
+      filters.push(...additionalFilters);
+    }
+
+    // Combine all filters with AND logic, return undefined if no filters
+    return filters.length > 0 ? and(...filters) : undefined;
   }
 }

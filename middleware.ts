@@ -6,19 +6,7 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { jwtVerify } from 'jose';
-
-// JWT secret for verification (must match auth-helpers.ts)
-// Throws error in production if secret is missing; allows dev fallback only
-const rawJwtSecret = process.env.JWT_SECRET;
-if (!rawJwtSecret && process.env.NODE_ENV === 'production') {
-  throw new Error('JWT_SECRET environment variable is required in production');
-}
-if (!rawJwtSecret && process.env.NODE_ENV !== 'production') {
-  // eslint-disable-next-line no-console
-  console.warn('⚠️ Using development fallback JWT_SECRET. Do NOT use this in production.');
-}
-const JWT_SECRET = new TextEncoder().encode(rawJwtSecret || 'quoteflow-ai-secret-key-change-in-production');
+import { verifyJWT } from '@/lib/middleware/auth-helpers'; // Use centralized JWT verification
 
 // =============================================
 // ROUTE CONFIGURATION
@@ -62,28 +50,7 @@ function matchesRoute(pathname: string, routes: string[]): boolean {
   return routes.some(route => pathname.startsWith(route));
 }
 
-/**
- * Verify JWT token and extract payload
- * @param token - JWT token string
- * @returns Decoded payload or null if verification fails
- */
-async function verifyToken(token: string) {
-  try {
-    // Verify token signature and decode payload
-    const { payload } = await jwtVerify(token, JWT_SECRET);
-
-    // Return typed payload with workspace context
-    return payload as {
-      client_id: number;
-      company_id: number;
-      username: string;
-      role: string;
-    };
-  } catch {
-    // Token invalid or expired
-    return null;
-  }
-}
+// Note: verifyToken removed - now using verifyJWT from auth-helpers.ts
 
 // =============================================
 // MAIN MIDDLEWARE FUNCTION
@@ -176,8 +143,8 @@ export async function middleware(request: NextRequest) {
     );
   }
 
-  // Verify token and extract payload
-  const payload = await verifyToken(token);
+  // Verify token using centralized verifyJWT from auth-helpers.ts
+  const payload = await verifyJWT(token);
 
   // Token invalid or expired
   if (!payload) {
