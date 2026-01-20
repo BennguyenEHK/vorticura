@@ -37,6 +37,7 @@ yarn-error.log*
 .vercel
 *.md
 !README.md
+!Monorepo-structure.md
 
 # typescript
 *.tsbuildinfo
