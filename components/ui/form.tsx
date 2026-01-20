@@ -117,25 +117,28 @@ const FormLabel = React.forwardRef<
 })
 FormLabel.displayName = "FormLabel"
 
-// FormControl wraps the actual input element
+// FormControl clones child input and injects accessibility props
 const FormControl = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
->(({ ...props }, ref) => {
+>(({ children, ...props }, ref) => {
   const { error, formItemId, formDescriptionId, formMessageId } = useFormField()
 
+  // Clone the child element (input) and inject id and aria attributes
+  const childWithProps = React.isValidElement(children)
+    ? React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
+        id: formItemId, // Pass id to actual input for label association
+        "aria-describedby": !error
+          ? formDescriptionId
+          : `${formDescriptionId} ${formMessageId}`,
+        "aria-invalid": !!error,
+      })
+    : children
+
   return (
-    <div
-      ref={ref}
-      id={formItemId}
-      aria-describedby={
-        !error
-          ? `${formDescriptionId}` // Link to description when no error
-          : `${formDescriptionId} ${formMessageId}` // Link to both when error exists
-      }
-      aria-invalid={!!error} // Accessibility: indicate invalid state
-      {...props}
-    />
+    <div ref={ref} {...props}>
+      {childWithProps}
+    </div>
   )
 })
 FormControl.displayName = "FormControl"

@@ -77,7 +77,7 @@ export default function AuthLayout({
 
       {/* ===== Right Panel: Brand Area (60% on desktop, hidden on mobile) ===== */}
       <section
-        className="hidden lg:flex lg:w-3/5 lg:flex-col lg:items-center lg:justify-center lg:bg-gradient-to-br lg:from-slate-900 lg:via-slate-800 lg:to-slate-900"
+        className="relative hidden lg:flex lg:w-3/5 lg:flex-col lg:items-center lg:justify-center lg:bg-gradient-to-br lg:from-slate-900 lg:via-slate-800 lg:to-slate-900"
         aria-hidden="true" // Decorative panel, not essential for accessibility
       >
         {/* Decorative Background Pattern */}
