@@ -22,29 +22,29 @@ import { workspaceConfig } from '@/config/workspace.config';
 export async function POST(request: NextRequest) {
   try {
     // Parse login credentials from request body
-    const { username, password } = await request.json();
+    const { identifier, password, isEmail: isEmailIdentifier } = await request.json();
 
-    // Validate input (both fields required)
-    if (!username || !password) {
+    // Validate input (all fields required)
+    if (!identifier || !password || isEmailIdentifier === undefined) {
       return NextResponse.json(
-        { error: 'Username and password are required' },
+        { error: 'Identifier, password, and isEmail flag are required' },
         { status: 400 }
       );
     }
 
-    // Query user from database with all necessary fields
+    // Query user from database based on identifier type (email or username)
     const users = await db
       .select({
         clientId: clientInfo.clientId,
         companyId: clientInfo.companyId,
         username: clientInfo.username,
+        email: clientInfo.email,
         passwordHash: clientInfo.passwordHash,
         role: clientInfo.clientRole,
         status: clientInfo.clientStatus,
-        email: clientInfo.email,
       })
       .from(clientInfo)
-      .where(eq(clientInfo.username, username))
+      .where(isEmailIdentifier ? eq(clientInfo.email, identifier) : eq(clientInfo.username, identifier))
       .limit(1);
 
     const user = users[0];
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
 
     // Defensive check: verify user.passwordHash exists before comparing
     if (!user.passwordHash) {
-      console.warn(`Login attempt for user ${user.clientId}: missing passwordHash`);
+      console.warn('Login attempt: missing passwordHash');
       return NextResponse.json(
         { error: 'Invalid username or password' },
         { status: 401 }

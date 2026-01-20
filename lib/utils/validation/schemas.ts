@@ -6,6 +6,12 @@ import { z } from "zod"
 // Zod schemas for validating auth form inputs
 // Used with React Hook Form for client-side validation
 
+// Helper function to detect if a string is an email
+export const isEmail = (value: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(value)
+}
+
 // Email validation with proper format checking
 const emailSchema = z
   .string()
@@ -16,8 +22,8 @@ const emailSchema = z
 const optionalEmailSchema = z
   .string()
   .email({ message: "Please enter a valid email address" })
-  .optional()
-  .or(z.literal("")) // Allow empty string
+  .or(z.literal(""))
+  .optional() // Allow undefined
 
 // Password validation with security requirements
 const passwordSchema = z
@@ -63,9 +69,13 @@ const addressSchema = z
   .optional()
   .or(z.literal("")) // Allow empty string
 
-// Login form schema - email and password only
+// Login form schema - identifier (email or username) and password
+// Identifier auto-detects whether user entered email or username
 export const loginSchema = z.object({
-  email: emailSchema,
+  identifier: z
+    .string()
+    .min(1, { message: "Email or username is required" })
+    .min(3, { message: "Please enter a valid email or username" }),
   password: passwordSchema,
 })
 

@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/form"
 
 // Validation schemas
-import { loginSchema, signupSchema, type LoginFormData, type SignupFormData } from "@/lib/utils/validation/schemas"
+import { loginSchema, signupSchema, isEmail, type LoginFormData, type SignupFormData } from "@/lib/utils/validation/schemas"
 
 // =============================================
 // AuthForm Props Interface
@@ -50,7 +50,7 @@ const AuthForm = ({ type }: AuthFormProps) => {
   const form = useForm<AuthFormData>({
     resolver: zodResolver(formSchema),
     defaultValues: type === "login"
-      ? { email: "", password: "" }
+      ? { identifier: "", password: "" }
       : {
           username: "",
           email: "",
@@ -74,7 +74,7 @@ const AuthForm = ({ type }: AuthFormProps) => {
       const endpoint = type === "login" ? "/api/auth/login" : "/api/auth/signup"
 
       // Transform data for API (frontend uses camelCase, backend uses snake_case)
-      let apiData: Record<string, string | undefined>
+      let apiData: Record<string, string | boolean | undefined>
       if (type === "signup") {
         const signupData = data as SignupFormData
         apiData = {
@@ -88,10 +88,16 @@ const AuthForm = ({ type }: AuthFormProps) => {
           company_fax: signupData.companyFax || undefined,
         }
       } else {
-        apiData = data as Record<string, string>
+        // Login: transform identifier to identifier + isEmail flag
+        const loginData = data as LoginFormData
+        apiData = {
+          identifier: loginData.identifier,
+          password: loginData.password,
+          isEmail: isEmail(loginData.identifier), // Auto-detect if email or username
+        }
       }
 
-      // Send request to auth API
+      // Send request to auth API  change to use  /api/auth/login/route.ts ( POST function)  or /api/auth/signup/route.ts
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
@@ -200,18 +206,17 @@ const AuthForm = ({ type }: AuthFormProps) => {
               </>
             )}
 
-            {/* Email Field (both login and signup) */}
+            {/* Identifier Field (email or username - both login and signup) */}
             <FormField
               control={form.control}
-              name="email"
+              name="identifier"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email</FormLabel>
+                  <FormLabel>Email or Username</FormLabel>
                   <FormControl>
                     <Input
-                      type="email"
-                      placeholder="you@example.com"
-                      autoComplete="email"
+                      placeholder="you@example.com or johndoe"
+                      autoComplete="username"
                       disabled={isLoading}
                       {...field}
                     />
