@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/form"
 
 // Validation schemas
-import { loginSchema, signupSchema, isEmail, type LoginFormData, type SignupFormData } from "@/lib/utils/validation/schemas"
+import { loginSchema, signupSchema, type LoginFormData, type SignupFormData } from "@/lib/utils/validation/schemas"
 
 // =============================================
 // AuthForm Props Interface
@@ -88,16 +88,15 @@ const AuthForm = ({ type }: AuthFormProps) => {
           company_fax: signupData.companyFax || undefined,
         }
       } else {
-        // Login: transform identifier to identifier + isEmail flag
+        // Login: send identifier and password; server will auto-detect email vs username
         const loginData = data as LoginFormData
         apiData = {
           identifier: loginData.identifier,
           password: loginData.password,
-          isEmail: isEmail(loginData.identifier), // Auto-detect if email or username
         }
       }
 
-      // Send request to auth API  change to use  /api/auth/login/route.ts ( POST function)  or /api/auth/signup/route.ts
+      // POST to /api/auth/login or /api/auth/signup based on form type
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {

@@ -11,6 +11,7 @@ import { clientInfo, clientCompany } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { generateJWT } from '@/lib/middleware/auth-helpers';
 import { workspaceConfig } from '@/config/workspace.config';
+import { isEmail } from '@/lib/utils/validation/schemas';
 
 /**
  * POST /api/auth/login
@@ -22,15 +23,18 @@ import { workspaceConfig } from '@/config/workspace.config';
 export async function POST(request: NextRequest) {
   try {
     // Parse login credentials from request body
-    const { identifier, password, isEmail: isEmailIdentifier } = await request.json();
+    const { identifier, password } = await request.json();
 
-    // Validate input (all fields required)
-    if (!identifier || !password || isEmailIdentifier === undefined) {
+    // Validate input (identifier and password required)
+    if (!identifier || !password) {
       return NextResponse.json(
-        { error: 'Identifier, password, and isEmail flag are required' },
+        { error: 'Identifier and password are required' },
         { status: 400 }
       );
     }
+
+    // Compute email detection server-side to prevent client manipulation
+    const computedIsEmail = isEmail(identifier);
 
     // Query user from database based on identifier type (email or username)
     const users = await db
@@ -44,7 +48,7 @@ export async function POST(request: NextRequest) {
         status: clientInfo.clientStatus,
       })
       .from(clientInfo)
-      .where(isEmailIdentifier ? eq(clientInfo.email, identifier) : eq(clientInfo.username, identifier))
+      .where(computedIsEmail ? eq(clientInfo.email, identifier) : eq(clientInfo.username, identifier))
       .limit(1);
 
     const user = users[0];
