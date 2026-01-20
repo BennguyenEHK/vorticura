@@ -14,15 +14,17 @@ import { generateJWT } from '@/lib/middleware/auth-helpers';
 /**
  * Signup request body interface
  * Defines the expected structure of registration data
+ * Matches CLIENT_COMPANY and CLIENT_INFO table schemas
  */
 interface SignupRequest {
-  username: string;        // Required: unique username
+  username: string;        // Required: unique username (3-50 chars)
   password: string;        // Required: minimum 8 characters
   email?: string;          // Optional: user email
   company_name: string;    // Required: company name for new company creation
-  company_email?: string;  // Optional: company contact email
+  company_email?: string;  // Optional: company contact email (max 60 chars)
   company_address?: string; // Optional: company address
-  company_number?: string;  // Optional: company phone number
+  company_number?: string;  // Optional: company phone number (max 50 chars)
+  company_fax?: string;     // Optional: company fax number (max 50 chars)
 }
 
 /**
@@ -92,6 +94,7 @@ export async function POST(request: NextRequest) {
             companyEmail: body.company_email || null,
             companyAddress: body.company_address || null,
             companyNumber: body.company_number || null,
+            companyFax: body.company_fax || null, // Include company fax
           })
           .returning();
 

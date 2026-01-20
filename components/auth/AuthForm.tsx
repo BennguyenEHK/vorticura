@@ -5,7 +5,6 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
 
 // UI Components
 import { Button } from "@/components/ui/button"
@@ -47,11 +46,22 @@ const AuthForm = ({ type }: AuthFormProps) => {
   const formSchema = type === "login" ? loginSchema : signupSchema
 
   // Initialize React Hook Form with Zod resolver
+  // Default values match the schema structure for each form type
   const form = useForm<AuthFormData>({
     resolver: zodResolver(formSchema),
     defaultValues: type === "login"
       ? { email: "", password: "" }
-      : { firstName: "", lastName: "", email: "", password: "", confirmPassword: "" },
+      : {
+          username: "",
+          email: "",
+          password: "",
+          confirmPassword: "",
+          companyName: "",
+          companyEmail: "",
+          companyAddress: "",
+          companyNumber: "",
+          companyFax: "",
+        },
   })
 
   // Form submission handler
@@ -63,20 +73,38 @@ const AuthForm = ({ type }: AuthFormProps) => {
       // Determine API endpoint based on form type
       const endpoint = type === "login" ? "/api/auth/login" : "/api/auth/signup"
 
+      // Transform data for API (frontend uses camelCase, backend uses snake_case)
+      let apiData: Record<string, string | undefined>
+      if (type === "signup") {
+        const signupData = data as SignupFormData
+        apiData = {
+          username: signupData.username,
+          email: signupData.email,
+          password: signupData.password,
+          company_name: signupData.companyName,
+          company_email: signupData.companyEmail || undefined,
+          company_address: signupData.companyAddress || undefined,
+          company_number: signupData.companyNumber || undefined,
+          company_fax: signupData.companyFax || undefined,
+        }
+      } else {
+        apiData = data as Record<string, string>
+      }
+
       // Send request to auth API
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(apiData),
       })
 
       const result = await response.json()
 
       // Handle API errors
       if (!response.ok) {
-        setError(result.message || "Authentication failed. Please try again.")
+        setError(result.error || result.message || "Authentication failed. Please try again.")
         return
       }
 
@@ -121,7 +149,7 @@ const AuthForm = ({ type }: AuthFormProps) => {
   const { title, description, buttonText, footerText, footerLinkText, footerLinkHref } = config[type]
 
   return (
-    <Card className="w-full max-w-md shadow-lg">
+    <Card className="w-full max-w-lg shadow-lg">
       <CardHeader className="space-y-1 text-center">
         {/* Form Title */}
         <CardTitle className="text-2xl font-bold tracking-tight">
@@ -147,19 +175,20 @@ const AuthForm = ({ type }: AuthFormProps) => {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Signup-only fields: First and Last Name */}
+            {/* ===== SIGNUP ONLY: User Credentials Section ===== */}
             {type === "signup" && (
-              <div className="grid grid-cols-2 gap-4">
+              <>
+                {/* Username Field */}
                 <FormField
                   control={form.control}
-                  name="firstName"
+                  name="username"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>First Name</FormLabel>
+                      <FormLabel>Username</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="John"
-                          autoComplete="given-name"
+                          placeholder="johndoe"
+                          autoComplete="username"
                           disabled={isLoading}
                           {...field}
                         />
@@ -168,28 +197,10 @@ const AuthForm = ({ type }: AuthFormProps) => {
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="lastName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Last Name</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Doe"
-                          autoComplete="family-name"
-                          disabled={isLoading}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+              </>
             )}
 
-            {/* Email Field */}
+            {/* Email Field (both login and signup) */}
             <FormField
               control={form.control}
               name="email"
@@ -231,7 +242,7 @@ const AuthForm = ({ type }: AuthFormProps) => {
               )}
             />
 
-            {/* Signup-only: Confirm Password Field */}
+            {/* ===== SIGNUP ONLY: Confirm Password ===== */}
             {type === "signup" && (
               <FormField
                 control={form.control}
@@ -252,6 +263,127 @@ const AuthForm = ({ type }: AuthFormProps) => {
                   </FormItem>
                 )}
               />
+            )}
+
+            {/* ===== SIGNUP ONLY: Company Information Section ===== */}
+            {type === "signup" && (
+              <>
+                {/* Section Divider */}
+                <div className="relative py-2">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-slate-200" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-white px-2 text-slate-500">Company Information</span>
+                  </div>
+                </div>
+
+                {/* Company Name (Required) */}
+                <FormField
+                  control={form.control}
+                  name="companyName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Company Name *</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Acme Corporation"
+                          autoComplete="organization"
+                          disabled={isLoading}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Company Email (Optional) */}
+                <FormField
+                  control={form.control}
+                  name="companyEmail"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Company Email</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="email"
+                          placeholder="contact@company.com"
+                          autoComplete="email"
+                          disabled={isLoading}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Company Address (Optional) */}
+                <FormField
+                  control={form.control}
+                  name="companyAddress"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Company Address</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="123 Business St, City, Country"
+                          autoComplete="street-address"
+                          disabled={isLoading}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Company Phone and Fax (side by side) */}
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Company Phone Number (Optional) */}
+                  <FormField
+                    control={form.control}
+                    name="companyNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Phone Number</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="tel"
+                            placeholder="+1 234 567 890"
+                            autoComplete="tel"
+                            disabled={isLoading}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Company Fax Number (Optional) */}
+                  <FormField
+                    control={form.control}
+                    name="companyFax"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Fax Number</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="tel"
+                            placeholder="+1 234 567 891"
+                            autoComplete="fax"
+                            disabled={isLoading}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </>
             )}
 
             {/* Submit Button */}
