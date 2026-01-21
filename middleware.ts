@@ -14,6 +14,7 @@ import { verifyJWT } from '@/lib/middleware/auth-helpers'; // Use centralized JW
 
 // Routes that don't require authentication (public access)
 const PUBLIC_ROUTES = [
+  '/',                // Homepage (public landing page)
   '/login',           // Login page
   '/signup',          // Signup page
   '/api/auth',        // All auth endpoints (login, signup, logout, verify)
@@ -30,10 +31,17 @@ const PUBLIC_ROUTES = [
  * Check if a path matches any of the given routes
  * @param pathname - Current request path
  * @param routes - Array of route prefixes to match
- * @returns true if path starts with any route prefix
+ * @returns true if path matches exactly or starts with route prefix
  */
 function matchesRoute(pathname: string, routes: string[]): boolean {
-  return routes.some(route => pathname.startsWith(route));
+  return routes.some(route => {
+    // Exact match for root path '/' to avoid matching all routes
+    if (route === '/') {
+      return pathname === '/';
+    }
+    // Prefix match for other routes
+    return pathname.startsWith(route);
+  });
 }
 
 // Note: verifyToken removed - now using verifyJWT from auth-helpers.ts
@@ -120,9 +128,9 @@ export async function middleware(request: NextRequest) {
 
   // No token provided
   if (!token) {
-    // Redirect to login for page requests
+    // Redirect to homepage for page requests (homepage has login/signup CTAs)
     if (!pathname.startsWith('/api/')) {
-      return NextResponse.redirect(new URL('/login', request.url));
+      return NextResponse.redirect(new URL('/', request.url));
     }
     // Return 401 for API requests
     return NextResponse.json(
@@ -136,9 +144,9 @@ export async function middleware(request: NextRequest) {
 
   // Token invalid or expired
   if (!payload) {
-    // Redirect to login and clear invalid cookie for page requests
+    // Redirect to homepage and clear invalid cookie for page requests
     if (!pathname.startsWith('/api/')) {
-      const redirectResponse = NextResponse.redirect(new URL('/login', request.url));
+      const redirectResponse = NextResponse.redirect(new URL('/', request.url));
       redirectResponse.cookies.delete('auth_token'); // Clear invalid token
       return redirectResponse;
     }
