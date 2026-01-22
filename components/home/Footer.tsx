@@ -135,7 +135,7 @@ export default function Footer() {
   }
 
   return (
-    <footer className="bg-slate-50 border-t border-slate-200">
+    <footer className="bg-muted border-t border-border">
       {/* ===== Main Footer Content ===== */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 lg:gap-12">
@@ -144,12 +144,12 @@ export default function Footer() {
             {/* Logo and brand */}
             <Link href="/" className="inline-flex items-center gap-2.5">
               <Logo />
-              <span className="text-lg font-bold tracking-tight text-slate-900">
+              <span className="text-lg font-bold tracking-tight text-foreground">
                 QuoteFlow AI
               </span>
             </Link>
             {/* Brand description */}
-            <p className="mt-4 text-slate-600 text-sm leading-relaxed max-w-sm">
+            <p className="mt-4 text-body text-sm leading-relaxed max-w-sm">
               AI-powered quotation management that helps you create, track, and close deals faster than ever before.
             </p>
             {/* Social links */}
@@ -158,7 +158,7 @@ export default function Footer() {
                 <a
                   key={social.name}
                   href={social.href}
-                  className="text-slate-400 hover:text-slate-600 transition-colors"
+                  className="text-placeholder hover:text-body transition-colors"
                   aria-label={`Follow us on ${social.name}`}
                 >
                   {social.icon}
@@ -169,7 +169,7 @@ export default function Footer() {
 
           {/* Product Links */}
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 tracking-wide">
+            <h3 className="text-sm font-semibold text-foreground tracking-wide">
               {footerLinks.product.title}
             </h3>
             <ul className="mt-4 space-y-3">
@@ -178,7 +178,7 @@ export default function Footer() {
                   <a
                     href={link.href}
                     onClick={(e) => handleAnchorClick(e, link.href)}
-                    className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
+                    className="text-sm text-body hover:text-foreground transition-colors"
                   >
                     {link.label}
                   </a>
@@ -189,7 +189,7 @@ export default function Footer() {
 
           {/* Company Links */}
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 tracking-wide">
+            <h3 className="text-sm font-semibold text-foreground tracking-wide">
               {footerLinks.company.title}
             </h3>
             <ul className="mt-4 space-y-3">
@@ -197,7 +197,7 @@ export default function Footer() {
                 <li key={link.label}>
                   <a
                     href={link.href}
-                    className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
+                    className="text-sm text-body hover:text-foreground transition-colors"
                   >
                     {link.label}
                   </a>
@@ -208,7 +208,7 @@ export default function Footer() {
 
           {/* Resources Links */}
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 tracking-wide">
+            <h3 className="text-sm font-semibold text-foreground tracking-wide">
               {footerLinks.resources.title}
             </h3>
             <ul className="mt-4 space-y-3">
@@ -216,7 +216,7 @@ export default function Footer() {
                 <li key={link.label}>
                   <a
                     href={link.href}
-                    className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
+                    className="text-sm text-body hover:text-foreground transition-colors"
                   >
                     {link.label}
                   </a>
@@ -227,7 +227,7 @@ export default function Footer() {
 
           {/* Legal Links */}
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 tracking-wide">
+            <h3 className="text-sm font-semibold text-foreground tracking-wide">
               {footerLinks.legal.title}
             </h3>
             <ul className="mt-4 space-y-3">
@@ -235,7 +235,7 @@ export default function Footer() {
                 <li key={link.label}>
                   <a
                     href={link.href}
-                    className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
+                    className="text-sm text-body hover:text-foreground transition-colors"
                   >
                     {link.label}
                   </a>
@@ -247,22 +247,22 @@ export default function Footer() {
       </div>
 
       {/* ===== Bottom Bar ===== */}
-      <div className="border-t border-slate-200">
+      <div className="border-t border-border">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             {/* Copyright */}
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-muted-foreground">
               &copy; {currentYear} QuoteFlow AI. All rights reserved.
             </p>
             {/* Additional links */}
             <div className="flex items-center gap-6">
-              <a href="#" className="text-sm text-slate-500 hover:text-slate-700 transition-colors">
+              <a href="#" className="text-sm text-muted-foreground hover:text-label transition-colors">
                 Privacy
               </a>
-              <a href="#" className="text-sm text-slate-500 hover:text-slate-700 transition-colors">
+              <a href="#" className="text-sm text-muted-foreground hover:text-label transition-colors">
                 Terms
               </a>
-              <a href="#" className="text-sm text-slate-500 hover:text-slate-700 transition-colors">
+              <a href="#" className="text-sm text-muted-foreground hover:text-label transition-colors">
                 Cookies
               </a>
             </div>

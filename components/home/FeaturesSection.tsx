@@ -89,22 +89,22 @@ export default function FeaturesSection() {
   return (
     <section
       id="features"
-      className="relative py-24 lg:py-32 bg-slate-50 scroll-mt-16"
+      className="relative py-24 lg:py-32 bg-muted scroll-mt-16"
     >
       {/* ===== Section Header ===== */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-3xl mx-auto mb-16">
           {/* Section badge */}
-          <span className="inline-block text-sm font-semibold text-sky-600 tracking-wide uppercase mb-4">
+          <span className="inline-block text-sm font-semibold text-brand-hover tracking-wide uppercase mb-4">
             Features
           </span>
           {/* Section title */}
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-slate-900">
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-foreground">
             Everything you need to
-            <span className="block text-sky-500">close deals faster</span>
+            <span className="block text-brand">close deals faster</span>
           </h2>
           {/* Section description */}
-          <p className="mt-6 text-lg text-slate-600 leading-relaxed">
+          <p className="mt-6 text-lg text-body leading-relaxed">
             QuoteFlow AI combines powerful AI capabilities with intuitive design
             to streamline your entire quotation workflow from start to finish.
           </p>
@@ -115,7 +115,7 @@ export default function FeaturesSection() {
           {features.map((feature, index) => (
             <Card
               key={feature.title}
-              className="group relative overflow-hidden border-slate-200/50 bg-white hover:shadow-lg hover:shadow-slate-200/50 transition-all duration-300 hover:-translate-y-1"
+              className="group relative overflow-hidden border-border/50 bg-white hover:shadow-lg hover:shadow-border/50 transition-all duration-300 hover:-translate-y-1 animate-fadeIn"
               style={{
                 // Staggered animation delay for visual interest
                 animationDelay: `${index * 100}ms`,
@@ -130,12 +130,12 @@ export default function FeaturesSection() {
                 </div>
 
                 {/* Feature Title */}
-                <h3 className="text-xl font-semibold text-slate-900 mb-3">
+                <h3 className="text-xl font-semibold text-foreground mb-3">
                   {feature.title}
                 </h3>
 
                 {/* Feature Description */}
-                <p className="text-slate-600 leading-relaxed">
+                <p className="text-body leading-relaxed">
                   {feature.description}
                 </p>
 

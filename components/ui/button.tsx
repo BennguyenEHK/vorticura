@@ -13,22 +13,23 @@ export interface ButtonProps
   variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link"
   size?: "default" | "sm" | "lg" | "icon"
   isLoading?: boolean // Loading state indicator
+  asChild?: boolean // Render as child element (e.g., for composing with Link)
 }
 
-// Reusable Button component with multiple variants
+// Reusable Button component with multiple variants and asChild support
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "default", size = "default", isLoading, children, disabled, ...props }, ref) => {
+  ({ className, variant = "default", size = "default", isLoading, asChild = false, children, disabled, ...props }, ref) => {
     // Base styles for all buttons
     const baseStyles = "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
 
-    // Variant-specific styles
+    // Variant-specific styles (using design tokens from globals.css)
     const variantStyles = {
-      default: "bg-slate-900 text-white hover:bg-slate-800 focus-visible:ring-slate-950",
-      destructive: "bg-red-500 text-white hover:bg-red-600 focus-visible:ring-red-500",
-      outline: "border border-slate-200 bg-white hover:bg-slate-100 hover:text-slate-900 focus-visible:ring-slate-950",
-      secondary: "bg-slate-100 text-slate-900 hover:bg-slate-200 focus-visible:ring-slate-950",
-      ghost: "hover:bg-slate-100 hover:text-slate-900 focus-visible:ring-slate-950",
-      link: "text-slate-900 underline-offset-4 hover:underline focus-visible:ring-slate-950",
+      default: "bg-primary text-primary-foreground hover:bg-primary-hover focus-visible:ring-foreground",           // slate-900 based
+      destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90 focus-visible:ring-destructive", // red-500 based
+      outline: "border border-border bg-card hover:bg-secondary hover:text-foreground focus-visible:ring-foreground",   // outlined variant
+      secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80 focus-visible:ring-foreground",          // slate-100 based
+      ghost: "hover:bg-secondary hover:text-foreground focus-visible:ring-foreground",                                  // transparent until hover
+      link: "text-foreground underline-offset-4 hover:underline focus-visible:ring-foreground",                         // text link style
     }
 
     // Size-specific styles
@@ -39,14 +40,24 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       icon: "h-10 w-10",
     }
 
+    const buttonStyles = cn(
+      baseStyles,
+      variantStyles[variant],
+      sizeStyles[size],
+      className
+    )
+
+    // If asChild is true, apply styles to the first child element (typically a Link)
+    if (asChild && React.isValidElement(children)) {
+      return React.cloneElement(children as React.ReactElement<any>, {
+        className: cn(buttonStyles, (children as React.ReactElement<any>).props.className),
+        ...props
+      })
+    }
+
     return (
       <button
-        className={cn(
-          baseStyles,
-          variantStyles[variant],
-          sizeStyles[size],
-          className
-        )}
+        className={buttonStyles}
         ref={ref}
         disabled={disabled || isLoading}
         aria-busy={isLoading} // Accessibility: indicate loading state

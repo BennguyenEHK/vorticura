@@ -66,7 +66,7 @@ const StarRating = () => (
     {[...Array(5)].map((_, i) => (
       <svg
         key={i}
-        className="w-4 h-4 text-amber-400"
+        className="w-4 h-4 text-rating"
         fill="currentColor"
         viewBox="0 0 20 20"
       >
@@ -89,12 +89,12 @@ export default function TestimonialsSection() {
       {/* ===== Background Decorative Elements ===== */}
       <div className="absolute inset-0" aria-hidden="true">
         {/* Quote decorative elements */}
-        <div className="absolute top-12 left-12 text-slate-100 opacity-50">
+        <div className="absolute top-12 left-12 text-secondary opacity-50">
           <svg className="w-24 h-24" fill="currentColor" viewBox="0 0 24 24">
             <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z" />
           </svg>
         </div>
-        <div className="absolute bottom-12 right-12 text-slate-100 opacity-50 rotate-180">
+        <div className="absolute bottom-12 right-12 text-secondary opacity-50 rotate-180">
           <svg className="w-24 h-24" fill="currentColor" viewBox="0 0 24 24">
             <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z" />
           </svg>
@@ -105,16 +105,16 @@ export default function TestimonialsSection() {
         {/* ===== Section Header ===== */}
         <div className="text-center max-w-3xl mx-auto mb-16">
           {/* Section badge */}
-          <span className="inline-block text-sm font-semibold text-sky-600 tracking-wide uppercase mb-4">
+          <span className="inline-block text-sm font-semibold text-brand-hover tracking-wide uppercase mb-4">
             Testimonials
           </span>
           {/* Section title */}
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-slate-900">
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-foreground">
             Loved by sales teams
-            <span className="block text-sky-500">around the world</span>
+            <span className="block text-brand">around the world</span>
           </h2>
           {/* Section description */}
-          <p className="mt-6 text-lg text-slate-600 leading-relaxed">
+          <p className="mt-6 text-lg text-body leading-relaxed">
             See what our customers have to say about how QuoteFlow AI has transformed their quotation workflow.
           </p>
         </div>
@@ -124,7 +124,7 @@ export default function TestimonialsSection() {
           {testimonials.map((testimonial, index) => (
             <Card
               key={testimonial.author}
-              className="border-slate-200/50 bg-white hover:shadow-lg transition-shadow duration-300"
+              className="border-border/50 bg-white hover:shadow-lg transition-shadow duration-300 animate-fadeIn"
               style={{
                 // Staggered animation delay
                 animationDelay: `${index * 100}ms`,
@@ -135,7 +135,7 @@ export default function TestimonialsSection() {
                 <StarRating />
 
                 {/* Quote text */}
-                <blockquote className="mt-4 text-slate-600 leading-relaxed">
+                <blockquote className="mt-4 text-body leading-relaxed">
                   &ldquo;{testimonial.quote}&rdquo;
                 </blockquote>
 
@@ -146,10 +146,10 @@ export default function TestimonialsSection() {
                     {testimonial.avatar}
                   </div>
                   <div>
-                    <div className="font-semibold text-slate-900">
+                    <div className="font-semibold text-foreground">
                       {testimonial.author}
                     </div>
-                    <div className="text-sm text-slate-500">
+                    <div className="text-sm text-muted-foreground">
                       {testimonial.role}, {testimonial.company}
                     </div>
                   </div>
@@ -167,10 +167,10 @@ export default function TestimonialsSection() {
             { value: "4.9/5", label: "Average Rating" },
           ].map((stat) => (
             <div key={stat.label}>
-              <div className="text-2xl lg:text-3xl font-bold text-slate-900">
+              <div className="text-2xl lg:text-3xl font-bold text-foreground">
                 {stat.value}
               </div>
-              <div className="text-sm text-slate-500">{stat.label}</div>
+              <div className="text-sm text-muted-foreground">{stat.label}</div>
             </div>
           ))}
         </div>

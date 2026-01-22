@@ -60,7 +60,7 @@ export default function AuthLayout({
                 strokeLinejoin="round"
               />
             </svg>
-            <span className="text-xl font-bold text-slate-900">QuoteFlow AI</span>
+            <span className="text-xl font-bold text-foreground">QuoteFlow AI</span>
           </Link>
         </div>
 
@@ -69,8 +69,8 @@ export default function AuthLayout({
           {children}
         </div>
 
-        {/* Footer */}
-        <footer className="mt-8 text-center text-sm text-slate-500">
+        {/* Footer (using design token) */}
+        <footer className="mt-8 text-center text-sm text-muted-foreground">
           <p>&copy; {new Date().getFullYear()} QuoteFlow AI. All rights reserved.</p>
         </footer>
       </section>
@@ -82,8 +82,8 @@ export default function AuthLayout({
       >
         {/* Decorative Background Pattern */}
         <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -left-1/4 -top-1/4 h-1/2 w-1/2 rounded-full bg-sky-500/10 blur-3xl" />
-          <div className="absolute -bottom-1/4 -right-1/4 h-1/2 w-1/2 rounded-full bg-indigo-500/10 blur-3xl" />
+          <div className="absolute -left-1/4 -top-1/4 h-1/2 w-1/2 rounded-full bg-brand/10 blur-3xl" />
+          <div className="absolute -bottom-1/4 -right-1/4 h-1/2 w-1/2 rounded-full bg-chart-2/10 blur-3xl" />
         </div>
 
         {/* Brand Content */}
@@ -123,8 +123,8 @@ export default function AuthLayout({
             Streamline Your Quotations
           </h1>
 
-          {/* Tagline */}
-          <p className="mb-8 text-lg text-slate-300">
+          {/* Tagline (using design token for text on dark bg) */}
+          <p className="mb-8 text-lg text-on-dark">
             AI-powered quotation management that helps you create, track, and close deals faster than ever.
           </p>
 
@@ -132,9 +132,9 @@ export default function AuthLayout({
           <div className="space-y-4 text-left">
             {/* Feature 1 */}
             <div className="flex items-start gap-3">
-              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-500/20">
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand/20">
                 <svg
-                  className="h-3 w-3 text-sky-400"
+                  className="h-3 w-3 text-brand-light"
                   fill="currentColor"
                   viewBox="0 0 20 20"
                 >
@@ -145,16 +145,16 @@ export default function AuthLayout({
                   />
                 </svg>
               </div>
-              <p className="text-sm text-slate-300">
+              <p className="text-sm text-on-dark">
                 Generate professional quotations in seconds with AI assistance
               </p>
             </div>
 
             {/* Feature 2 */}
             <div className="flex items-start gap-3">
-              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-500/20">
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand/20">
                 <svg
-                  className="h-3 w-3 text-sky-400"
+                  className="h-3 w-3 text-brand-light"
                   fill="currentColor"
                   viewBox="0 0 20 20"
                 >
@@ -165,16 +165,16 @@ export default function AuthLayout({
                   />
                 </svg>
               </div>
-              <p className="text-sm text-slate-300">
+              <p className="text-sm text-on-dark">
                 Track workflow progress and collaborate with your team
               </p>
             </div>
 
             {/* Feature 3 */}
             <div className="flex items-start gap-3">
-              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-500/20">
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand/20">
                 <svg
-                  className="h-3 w-3 text-sky-400"
+                  className="h-3 w-3 text-brand-light"
                   fill="currentColor"
                   viewBox="0 0 20 20"
                 >
@@ -185,7 +185,7 @@ export default function AuthLayout({
                   />
                 </svg>
               </div>
-              <p className="text-sm text-slate-300">
+              <p className="text-sm text-on-dark">
                 Secure workspace isolation for multi-tenant environments
               </p>
             </div>

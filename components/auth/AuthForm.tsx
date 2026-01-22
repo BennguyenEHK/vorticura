@@ -167,10 +167,10 @@ const AuthForm = ({ type }: AuthFormProps) => {
       </CardHeader>
 
       <CardContent>
-        {/* Error Alert */}
+        {/* Error Alert (using design tokens) */}
         {error && (
           <div
-            className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600"
+            className="mb-4 rounded-lg border border-error-border bg-error-bg p-3 text-sm text-error"
             role="alert"
             aria-live="polite"
           >
@@ -272,13 +272,13 @@ const AuthForm = ({ type }: AuthFormProps) => {
             {/* ===== SIGNUP ONLY: Company Information Section ===== */}
             {type === "signup" && (
               <>
-                {/* Section Divider */}
+                {/* Section Divider (using design tokens) */}
                 <div className="relative py-2">
                   <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t border-slate-200" />
+                    <span className="w-full border-t border-border" />
                   </div>
                   <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-white px-2 text-slate-500">Company Information</span>
+                    <span className="bg-card px-2 text-muted-foreground">Company Information</span>
                   </div>
                 </div>
 
@@ -402,12 +402,12 @@ const AuthForm = ({ type }: AuthFormProps) => {
           </form>
         </Form>
 
-        {/* Footer with link to alternate auth page */}
+        {/* Footer with link to alternate auth page (using design tokens) */}
         <div className="mt-6 text-center text-sm">
-          <span className="text-slate-500">{footerText} </span>
+          <span className="text-muted-foreground">{footerText} </span>
           <Link
             href={footerLinkHref}
-            className="font-medium text-slate-900 underline-offset-4 hover:underline"
+            className="font-medium text-foreground underline-offset-4 hover:underline"
           >
             {footerLinkText}
           </Link>

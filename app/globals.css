@@ -32,6 +32,13 @@
   /* ----- Primary Action Tokens (slate-900 based) ----- */
   --color-primary: var(--primary);                 /* bg-primary = slate-900 */
   --color-primary-foreground: var(--primary-foreground); /* text on primary */
+  --color-primary-hover: var(--primary-hover);     /* hover:bg-primary-hover = slate-800 */
+
+  /* ----- Text Hierarchy Tokens ----- */
+  --color-body: var(--body);                       /* text-body = slate-600 (paragraphs) */
+  --color-label: var(--label);                     /* text-label = slate-700 (form labels) */
+  --color-placeholder: var(--placeholder);         /* text-placeholder = slate-400 */
+  --color-on-dark: var(--on-dark);                 /* text-on-dark = slate-300 (text on dark bg) */
 
   /* ----- Secondary/Muted Tokens ----- */
   --color-secondary: var(--secondary);             /* bg-secondary = slate-100 */
@@ -44,8 +51,13 @@
   /* ----- Brand Accent Tokens (sky-500 based) ----- */
   --color-brand: var(--brand);                     /* bg-brand = sky-500 */
   --color-brand-foreground: var(--brand-foreground);
-  --color-brand-hover: var(--brand-hover);         /* hover:bg-brand-hover */
+  --color-brand-hover: var(--brand-hover);         /* hover:bg-brand-hover = sky-600 */
   --color-brand-muted: var(--brand-muted);         /* bg-brand-muted = sky-50 */
+  --color-brand-light: var(--brand-light);         /* text-brand-light = sky-400 (on dark bg) */
+  --color-brand-dark: var(--brand-dark);           /* text-brand-dark = sky-700 (badge text) */
+
+  /* ----- Feedback/Rating Tokens ----- */
+  --color-rating: var(--rating);                   /* text-rating = amber-400 (star ratings) */
 
   /* ----- Destructive/Error Tokens ----- */
   --color-destructive: var(--destructive);         /* bg-destructive = red-500 */
@@ -117,6 +129,13 @@
   /* ----- Primary Actions (Default Button: bg-slate-900) ----- */
   --primary: oklch(0.129 0.042 264.695);           /* #0f172a - slate-900 */
   --primary-foreground: oklch(0.985 0 0);          /* #fafafa - white */
+  --primary-hover: oklch(0.208 0.042 265.755);     /* #1e293b - slate-800 */
+
+  /* ----- Text Hierarchy ----- */
+  --body: oklch(0.415 0.044 264.529);              /* #475569 - slate-600 (paragraph text) */
+  --label: oklch(0.312 0.044 264.182);             /* #334155 - slate-700 (form labels) */
+  --placeholder: oklch(0.704 0.025 264.182);       /* #94a3b8 - slate-400 (placeholder text) */
+  --on-dark: oklch(0.869 0.015 264.182);           /* #cbd5e1 - slate-300 (text on dark bg) */
 
   /* ----- Secondary (bg-slate-100 hover states) ----- */
   --secondary: oklch(0.968 0.005 264.182);         /* #f1f5f9 - slate-100 */
@@ -135,6 +154,11 @@
   --brand-foreground: oklch(1 0 0);                /* #ffffff - white */
   --brand-hover: oklch(0.588 0.158 241.966);       /* #0284c7 - sky-600 */
   --brand-muted: oklch(0.977 0.013 236.62);        /* #f0f9ff - sky-50 */
+  --brand-light: oklch(0.776 0.152 231.836);       /* #38bdf8 - sky-400 (light accent) */
+  --brand-dark: oklch(0.5 0.134 242.749);          /* #0369a1 - sky-700 (badge text) */
+
+  /* ----- Feedback/Rating ----- */
+  --rating: oklch(0.828 0.189 84.429);             /* #fbbf24 - amber-400 (star ratings) */
 
   /* ----- Destructive/Error States ----- */
   --destructive: oklch(0.637 0.237 25.331);        /* #ef4444 - red-500 */
@@ -187,6 +211,13 @@
   /* ----- Primary Actions (Inverted) ----- */
   --primary: oklch(0.984 0.003 264.182);           /* slate-50 */
   --primary-foreground: oklch(0.129 0.042 264.695);/* slate-900 */
+  --primary-hover: oklch(0.869 0.015 264.182);     /* slate-300 */
+
+  /* ----- Text Hierarchy (Inverted) ----- */
+  --body: oklch(0.704 0.025 264.182);              /* slate-400 */
+  --label: oklch(0.869 0.015 264.182);             /* slate-300 */
+  --placeholder: oklch(0.517 0.035 264.364);       /* slate-500 */
+  --on-dark: oklch(0.984 0.003 264.182);           /* slate-50 */
 
   /* ----- Secondary ----- */
   --secondary: oklch(0.312 0.044 264.182);         /* slate-700 */
@@ -205,6 +236,11 @@
   --brand-foreground: oklch(1 0 0);                /* white */
   --brand-hover: oklch(0.776 0.152 231.836);       /* sky-400 (lighter on dark) */
   --brand-muted: oklch(0.312 0.044 264.182);       /* slate-700 */
+  --brand-light: oklch(0.776 0.152 231.836);       /* sky-400 */
+  --brand-dark: oklch(0.685 0.169 237.323);        /* sky-500 (same on dark) */
+
+  /* ----- Feedback/Rating ----- */
+  --rating: oklch(0.828 0.189 84.429);             /* amber-400 (same on dark) */
 
   /* ----- Destructive/Error States ----- */
   --destructive: oklch(0.704 0.191 22.216);        /* red-400 (lighter on dark) */

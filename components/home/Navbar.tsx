@@ -89,7 +89,7 @@ export default function Navbar() {
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         isScrolled
-          ? "bg-white/80 backdrop-blur-xl border-b border-slate-200/50 shadow-sm"
+          ? "bg-white/80 backdrop-blur-xl border-b border-border/50 shadow-sm"
           : "bg-transparent"
       }`}
     >
@@ -102,7 +102,7 @@ export default function Navbar() {
             aria-label="QuoteFlow AI Homepage"
           >
             <Logo />
-            <span className="text-lg font-bold tracking-tight text-slate-900">
+            <span className="text-lg font-bold tracking-tight text-foreground">
               QuoteFlow AI
             </span>
           </Link>
@@ -114,7 +114,7 @@ export default function Navbar() {
                 key={link.href}
                 href={link.href}
                 onClick={(e) => handleNavClick(e, link.href)}
-                className="px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:text-slate-900 rounded-lg hover:bg-slate-100/50"
+                className="px-4 py-2 text-sm font-medium text-body transition-colors hover:text-foreground rounded-lg hover:bg-secondary/50"
               >
                 {link.label}
               </a>
@@ -129,7 +129,7 @@ export default function Navbar() {
               </Button>
             </Link>
             <Link href="/signup">
-              <Button size="sm" className="bg-sky-500 hover:bg-sky-600">
+              <Button size="sm" className="bg-brand hover:bg-brand-hover">
                 Get Started
               </Button>
             </Link>
@@ -138,7 +138,7 @@ export default function Navbar() {
           {/* Mobile Menu Toggle Button */}
           <button
             type="button"
-            className="md:hidden inline-flex items-center justify-center p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            className="md:hidden inline-flex items-center justify-center p-2 rounded-lg text-body hover:text-foreground hover:bg-secondary"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             aria-expanded={isMobileMenuOpen}
             aria-label="Toggle navigation menu"
@@ -172,27 +172,27 @@ export default function Navbar() {
 
         {/* Mobile Menu Dropdown */}
         {isMobileMenuOpen && (
-          <div className="md:hidden border-t border-slate-200/50 bg-white/95 backdrop-blur-xl py-4 space-y-1">
+          <div className="md:hidden border-t border-border/50 bg-white/95 backdrop-blur-xl py-4 space-y-1">
             {/* Mobile Navigation Links */}
             {navLinks.map((link) => (
               <a
                 key={link.href}
                 href={link.href}
                 onClick={(e) => handleNavClick(e, link.href)}
-                className="block px-4 py-2.5 text-base font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100/50 rounded-lg"
+                className="block px-4 py-2.5 text-base font-medium text-body hover:text-foreground hover:bg-secondary/50 rounded-lg"
               >
                 {link.label}
               </a>
             ))}
             {/* Mobile Auth Buttons */}
-            <div className="pt-4 px-4 space-y-2 border-t border-slate-200/50 mt-4">
+            <div className="pt-4 px-4 space-y-2 border-t border-border/50 mt-4">
               <Link href="/login" className="block">
                 <Button variant="outline" className="w-full">
                   Log in
                 </Button>
               </Link>
               <Link href="/signup" className="block">
-                <Button className="w-full bg-sky-500 hover:bg-sky-600">
+                <Button className="w-full bg-brand hover:bg-brand-hover">
                   Get Started
                 </Button>
               </Link>

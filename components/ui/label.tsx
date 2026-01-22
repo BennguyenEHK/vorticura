@@ -20,11 +20,11 @@ const Label = React.forwardRef<HTMLLabelElement, LabelProps>(
       <label
         ref={ref}
         className={cn(
-          // Base label styles
+          // Base label styles (using design tokens)
           "text-sm font-medium leading-none",
           "peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
-          // Conditional color based on error state
-          error ? "text-red-500" : "text-slate-700",
+          // Conditional color based on error state (using design tokens)
+          error ? "text-error" : "text-label",
           className
         )}
         {...props}

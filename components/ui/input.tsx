@@ -20,16 +20,16 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       <input
         type={type}
         className={cn(
-          // Base input styles with focus and placeholder states
-          "flex h-10 w-full rounded-lg border bg-white px-3 py-2 text-sm",
+          // Base input styles with focus and placeholder states (using design tokens)
+          "flex h-10 w-full rounded-lg border bg-card px-3 py-2 text-sm",
           "file:border-0 file:bg-transparent file:text-sm file:font-medium",
-          "placeholder:text-slate-400",
+          "placeholder:text-placeholder",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0",
           "disabled:cursor-not-allowed disabled:opacity-50",
-          // Conditional styling based on error state
+          // Conditional styling based on error state (using design tokens)
           error
-            ? "border-red-500 focus-visible:ring-red-500" // Error state: red border and ring
-            : "border-slate-200 focus-visible:ring-slate-400", // Normal state: neutral styling
+            ? "border-destructive focus-visible:ring-destructive" // Error state: red border and ring
+            : "border-border focus-visible:ring-ring", // Normal state: neutral styling
           className
         )}
         ref={ref}

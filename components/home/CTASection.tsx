@@ -44,7 +44,7 @@ export default function CTASection() {
           </h2>
 
           {/* Description */}
-          <p className="mt-6 text-lg text-slate-300 leading-relaxed">
+          <p className="mt-6 text-lg text-on-dark leading-relaxed">
             Join hundreds of companies already using QuoteFlow AI to create professional
             quotations faster, close more deals, and grow their business.
           </p>
@@ -52,11 +52,12 @@ export default function CTASection() {
           {/* CTA Buttons */}
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
             {/* Primary CTA */}
-            <Link href="/signup">
-              <Button
-                size="lg"
-                className="bg-sky-500 hover:bg-sky-400 text-white px-8 py-6 text-base font-medium shadow-lg shadow-sky-500/25 hover:shadow-xl hover:shadow-sky-500/30 transition-all"
-              >
+            <Button
+              asChild
+              size="lg"
+              className="bg-brand hover:bg-brand-hover text-white px-8 py-6 text-base font-medium shadow-lg shadow-brand/25 hover:shadow-xl hover:shadow-brand/30 transition-all"
+            >
+              <Link href="/signup">
                 Start Free Trial
                 <svg
                   className="w-4 h-4 ml-1"
@@ -71,25 +72,26 @@ export default function CTASection() {
                     d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
                   />
                 </svg>
-              </Button>
-            </Link>
+              </Link>
+            </Button>
             {/* Secondary CTA */}
-            <Link href="#pricing">
-              <Button
-                variant="outline"
-                size="lg"
-                className="px-8 py-6 text-base font-medium border-slate-600 text-white hover:bg-slate-800 hover:text-white"
-              >
+            <Button
+              asChild
+              variant="outline"
+              size="lg"
+              className="px-8 py-6 text-base font-medium border-border text-white hover:bg-primary-hover hover:text-white"
+            >
+              <Link href="#pricing">
                 View Pricing
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
 
           {/* Trust indicators */}
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-4 text-sm text-slate-400">
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-4 text-sm text-placeholder">
             <div className="flex items-center gap-2">
               {/* Checkmark icon */}
-              <svg className="w-4 h-4 text-sky-400" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="w-4 h-4 text-brand-light" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fillRule="evenodd"
                   d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -99,7 +101,7 @@ export default function CTASection() {
               <span>14-day free trial</span>
             </div>
             <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-sky-400" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="w-4 h-4 text-brand-light" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fillRule="evenodd"
                   d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -109,7 +111,7 @@ export default function CTASection() {
               <span>No credit card required</span>
             </div>
             <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-sky-400" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="w-4 h-4 text-brand-light" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fillRule="evenodd"
                   d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"

@@ -63,16 +63,16 @@ export default function HowItWorksSection() {
         {/* ===== Section Header ===== */}
         <div className="text-center max-w-3xl mx-auto mb-20">
           {/* Section badge */}
-          <span className="inline-block text-sm font-semibold text-sky-600 tracking-wide uppercase mb-4">
+          <span className="inline-block text-sm font-semibold text-brand-hover tracking-wide uppercase mb-4">
             How It Works
           </span>
           {/* Section title */}
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-slate-900">
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-foreground">
             From RFQ to quotation
-            <span className="block text-sky-500">in three simple steps</span>
+            <span className="block text-brand">in three simple steps</span>
           </h2>
           {/* Section description */}
-          <p className="mt-6 text-lg text-slate-600 leading-relaxed">
+          <p className="mt-6 text-lg text-body leading-relaxed">
             QuoteFlow AI automates the tedious parts of quotation creation so you
             can focus on what matters most: closing deals and growing your business.
           </p>
@@ -96,22 +96,22 @@ export default function HowItWorksSection() {
                 {/* Step Number Circle */}
                 <div className="relative mb-8">
                   {/* Outer glow ring */}
-                  <div className="absolute inset-0 bg-sky-500/20 rounded-full blur-xl scale-150" />
+                  <div className="absolute inset-0 bg-brand/20 rounded-full blur-xl scale-150" />
                   {/* Main circle with icon */}
                   <div className="relative flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-xl shadow-slate-900/20">
                     {step.icon}
                   </div>
                   {/* Step number badge */}
-                  <div className="absolute -top-2 -right-2 flex items-center justify-center w-8 h-8 rounded-full bg-sky-500 text-white text-sm font-bold shadow-lg">
+                  <div className="absolute -top-2 -right-2 flex items-center justify-center w-8 h-8 rounded-full bg-brand text-white text-sm font-bold shadow-lg">
                     {step.number.replace("0", "")}
                   </div>
                 </div>
 
                 {/* Step Content */}
-                <h3 className="text-xl font-semibold text-slate-900 mb-3">
+                <h3 className="text-xl font-semibold text-foreground mb-3">
                   {step.title}
                 </h3>
-                <p className="text-slate-600 leading-relaxed max-w-sm">
+                <p className="text-body leading-relaxed max-w-sm">
                   {step.description}
                 </p>
 
@@ -119,7 +119,7 @@ export default function HowItWorksSection() {
                 {index < steps.length - 1 && (
                   <div className="lg:hidden flex justify-center my-8">
                     <svg
-                      className="w-6 h-6 text-slate-300"
+                      className="w-6 h-6 text-on-dark"
                       fill="none"
                       viewBox="0 0 24 24"
                       strokeWidth="2"
@@ -135,7 +135,7 @@ export default function HowItWorksSection() {
         </div>
 
         {/* ===== Stats Row ===== */}
-        <div className="mt-24 grid grid-cols-2 lg:grid-cols-4 gap-8 py-12 border-t border-b border-slate-200">
+        <div className="mt-24 grid grid-cols-2 lg:grid-cols-4 gap-8 py-12 border-t border-b border-border">
           {[
             { value: "90%", label: "Time Saved" },
             { value: "60+", label: "Pricing Formulas" },
@@ -143,10 +143,10 @@ export default function HowItWorksSection() {
             { value: "24/7", label: "AI Availability" },
           ].map((stat) => (
             <div key={stat.label} className="text-center">
-              <div className="text-3xl lg:text-4xl font-bold text-slate-900">
+              <div className="text-3xl lg:text-4xl font-bold text-foreground">
                 {stat.value}
               </div>
-              <div className="mt-1 text-sm text-slate-500">{stat.label}</div>
+              <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
             </div>
           ))}
         </div>

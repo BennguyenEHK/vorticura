@@ -15,8 +15,8 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      // Card base styles: rounded corners, border, shadow
-      "rounded-2xl border border-slate-200 bg-white text-slate-950 shadow-sm",
+      // Card base styles: rounded corners, border, shadow (using design tokens)
+      "rounded-2xl border border-border bg-card text-card-foreground shadow-sm",
       className
     )}
     {...props}
@@ -49,8 +49,8 @@ const CardTitle = React.forwardRef<
   <h3
     ref={ref}
     className={cn(
-      // Title typography styles
-      "text-2xl font-semibold leading-none tracking-tight text-slate-900",
+      // Title typography styles (using design tokens)
+      "text-2xl font-semibold leading-none tracking-tight text-foreground",
       className
     )}
     {...props}
@@ -66,8 +66,8 @@ const CardDescription = React.forwardRef<
   <p
     ref={ref}
     className={cn(
-      // Description typography styles
-      "text-sm text-slate-500",
+      // Description typography styles (using design tokens)
+      "text-sm text-muted-foreground",
       className
     )}
     {...props}
