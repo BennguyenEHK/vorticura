@@ -16,7 +16,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireWorkspace } from '@/lib/middleware/get-workspace'; // Extract workspace from headers
-import { getData } from '@/lib/db/queries'; // Use getData to fetch and count records
+import { getCount } from '@/lib/db/queries'; // Use getCount for efficient counting
 
 // Define expected request body structure for type safety
 interface StatsRequestBody {
@@ -53,18 +53,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 5: Execute select operation to get records count
-    // getData automatically applies company_id and client_id filters
-    const results = await getData(
+    // Step 5: Execute count operation with workspace isolation
+    // getCount efficiently counts records without loading all rows into memory
+    const count = await getCount(
       body.tableName,
       body.columns || {},    // Pass empty object if no WHERE conditions
       workspace              // Workspace context for tenant isolation
     );
 
-    // Step 6: Calculate statistics from results
+    // Step 6: Calculate statistics from count
     const stats = {
       tableName: body.tableName,         // Table that was queried
-      count: results.length,             // Total record count
+      count: count,                      // Total record count (via efficient COUNT query)
       hasFilters: Object.keys(body.columns || {}).length > 0,  // Whether filters were applied
       filters: body.columns || {},       // Applied filters (for reference)
     };

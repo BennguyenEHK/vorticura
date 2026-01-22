@@ -59,10 +59,13 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Skip middleware for static assets (performance optimization)
+  // Whitelist known static file extensions to avoid false positives on versioned API paths
+  const staticExtensions = /\.(css|js|png|jpg|jpeg|gif|svg|webp|woff|woff2|ttf|eot|map)$/i;
+  
   if (
     pathname.startsWith('/_next/static') ||
     pathname.startsWith('/_next/image') ||
-    /\.[a-zA-Z0-9]+$/.test(pathname) // Match file extensions (e.g., .css, .js, .png)
+    staticExtensions.test(pathname)
   ) {
     return NextResponse.next();
   }

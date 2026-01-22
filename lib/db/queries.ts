@@ -13,7 +13,7 @@
  * All functions enforce workspace isolation using WorkspaceContext directly
  */
 
-import { eq, SQL, and } from 'drizzle-orm';
+import { eq, SQL, and, count } from 'drizzle-orm';
 import { PgTable } from 'drizzle-orm/pg-core';
 import { WorkspaceContext } from '@/lib/middleware/workspace-context'; // Direct usage, no helper wrapper
 import { db } from './client';
@@ -165,11 +165,12 @@ export async function insertData<T extends Record<string, unknown>>(
  * Generic SELECT function with optional LEFT JOIN support
  * Automatically applies workspace filtering (company_id, client_id)
  *
- * LEFT JOIN logic: If table array length >= 2, performs leftJoin on quotation_id
+ * LEFT JOIN logic: If table array length >= 2, performs leftJoin with configurable join column
  *
  * @param tableNames - Single table name OR array of table names for JOIN
  * @param columns - Where conditions { quotation_id: 1, status: 'active' }
  * @param workspace - WorkspaceContext for tenant isolation
+ * @param options - Optional configuration { joinColumn: 'quotationId' (default), customJoinCondition: SQL condition }
  * @returns Array of matching records
  *
  * Example 1 (Single Table):
@@ -177,7 +178,7 @@ export async function insertData<T extends Record<string, unknown>>(
  * const quotations = await getData('quotations', { quotation_id: 1 }, workspace);
  * ```
  *
- * Example 2 (Multiple Tables with LEFT JOIN):
+ * Example 2 (Multiple Tables with LEFT JOIN - using default quotation_id):
  * ```typescript
  * const quotationsWithItems = await getData(
  *   ['quotations', 'quotationItems'],
@@ -186,24 +187,41 @@ export async function insertData<T extends Record<string, unknown>>(
  * );
  * // Performs: SELECT * FROM quotations LEFT JOIN quotationItems ON quotations.quotation_id = quotationItems.quotation_id
  * ```
+ *
+ * Example 3 (Custom join column):
+ * ```typescript
+ * const dataWithCustomJoin = await getData(
+ *   ['table1', 'table2'],
+ *   { some_id: 1 },
+ *   workspace,
+ *   { joinColumn: 'customId' }
+ * );
+ * ```
  */
 export async function getData(
   tableNames: string | string[],
   columns: Record<string, unknown>,
-  workspace: WorkspaceContext
+  workspace: WorkspaceContext,
+  options?: { joinColumn?: string; customJoinCondition?: SQL }
 ): Promise<any[]> {
   try {
-    // Convert single table name to array for uniform processing
+    // Normalize table names to array
     const tables = Array.isArray(tableNames) ? tableNames : [tableNames];
 
-    // Get the primary table (first table in array)
+    if (tables.length === 0) {
+      throw new Error('At least one table name must be provided.');
+    }
+
+    // Primary table
     const primaryTable = getTableByName(tables[0]);
 
     // Build WHERE conditions (workspace filters + user-provided columns)
     const whereConditions = multipleCol(primaryTable, columns);
-    const whereClause = workspace.buildWhereClause(primaryTable, whereConditions); // Direct usage
+    const whereClause = workspace.buildWhereClause(primaryTable, whereConditions);
 
-    // CASE 1: Single table query (no JOIN)
+    // =========================
+    // CASE 1: Single-table query
+    // =========================
     if (tables.length === 1) {
       const results = await db
         .select()
@@ -213,47 +231,139 @@ export async function getData(
       return results;
     }
 
-    // CASE 2: Multiple tables - perform LEFT JOIN on quotation_id with workspace isolation
-    if (tables.length >= 2) {
-      // Get the secondary table for LEFT JOIN
+    // =========================
+    // CASE 2: Two-table LEFT JOIN
+    // =========================
+    if (tables.length === 2) {
       const secondaryTable = getTableByName(tables[1]);
 
-      // Get workspace filter for security (company_id and optional client_id)
-      const workspaceFilter = workspace.getDatabaseFilter(); // Direct usage
+      // Workspace filter (company_id, optional client_id)
+      const workspaceFilter = workspace.getDatabaseFilter();
 
-      // Build JOIN conditions with workspace filtering on BOTH tables (CRITICAL for security)
-      const joinConditions: SQL[] = [
-        eq((primaryTable as any).quotationId, (secondaryTable as any).quotationId), // Join on quotation_id
-      ];
+      // Join column (default: quotationId)
+      const joinColumn = options?.joinColumn || 'quotationId';
 
-      // Add company_id filter to secondary table (prevents cross-tenant data leakage)
+      const joinConditions: SQL[] = [];
+
+      // Custom join condition OR default join column
+      if (options?.customJoinCondition) {
+        joinConditions.push(options.customJoinCondition);
+      } else {
+        if (!(joinColumn in primaryTable)) {
+          throw new Error(
+            `Join column "${joinColumn}" does not exist in table "${tables[0]}"`
+          );
+        }
+
+        if (!(joinColumn in secondaryTable)) {
+          throw new Error(
+            `Join column "${joinColumn}" does not exist in table "${tables[1]}"`
+          );
+        }
+
+        joinConditions.push(
+          eq(
+            (primaryTable as any)[joinColumn],
+            (secondaryTable as any)[joinColumn]
+          )
+        );
+      }
+
+      // Enforce tenant isolation on secondary table (CRITICAL)
       if ('companyId' in secondaryTable) {
-        joinConditions.push(eq((secondaryTable as any).companyId, workspaceFilter.company_id));
+        joinConditions.push(
+          eq(
+            (secondaryTable as any).companyId,
+            workspaceFilter.company_id
+          )
+        );
       }
 
-      // Add client_id filter to secondary table if workspace isolation is enabled
-      if (workspaceFilter.client_id !== undefined && 'clientId' in secondaryTable) {
-        joinConditions.push(eq((secondaryTable as any).clientId, workspaceFilter.client_id));
+      if (
+        workspaceFilter.client_id !== undefined &&
+        'clientId' in secondaryTable
+      ) {
+        joinConditions.push(
+          eq(
+            (secondaryTable as any).clientId,
+            workspaceFilter.client_id
+          )
+        );
       }
 
-      // Execute LEFT JOIN with workspace-filtered secondary table
       const results = await db
         .select()
         .from(primaryTable as any)
         .leftJoin(
           secondaryTable as any,
-          and(...joinConditions) // ✅ Workspace filters applied to JOIN condition
+          and(...joinConditions)
         )
-        .where(whereClause); // Primary table workspace filters
+        .where(whereClause); // primary table workspace filters
 
       return results;
     }
 
-    return [];
+    // =========================
+    // CASE 3: More than 2 tables (not supported yet)
+    // =========================
+    throw new Error(
+      `getData currently supports only 1 or 2 tables. Received: ${tables.length}`
+    );
+  } catch (error) {
+    console.error('Database select operation failed:', error);
+    throw new Error(
+      'Failed to retrieve data. Please check your query and try again.'
+    );
+  }
+}
+
+
+// =============================================
+// 2️⃣ᵃ COUNT DATA
+// =============================================
+
+/**
+ * Generic COUNT function for efficient record counting
+ * Returns only the count without loading all rows into memory
+ * Automatically applies workspace filtering (company_id, client_id)
+ *
+ * @param tableName - Single table name to count
+ * @param columns - Where conditions { quotation_id: 1, status: 'active' }
+ * @param workspace - WorkspaceContext for tenant isolation
+ * @returns Record count as number
+ *
+ * Example:
+ * ```typescript
+ * const count = await getCount('quotations', { status: 'active' }, workspace);
+ * // Returns: 42
+ * ```
+ */
+export async function getCount(
+  tableName: string,
+  columns: Record<string, unknown>,
+  workspace: WorkspaceContext
+): Promise<number> {
+  try {
+    // Get the actual table object from table map
+    const table = getTableByName(tableName);
+
+    // Build WHERE conditions (workspace filters + user-provided columns)
+    const whereConditions = multipleCol(table, columns);
+    const whereClause = workspace.buildWhereClause(table, whereConditions); // Direct usage
+
+    // Execute COUNT query efficiently without loading all rows using Drizzle count() function
+    const result = await db
+      .select({ count: count() })
+      .from(table as any)
+      .where(whereClause);
+
+    // Extract count from result
+    const countValue = result[0]?.count;
+    return typeof countValue === 'number' ? countValue : 0;
   } catch (error) {
     // Log error for debugging but sanitize message for security
-    console.error('Database select operation failed:', error);
-    throw new Error('Failed to retrieve data. Please check your query and try again.');
+    console.error('Database count operation failed:', error);
+    throw new Error('Failed to count records. Please check your query and try again.');
   }
 }
 
@@ -385,3 +495,5 @@ export {
   supplierSearch,
   userSessions,
 };
+
+// Functions are exported directly above (insertData, getData, getCount, updateData, deleteData)
