@@ -38,7 +38,7 @@ export default function Home() {
         <HowItWorksSection />
 
         {/* Pricing: Tier comparison cards */}
-        <PricingSection />
+        {/* <PricingSection /> */}
 
         {/* Testimonials: Customer reviews and social proof */}
         <TestimonialsSection />

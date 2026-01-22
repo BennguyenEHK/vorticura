@@ -13,7 +13,10 @@
       "Bash(npx tsc:*)",
       "mcp__ide__getDiagnostics",
       "Bash(cd:*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(if not exist \"C:\\\\Users\\\\LENOVO\\\\OneDrive\\\\Máy tính\\\\make_sales_agent\\\\quoteflow_ai\\\\components\\\\ui\" mkdir \"C:\\\\Users\\\\LENOVO\\\\OneDrive\\\\Máy tính\\\\make_sales_agent\\\\quoteflow_ai\\\\components\\\\ui\")",
+      "Bash(if not exist \"C:\\\\Users\\\\LENOVO\\\\OneDrive\\\\Máy tính\\\\make_sales_agent\\\\quoteflow_ai\\\\components\\\\auth\" mkdir \"C:\\\\Users\\\\LENOVO\\\\OneDrive\\\\Máy tính\\\\make_sales_agent\\\\quoteflow_ai\\\\components\\\\auth\")",
+      "Skill(frontend-design)"
     ]
   }
 }

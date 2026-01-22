@@ -85,9 +85,9 @@ quoteflow_ai/
 │   │   └── stats/
 │   │       └── route.ts                   # GET /api/stats
 │   │
-│   ├── layout.tsx                         # Root layout
-│   ├── page.tsx                           # Home page
-│   └── globals.css                        # Global styles
+│   ├── layout.tsx ✓                       # Root layout
+│   ├── page.tsx ✓                         # Home page (landing page with sections)
+│   └── globals.css ✓                      # Global styles (Tailwind v4)
 │
 ├── components/                            # React Components
 │   ├── quotation/                         # Feature: Quotation
@@ -125,6 +125,17 @@ quoteflow_ai/
 │   │
 │   ├── auth/                              # Feature: Authentication
 │   │   └── AuthForm.tsx ✓                 # Reusable auth form (login/signup)
+│   │
+│   ├── home/                              # Feature: Homepage (Public Landing)
+│   │   ├── index.ts ✓                     # Barrel exports for all home components
+│   │   ├── Navbar.tsx ✓                   # Sticky navigation with scroll-aware styling
+│   │   ├── HeroSection.tsx ✓              # Main hero with headline, CTAs, trust indicators
+│   │   ├── FeaturesSection.tsx ✓          # 6-card grid showcasing AI capabilities
+│   │   ├── HowItWorksSection.tsx ✓        # 3-step process visualization
+│   │   ├── PricingSection.tsx ✓           # Pricing tiers (currently disabled in page.tsx)
+│   │   ├── TestimonialsSection.tsx ✓      # Customer reviews and social proof
+│   │   ├── CTASection.tsx ✓               # Final call-to-action with gradient bg
+│   │   └── Footer.tsx ✓                   # Navigation links, social icons, copyright
 │   │
 │   └── ui/                                # Reusable UI Components
 │       ├── button.tsx ✓                   # Button component
@@ -255,6 +266,6 @@ quoteflow_ai/
 ├── middleware.ts  ✓                         # Global Next.js middleware
 ├── next.config.ts                         # Next.js configuration
 ├── package.json                           # Dependencies
-├── tailwind.config.ts                     # Tailwind CSS config
+├── postcss.config.mjs ✓                   # PostCSS config (Tailwind v4 plugin)
 ├── tsconfig.json                          # TypeScript config
 └── README.md                              # Documentation
