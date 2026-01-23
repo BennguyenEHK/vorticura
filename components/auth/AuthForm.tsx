@@ -5,6 +5,8 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
+// Icon imports for password visibility toggle
+import { Eye, EyeOff } from "lucide-react"
 
 // UI Components
 import { Button } from "@/components/ui/button"
@@ -41,6 +43,9 @@ const AuthForm = ({ type }: AuthFormProps) => {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // State for password visibility toggle (eye icon button)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   // Determine which schema to use based on form type
   const formSchema = type === "login" ? loginSchema : signupSchema
@@ -205,27 +210,52 @@ const AuthForm = ({ type }: AuthFormProps) => {
               </>
             )}
 
-            {/* Identifier Field (email or username - both login and signup) */}
-            <FormField
-              control={form.control}
-              name="identifier"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email or Username</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="you@example.com or johndoe"
-                      autoComplete="username"
-                      disabled={isLoading}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* ===== LOGIN ONLY: Identifier Field (email or username) ===== */}
+            {type === "login" && (
+              <FormField
+                control={form.control}
+                name="identifier"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email or Username</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="you@example.com or johndoe"
+                        autoComplete="username"
+                        disabled={isLoading}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
-            {/* Password Field */}
+            {/* ===== SIGNUP ONLY: Email Field ===== */}
+            {type === "signup" && (
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="email"
+                        placeholder="you@example.com"
+                        autoComplete="email"
+                        disabled={isLoading}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {/* Password Field with visibility toggle */}
             <FormField
               control={form.control}
               name="password"
@@ -233,20 +263,39 @@ const AuthForm = ({ type }: AuthFormProps) => {
                 <FormItem>
                   <FormLabel>Password</FormLabel>
                   <FormControl>
-                    <Input
-                      type="password"
-                      placeholder="••••••••"
-                      autoComplete={type === "login" ? "current-password" : "new-password"}
-                      disabled={isLoading}
-                      {...field}
-                    />
+                    {/* Wrapper div for input and toggle button positioning */}
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        autoComplete={type === "login" ? "current-password" : "new-password"}
+                        disabled={isLoading}
+                        className="pr-10" // Padding for toggle button
+                        {...field}
+                      />
+                      {/* Toggle button - shows/hides password */}
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        disabled={isLoading}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                        tabIndex={-1}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            {/* ===== SIGNUP ONLY: Confirm Password ===== */}
+            {/* ===== SIGNUP ONLY: Confirm Password with visibility toggle ===== */}
             {type === "signup" && (
               <FormField
                 control={form.control}
@@ -255,13 +304,32 @@ const AuthForm = ({ type }: AuthFormProps) => {
                   <FormItem>
                     <FormLabel>Confirm Password</FormLabel>
                     <FormControl>
-                      <Input
-                        type="password"
-                        placeholder="••••••••"
-                        autoComplete="new-password"
-                        disabled={isLoading}
-                        {...field}
-                      />
+                      {/* Wrapper div for input and toggle button positioning */}
+                      <div className="relative">
+                        <Input
+                          type={showConfirmPassword ? "text" : "password"}
+                          placeholder="••••••••"
+                          autoComplete="new-password"
+                          disabled={isLoading}
+                          className="pr-10" // Padding for toggle button
+                          {...field}
+                        />
+                        {/* Toggle button - shows/hides confirm password */}
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          disabled={isLoading}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                          aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                          tabIndex={-1}
+                        >
+                          {showConfirmPassword ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
