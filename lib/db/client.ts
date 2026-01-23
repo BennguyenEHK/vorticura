@@ -1,66 +1,37 @@
 // =============================================
-// 🗄️ DRIZZLE DATABASE CLIENT
+// 🗄️ DRIZZLE DATABASE CLIENT (Neon Serverless)
 // =============================================
-// Purpose: Type-safe database client with connection pooling
-// Replaces: utils/database/database.js (569 lines → 80 lines)
+// Purpose: Type-safe database client optimized for Neon Serverless
+// Uses: @neondatabase/serverless for edge-compatible connections
 
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import { neon } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-http';
 import * as schema from './schema';
 
 // =============================================
 // 📊 DATABASE CONFIGURATION
 // =============================================
 
-// Build connection string from environment variables
-// Require explicit credentials when DATABASE_URL is not provided to fail fast
-if (!process.env.DATABASE_URL && !process.env.POSTGRES_PASSWORD) {
-  throw new Error('POSTGRES_PASSWORD environment variable is required when DATABASE_URL is not set');
+// Validate DATABASE_URL is set
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL environment variable is required');
 }
 
-const connectionString =
-  process.env.DATABASE_URL ||
-  `postgresql://${process.env.POSTGRES_USER || 'postgres'}:${process.env.POSTGRES_PASSWORD}@${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || '5432'}/${process.env.POSTGRES_DB || 'sse_data'}`;
-
 // =============================================
-// 🔌 CONNECTION POOL
+// 🚀 NEON SERVERLESS CLIENT
 // =============================================
 
 /**
- * PostgreSQL connection pool with optimized settings
- * - max: Maximum number of clients in the pool
- * - idleTimeoutMillis: Close idle clients after specified time
- * - connectionTimeoutMillis: Return error if connection takes too long
+ * Neon HTTP client for serverless/edge environments
+ * Automatically handles connection pooling via Neon's infrastructure
  */
-export const pool = new Pool({
-  connectionString,
-  max: 20, // Maximum pool connections
-  idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: 10000, // Return error after 10 seconds
-});
-
-// Setup connection pool event handlers for monitoring
-pool.on('connect', () => {
-  console.log('🔗 New database client connected');
-});
-
-pool.on('remove', () => {
-  console.log('🔚 Database client removed from pool');
-});
-
-pool.on('error', (err) => {
-  console.error('❌ Database pool error:', err.message);
-});
-
-// =============================================
-// 🚀 DRIZZLE CLIENT
-// =============================================
+const sql = neon(process.env.DATABASE_URL);
 
 /**
  * Drizzle ORM database client instance
  * Provides type-safe query building and execution
  */
-export const db = drizzle(pool, { schema });
+export const db = drizzle(sql, { schema });
 
 // =============================================
 // 🏥 HEALTH CHECK
@@ -73,18 +44,13 @@ export const db = drizzle(pool, { schema });
 export async function checkDatabaseHealth() {
   try {
     // Execute simple query to verify connection
-    const result = await pool.query('SELECT NOW() as current_time, version() as pg_version');
+    const result = await sql`SELECT NOW() as current_time, version() as pg_version`;
 
     return {
       status: 'connected',
       connected: true,
-      timestamp: result.rows[0].current_time,
-      version: result.rows[0].pg_version.split(' ')[0], // Extract PostgreSQL version number
-      poolStatus: {
-        totalCount: pool.totalCount, // Total number of clients in pool
-        idleCount: pool.idleCount, // Number of idle clients
-        waitingCount: pool.waitingCount, // Number of queued requests
-      },
+      timestamp: result[0].current_time,
+      version: String(result[0].pg_version).split(' ')[0],
     };
   } catch (error) {
     return {
@@ -96,38 +62,11 @@ export async function checkDatabaseHealth() {
 }
 
 // =============================================
-// 🔚 GRACEFUL SHUTDOWN
+// 🔧 UTILITY EXPORTS
 // =============================================
 
 /**
- * Close all database connections gracefully
- * Called during application shutdown
+ * Raw SQL client for custom queries
+ * Use when you need to execute raw SQL outside of Drizzle
  */
-export async function closeDatabase() {
-  console.log('🔌 Closing database connections...');
-  await pool.end();
-  console.log('✅ Database connections closed successfully');
-}
-
-// Handle process termination signals for graceful shutdown
-process.on('SIGTERM', async () => {
-  try {
-    await closeDatabase();
-    process.exit(0);
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error('Error during SIGTERM shutdown:', err);
-    process.exit(1);
-  }
-});
-
-process.on('SIGINT', async () => {
-  try {
-    await closeDatabase();
-    process.exit(0);
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error('Error during SIGINT shutdown:', err);
-    process.exit(1);
-  }
-});
+export { sql };
