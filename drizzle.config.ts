@@ -2,7 +2,7 @@
 // ⚙️ DRIZZLE CONFIGURATION
 // =============================================
 // Purpose: Configure Drizzle Kit for migrations and schema management
-
+import 'dotenv/config';
 import type { Config } from 'drizzle-kit';
 
 // Build database connection string from environment variables
