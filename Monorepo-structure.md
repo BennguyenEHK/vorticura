@@ -7,9 +7,9 @@ quoteflow_ai/
 │   │   └── signup/
 │   │       └── page.tsx ✓                 # Signup page
 │   │
-│   ├── (dashboard)/                       # Route group: Protected routes
-│   │   ├── layout.tsx                     # Dashboard layout
-│   │   ├── page.tsx                       # Dashboard home
+│   ├── dashboard/                          # Dashboard routes
+│   │   ├── layout.tsx ✓                   # Dashboard layout with sidebar/topbar
+│   │   ├── page.tsx ✓                     # Dashboard home page
 │   │   ├── quotations/
 │   │   │   ├── page.tsx                   # Quotations list page
 │   │   │   └── [id]/
@@ -54,15 +54,15 @@ quoteflow_ai/
 │   │   │
 │   │   ├── database/
 │   │   │   ├── insert/
-│   │   │   │   └── route.ts               # POST /api/database/insert
+│   │   │   │   └── route.ts ✓                # POST /api/database/insert
 │   │   │   ├── select/
-│   │   │   │   └── route.ts               # POST /api/database/select
+│   │   │   │   └── route.ts ✓               # POST /api/database/select
 │   │   │   ├── update/
-│   │   │   │   └── route.ts               # POST /api/database/update
+│   │   │   │   └── route.ts ✓               # POST /api/database/update
 │   │   │   ├── delete/
-│   │   │   │   └── route.ts               # DELETE /api/database/delete
+│   │   │   │   └── route.ts ✓               # DELETE /api/database/delete
 │   │   │   └── stats/
-│   │   │       └── route.ts               # GET /api/database/stats
+│   │   │       └── route.ts ✓              # GET /api/database/stats
 │   │   │
 │   │   ├── sessions/
 │   │   │   ├── route.ts                   # GET /api/sessions
@@ -126,6 +126,11 @@ quoteflow_ai/
 │   ├── auth/                              # Feature: Authentication
 │   │   └── AuthForm.tsx ✓                 # Reusable auth form (login/signup)
 │   │
+│   ├── dashboard/                         # Feature: Dashboard UI
+│   │   ├── index.ts ✓                     # Barrel exports for dashboard components
+│   │   ├── dashboard-sidebar.tsx ✓        # Collapsible sidebar navigation
+│   │   └── dashboard-topbar.tsx ✓         # Fixed top navigation bar
+│   │
 │   ├── home/                              # Feature: Homepage (Public Landing)
 │   │   ├── index.ts ✓                     # Barrel exports for all home components
 │   │   ├── Navbar.tsx ✓                   # Sticky navigation with scroll-aware styling
@@ -143,8 +148,8 @@ quoteflow_ai/
 │       ├── label.tsx ✓                    # Label component
 │       ├── form.tsx ✓                     # Form components (React Hook Form)
 │       ├── card.tsx ✓                     # Card component
-│       ├── dialog.tsx                     # Dialog component
-│       └── table.tsx                      # Table component
+│       ├── dialog.tsx  ✓                    # Dialog component
+│       └── table.tsx  ✓                     # Table component
 │
 ├── lib/                                   # Business Logic & Utilities
 │   ├── services/                          # Business Logic Layer

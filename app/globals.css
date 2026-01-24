@@ -59,6 +59,18 @@
   /* ----- Feedback/Rating Tokens ----- */
   --color-rating: var(--rating);                   /* text-rating = amber-400 (star ratings) */
 
+  /* ----- Status Badge Tokens ----- */
+  --color-status-draft: var(--status-draft);       /* bg-status-draft = amber-400 */
+  --color-status-draft-foreground: var(--status-draft-foreground);
+  --color-status-pending: var(--status-pending);   /* bg-status-pending = sky-100 */
+  --color-status-pending-foreground: var(--status-pending-foreground);
+  --color-status-complete: var(--status-complete); /* bg-status-complete = emerald-100 */
+  --color-status-complete-foreground: var(--status-complete-foreground);
+
+  /* ----- Avatar Tokens ----- */
+  --color-avatar: var(--avatar);                   /* bg-avatar = indigo-500 */
+  --color-avatar-foreground: var(--avatar-foreground);
+
   /* ----- Destructive/Error Tokens ----- */
   --color-destructive: var(--destructive);         /* bg-destructive = red-500 */
   --color-destructive-foreground: var(--destructive-foreground);
@@ -160,6 +172,18 @@
   /* ----- Feedback/Rating ----- */
   --rating: oklch(0.828 0.189 84.429);             /* #fbbf24 - amber-400 (star ratings) */
 
+  /* ----- Status Badge Colors ----- */
+  --status-draft: oklch(0.828 0.189 84.429);       /* #fbbf24 - amber-400 */
+  --status-draft-foreground: oklch(0.129 0.042 264.695); /* #0f172a - slate-900 */
+  --status-pending: oklch(0.977 0.013 236.62);     /* #f0f9ff - sky-50 */
+  --status-pending-foreground: oklch(0.5 0.134 242.749); /* #0369a1 - sky-700 */
+  --status-complete: oklch(0.962 0.044 156.743);   /* #d1fae5 - emerald-100 */
+  --status-complete-foreground: oklch(0.448 0.119 160.197); /* #047857 - emerald-700 */
+
+  /* ----- Avatar Colors ----- */
+  --avatar: oklch(0.585 0.233 277.117);            /* #6366f1 - indigo-500 */
+  --avatar-foreground: oklch(1 0 0);               /* #ffffff - white */
+
   /* ----- Destructive/Error States ----- */
   --destructive: oklch(0.637 0.237 25.331);        /* #ef4444 - red-500 */
   --destructive-foreground: oklch(1 0 0);          /* #ffffff - white */
@@ -241,6 +265,18 @@
 
   /* ----- Feedback/Rating ----- */
   --rating: oklch(0.828 0.189 84.429);             /* amber-400 (same on dark) */
+
+  /* ----- Status Badge Colors (Dark Mode) ----- */
+  --status-draft: oklch(0.828 0.189 84.429);       /* amber-400 (same on dark) */
+  --status-draft-foreground: oklch(0.129 0.042 264.695); /* slate-900 */
+  --status-pending: oklch(0.312 0.044 264.182);    /* slate-700 */
+  --status-pending-foreground: oklch(0.776 0.152 231.836); /* sky-400 */
+  --status-complete: oklch(0.312 0.044 264.182);   /* slate-700 */
+  --status-complete-foreground: oklch(0.696 0.17 162.48); /* emerald-500 */
+
+  /* ----- Avatar Colors (Dark Mode) ----- */
+  --avatar: oklch(0.585 0.233 277.117);            /* indigo-500 (same on dark) */
+  --avatar-foreground: oklch(1 0 0);               /* white */
 
   /* ----- Destructive/Error States ----- */
   --destructive: oklch(0.704 0.191 22.216);        /* red-400 (lighter on dark) */
