@@ -16,7 +16,12 @@
       "Bash(findstr:*)",
       "Bash(if not exist \"C:\\\\Users\\\\LENOVO\\\\OneDrive\\\\Máy tính\\\\make_sales_agent\\\\quoteflow_ai\\\\components\\\\ui\" mkdir \"C:\\\\Users\\\\LENOVO\\\\OneDrive\\\\Máy tính\\\\make_sales_agent\\\\quoteflow_ai\\\\components\\\\ui\")",
       "Bash(if not exist \"C:\\\\Users\\\\LENOVO\\\\OneDrive\\\\Máy tính\\\\make_sales_agent\\\\quoteflow_ai\\\\components\\\\auth\" mkdir \"C:\\\\Users\\\\LENOVO\\\\OneDrive\\\\Máy tính\\\\make_sales_agent\\\\quoteflow_ai\\\\components\\\\auth\")",
-      "Skill(frontend-design)"
+      "Skill(frontend-design)",
+      "mcp__claude_ai_Figma__whoami",
+      "Bash(move \"app\\\\dashboard\\\\layout.tsx\" \"app\\\\\\(dashboard\\)\\\\layout.tsx\")",
+      "Bash(move \"app\\\\dashboard\\\\page.tsx\" \"app\\\\\\(dashboard\\)\\\\dashboard\\\\page.tsx\")",
+      "Bash(cmd /c \"move app\\\\dashboard\\\\layout.tsx app\\\\\\(dashboard\\)\\\\layout.tsx\")",
+      "Bash(cmd /c \"move app\\\\dashboard\\\\page.tsx app\\\\\\(dashboard\\)\\\\dashboard\\\\page.tsx\")"
     ]
   }
 }

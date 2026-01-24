@@ -91,46 +91,46 @@ quoteflow_ai/
 │   └── globals.css ✓                      # Global styles (Tailwind v4)
 │
 ├── components/                            # React Components
-│   ├── quotation/                         # Feature: Quotation
-│   │   ├── FormulaInputPanel.tsx
-│   │   ├── ResultPreviewPanel.tsx
-│   │   └── modules/
-│   │       ├── FormattingUtils.tsx
-│   │       ├── CurrencyManager.tsx
-│   │       ├── TestDataProvider.tsx
-│   │       ├── VariableManager.tsx
-│   │       ├── SearchFilter.tsx
-│   │       ├── ProfitTableManager.tsx
-│   │       ├── UIGenerator.tsx
-│   │       ├── EventHandlers.tsx
-│   │       ├── BulkUpdateManager.tsx
-│   │       ├── FormulaCalculator.tsx
-│   │       ├── DataLoader.tsx
-│   │       ├── DisplayManager.tsx
-│   │       ├── EditController.tsx
-│   │       ├── DownloadController.tsx
-│   │       ├── QuotationLoader.tsx
-│   │       ├── SearchManager.tsx
-│   │       ├── HtmlExtractor.tsx
-│   │       ├── DocumentDeleter.tsx
-│   │       └── ReportRenderer.tsx
-│   │
-│   ├── workflow/                          # Feature: Workflow
-│   │   └── WorkflowTrackerPanel.tsx
-│   │
-│   ├── files/                             # Feature: Files
-│   │   └── FileManagerPanel.tsx
-│   │
-│   ├── chat/                              # Feature: Chat
-│   │   └── ChatInputPanel.tsx
-│   │
 │   ├── auth/                              # Feature: Authentication
 │   │   └── AuthForm.tsx ✓                 # Reusable auth form (login/signup)
 │   │
-│   ├── dashboard/                         # Feature: Dashboard UI
+│   ├── dashboard/                         # Feature: Dashboard UI & Components
 │   │   ├── index.ts ✓                     # Barrel exports for dashboard components
 │   │   ├── dashboard-sidebar.tsx ✓        # Collapsible sidebar navigation
-│   │   └── dashboard-topbar.tsx ✓         # Fixed top navigation bar
+│   │   ├── dashboard-topbar.tsx ✓         # Fixed top navigation bar
+│   │   │
+│   │   ├── quotation/                     # Quotation feature components
+│   │   │   ├── FormulaInputPanel.tsx
+│   │   │   ├── ResultPreviewPanel.tsx
+│   │   │   └── modules/
+│   │   │       ├── FormattingUtils.tsx
+│   │   │       ├── CurrencyManager.tsx
+│   │   │       ├── TestDataProvider.tsx
+│   │   │       ├── VariableManager.tsx
+│   │   │       ├── SearchFilter.tsx
+│   │   │       ├── ProfitTableManager.tsx
+│   │   │       ├── UIGenerator.tsx
+│   │   │       ├── EventHandlers.tsx
+│   │   │       ├── BulkUpdateManager.tsx
+│   │   │       ├── FormulaCalculator.tsx
+│   │   │       ├── DataLoader.tsx
+│   │   │       ├── DisplayManager.tsx
+│   │   │       ├── EditController.tsx
+│   │   │       ├── DownloadController.tsx
+│   │   │       ├── QuotationLoader.tsx
+│   │   │       ├── SearchManager.tsx
+│   │   │       ├── HtmlExtractor.tsx
+│   │   │       ├── DocumentDeleter.tsx
+│   │   │       └── ReportRenderer.tsx
+│   │   │
+│   │   ├── workflow/                      # Workflow feature components
+│   │   │   └── WorkflowTrackerPanel.tsx
+│   │   │
+│   │   ├── files/                         # Files feature components
+│   │   │   └── FileManagerPanel.tsx
+│   │   │
+│   │   └── chat/                          # Chat feature components
+│   │       └── ChatInputPanel.tsx
 │   │
 │   ├── home/                              # Feature: Homepage (Public Landing)
 │   │   ├── index.ts ✓                     # Barrel exports for all home components
