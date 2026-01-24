@@ -7,19 +7,20 @@ quoteflow_ai/
 │   │   └── signup/
 │   │       └── page.tsx ✓                 # Signup page
 │   │
-│   ├── dashboard/                          # Dashboard routes
+│   ├── (dashboard)/                        # Route group: Protected dashboard routes
 │   │   ├── layout.tsx ✓                   # Dashboard layout with sidebar/topbar
-│   │   ├── page.tsx ✓                     # Dashboard home page
+│   │   ├── dashboard/
+│   │   │   └── page.tsx ✓                 # Dashboard home page (/dashboard)
 │   │   ├── quotations/
-│   │   │   ├── page.tsx                   # Quotations list page
+│   │   │   ├── page.tsx                   # Quotations list page (/quotations)
 │   │   │   └── [id]/
 │   │   │       └── page.tsx               # Single quotation page
 │   │   ├── workflow/
-│   │   │   └── page.tsx                   # Workflow tracker page
+│   │   │   └── page.tsx                   # Workflow tracker page (/workflow)
 │   │   ├── files/
-│   │   │   └── page.tsx                   # File manager page
+│   │   │   └── page.tsx                   # File manager page (/files)
 │   │   └── chat/
-│   │       └── page.tsx                   # Chat page
+│   │       └── page.tsx                   # Chat page (/chat)
 │   │
 │   ├── api/                               # API Routes (Controllers)
 │   │   ├── auth/
