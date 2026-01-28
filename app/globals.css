@@ -93,6 +93,10 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
+  /* ----- Glass/Overlay Tokens (for navbar, modals) ----- */
+  --color-glass: var(--glass);                         /* bg-glass = translucent backdrop */
+  --color-glass-heavy: var(--glass-heavy);             /* bg-glass-heavy = more opaque backdrop */
+
   /* ----- Chart Tokens ----- */
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -212,6 +216,10 @@
   --sidebar-accent-foreground: oklch(0.129 0.042 264.695);
   --sidebar-border: oklch(0.929 0.009 264.182);    /* slate-200 */
   --sidebar-ring: oklch(0.704 0.025 264.182);      /* slate-400 */
+
+  /* ----- Glass/Overlay (Navbar, modals) ----- */
+  --glass: oklch(1 0 0 / 80%);                     /* white/80% - navbar scrolled */
+  --glass-heavy: oklch(1 0 0 / 95%);               /* white/95% - mobile menu */
 }
 
 /* =============================================
@@ -306,6 +314,10 @@
   --sidebar-accent-foreground: oklch(0.984 0.003 264.182);
   --sidebar-border: oklch(1 0 0 / 10%);            /* white/10% */
   --sidebar-ring: oklch(0.517 0.035 264.364);      /* slate-500 */
+
+  /* ----- Glass/Overlay (Dark mode) ----- */
+  --glass: oklch(0.129 0.042 264.695 / 80%);       /* slate-900/80% - navbar scrolled */
+  --glass-heavy: oklch(0.129 0.042 264.695 / 95%); /* slate-900/95% - mobile menu */
 }
 
 /* =============================================

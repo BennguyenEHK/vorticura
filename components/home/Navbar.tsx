@@ -27,13 +27,21 @@ export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false)
   // Track mobile menu open/close state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  // Track if component has mounted (for hydration-safe theme rendering)
+  const [mounted, setMounted] = useState(false)
   // Theme toggle hook from next-themes
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme, resolvedTheme } = useTheme()
 
   // Toggle between light and dark themes
   const toggleTheme = () => {
-    setTheme(theme === "dark" ? "light" : "dark")
+    setTheme(resolvedTheme === "dark" ? "light" : "dark")
   }
+
+  // Set mounted to true after hydration completes
+  // This prevents hydration mismatch for theme-dependent UI
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Listen to scroll events to update navbar styling
   useEffect(() => {
@@ -64,7 +72,7 @@ export default function Navbar() {
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         isScrolled
-          ? "bg-white/80 backdrop-blur-xl border-b border-border/50 shadow-sm"
+          ? "bg-glass backdrop-blur-xl border-b border-border/50 shadow-sm"
           : "bg-transparent"
       }`}
     >
@@ -99,16 +107,22 @@ export default function Navbar() {
           {/* Desktop Auth Buttons and Theme Toggle */}
           <div className="hidden md:flex md:items-center md:gap-3">
             {/* Theme toggle button - matches topbar implementation */}
+            {/* Only render theme-dependent content after mount to prevent hydration mismatch */}
             <Button
               variant="ghost"
               size="icon"
               onClick={toggleTheme}
               className="h-9 w-9"
-              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label={mounted ? (resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode") : "Toggle theme"}
             >
               {/* Show sun icon in dark mode, moon icon in light mode */}
-              {theme === "dark" ? (
-                <Sun className="h-4 w-4" />
+              {/* Before mount: show Moon as default to match server render */}
+              {mounted ? (
+                resolvedTheme === "dark" ? (
+                  <Sun className="h-4 w-4" />
+                ) : (
+                  <Moon className="h-4 w-4" />
+                )
               ) : (
                 <Moon className="h-4 w-4" />
               )}
@@ -162,7 +176,7 @@ export default function Navbar() {
 
         {/* Mobile Menu Dropdown */}
         {isMobileMenuOpen && (
-          <div className="md:hidden border-t border-border/50 bg-white/95 backdrop-blur-xl py-4 space-y-1">
+          <div className="md:hidden border-t border-border/50 bg-glass-heavy backdrop-blur-xl py-4 space-y-1">
             {/* Mobile Navigation Links */}
             {navLinks.map((link) => (
               <a
@@ -177,18 +191,27 @@ export default function Navbar() {
             {/* Mobile Auth Buttons and Theme Toggle */}
             <div className="pt-4 px-4 space-y-2 border-t border-border/50 mt-4">
               {/* Mobile theme toggle button */}
+              {/* Only render theme-dependent content after mount to prevent hydration mismatch */}
               <Button
                 variant="outline"
                 onClick={toggleTheme}
                 className="w-full justify-start"
-                aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                aria-label={mounted ? (resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode") : "Toggle theme"}
               >
                 {/* Show sun icon in dark mode, moon icon in light mode */}
-                {theme === "dark" ? (
-                  <>
-                    <Sun className="h-4 w-4 mr-2" />
-                    Light Mode
-                  </>
+                {/* Before mount: show Moon/Dark Mode as default to match server render */}
+                {mounted ? (
+                  resolvedTheme === "dark" ? (
+                    <>
+                      <Sun className="h-4 w-4 mr-2" />
+                      Light Mode
+                    </>
+                  ) : (
+                    <>
+                      <Moon className="h-4 w-4 mr-2" />
+                      Dark Mode
+                    </>
+                  )
                 ) : (
                   <>
                     <Moon className="h-4 w-4 mr-2" />

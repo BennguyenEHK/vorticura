@@ -7,6 +7,7 @@
 // Moved from components/app/dashboard/dashboard-topbar.tsx to components/app/topbar.tsx
 // Includes theme toggle using next-themes
 
+import { useState, useEffect } from "react";
 import { Search, Bell, ChevronDown, Download, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
@@ -23,12 +24,20 @@ import { Logo } from "@/components/ui/logo";
  * Uses shared Logo component for consistent branding
  */
 export function DashboardTopBar() {
+  // Track if component has mounted (for hydration-safe theme rendering)
+  const [mounted, setMounted] = useState(false);
   // Theme toggle hook from next-themes
-  const { theme, setTheme } = useTheme();
+  const { setTheme, resolvedTheme } = useTheme();
+
+  // Set mounted to true after hydration completes
+  // This prevents hydration mismatch for theme-dependent UI
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Toggle between light and dark themes
   const toggleTheme = () => {
-    setTheme(theme === "dark" ? "light" : "dark");
+    setTheme(resolvedTheme === "dark" ? "light" : "dark");
   };
 
   return (
@@ -104,16 +113,22 @@ export function DashboardTopBar() {
           </Button>
 
           {/* Theme toggle button */}
+          {/* Only render theme-dependent content after mount to prevent hydration mismatch */}
           <Button
             variant="ghost"
             size="icon"
             onClick={toggleTheme}
             className="h-9 w-9"
-            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label={mounted ? (resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode") : "Toggle theme"}
           >
             {/* Show sun icon in dark mode, moon icon in light mode */}
-            {theme === "dark" ? (
-              <Sun className="h-4 w-4" />
+            {/* Before mount: show Moon as default to match server render */}
+            {mounted ? (
+              resolvedTheme === "dark" ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Moon className="h-4 w-4" />
+              )
             ) : (
               <Moon className="h-4 w-4" />
             )}
