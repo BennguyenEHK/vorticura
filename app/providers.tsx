@@ -25,7 +25,7 @@ export function Providers({ children }: ProvidersProps) {
       attribute="class"           // Apply theme via class on <html> element
       defaultTheme="system"       // Respect user's system preference by default
       enableSystem                // Enable system theme detection
-      disableTransitionOnChange   // Prevent flash during theme switch
+      // Note: disableTransitionOnChange removed to allow smooth theme transitions
     >
       {children}
     </ThemeProvider>

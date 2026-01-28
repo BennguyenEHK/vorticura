@@ -6,7 +6,9 @@
 // Shared layout for all authenticated app pages (dashboard, workspace)
 // Includes: Topbar, Sidebar, and dynamic main content area
 
-import { DashboardSidebar, DashboardTopBar } from "@/components/app/dashboard";
+// Import sidebar and topbar from components/app folder (moved from dashboard subfolder)
+import { DashboardSidebar } from "@/components/app/sidebar";
+import { DashboardTopBar } from "@/components/app/topbar";
 import {
   SidebarProvider,
   useSidebar,

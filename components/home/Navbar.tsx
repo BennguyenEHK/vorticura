@@ -2,6 +2,8 @@
 
 import Link from "next/link"
 import { useState, useEffect } from "react"
+import { useTheme } from "next-themes"  // Theme toggle hook
+import { Moon, Sun } from "lucide-react"  // Theme toggle icons
 import { Button } from "@/components/ui/button"
 import { Logo } from "@/components/ui/logo"  // Shared logo component
 
@@ -25,6 +27,13 @@ export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false)
   // Track mobile menu open/close state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  // Theme toggle hook from next-themes
+  const { theme, setTheme } = useTheme()
+
+  // Toggle between light and dark themes
+  const toggleTheme = () => {
+    setTheme(theme === "dark" ? "light" : "dark")
+  }
 
   // Listen to scroll events to update navbar styling
   useEffect(() => {
@@ -87,8 +96,23 @@ export default function Navbar() {
             ))}
           </div>
 
-          {/* Desktop Auth Buttons */}
+          {/* Desktop Auth Buttons and Theme Toggle */}
           <div className="hidden md:flex md:items-center md:gap-3">
+            {/* Theme toggle button - matches topbar implementation */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleTheme}
+              className="h-9 w-9"
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {/* Show sun icon in dark mode, moon icon in light mode */}
+              {theme === "dark" ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Moon className="h-4 w-4" />
+              )}
+            </Button>
             <Link href="/login">
               <Button variant="ghost" size="sm">
                 Log in
@@ -150,8 +174,28 @@ export default function Navbar() {
                 {link.label}
               </a>
             ))}
-            {/* Mobile Auth Buttons */}
+            {/* Mobile Auth Buttons and Theme Toggle */}
             <div className="pt-4 px-4 space-y-2 border-t border-border/50 mt-4">
+              {/* Mobile theme toggle button */}
+              <Button
+                variant="outline"
+                onClick={toggleTheme}
+                className="w-full justify-start"
+                aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {/* Show sun icon in dark mode, moon icon in light mode */}
+                {theme === "dark" ? (
+                  <>
+                    <Sun className="h-4 w-4 mr-2" />
+                    Light Mode
+                  </>
+                ) : (
+                  <>
+                    <Moon className="h-4 w-4 mr-2" />
+                    Dark Mode
+                  </>
+                )}
+              </Button>
               <Link href="/login" className="block">
                 <Button variant="outline" className="w-full">
                   Log in

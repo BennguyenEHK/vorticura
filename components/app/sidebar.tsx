@@ -1,9 +1,10 @@
 "use client";
 
 // =============================================
-// Dashboard Sidebar Component
+// App Sidebar Component
 // =============================================
 // Collapsible navigation sidebar for dashboard and workspace
+// Moved from components/app/dashboard/dashboard-sidebar.tsx to components/app/sidebar.tsx
 // Uses SidebarProvider context for shared collapsed state
 
 import {

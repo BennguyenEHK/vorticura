@@ -1,9 +1,10 @@
 "use client";
 
 // =============================================
-// Dashboard Top Bar Component
+// App Top Bar Component
 // =============================================
 // Fixed header navigation with logo, search, actions, and user info
+// Moved from components/app/dashboard/dashboard-topbar.tsx to components/app/topbar.tsx
 // Includes theme toggle using next-themes
 
 import { Search, Bell, ChevronDown, Download, Moon, Sun } from "lucide-react";

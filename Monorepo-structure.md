@@ -1,7 +1,7 @@
 # QuoteFlow AI - Project Structure
 
 > **Last Updated:** January 28, 2026
-> **Version:** 2.0 (Route Groups Refactor)
+> **Version:** 3.0 (Route Simplification + Component Extraction)
 
 ## Overview
 
@@ -20,14 +20,12 @@ quoteflow_ai/
 │   ├── (app)/                             # Route group: Authenticated app
 │   │   ├── layout.tsx ✓                   # App layout (sidebar + topbar + SidebarProvider)
 │   │   │
-│   │   ├── (dashboard)/                   # Dashboard route group (inherits app layout)
-│   │   │   └── dashboard/
-│   │   │       └── page.tsx ✓             # Dashboard page "/dashboard"
+│   │   ├── dashboard/                     # Dashboard route (simplified from nested groups)
+│   │   │   └── page.tsx ✓                 # Dashboard page "/dashboard"
 │   │   │
-│   │   └── (workspace)/                   # Workspace route group (inherits app layout)
-│   │       └── workspace/
-│   │           └── [quotationId]/
-│   │               └── page.tsx ✓         # Workspace "/workspace/[quotationId]"
+│   │   └── workspace/                     # Workspace route (simplified from nested groups)
+│   │       └── [quotationId]/
+│   │           └── page.tsx ✓             # Workspace "/workspace/[quotationId]"
 │   │
 │   ├── (auth)/                            # Route group: Authentication
 │   │   ├── layout.tsx ✓                   # Auth layout (split-screen)
@@ -82,23 +80,26 @@ quoteflow_ai/
 ├── components/                            # React Components
 │   ├── app/                               # App-level components (authenticated section)
 │   │   ├── index.ts ✓                     # Barrel exports for app components
+│   │   ├── sidebar.tsx ✓                  # Collapsible sidebar (moved from dashboard/)
+│   │   ├── topbar.tsx ✓                   # Fixed topbar with theme toggle (moved from dashboard/)
 │   │   ├── sidebar-provider.tsx ✓         # SidebarProvider context for collapse state
 │   │   │
 │   │   ├── dashboard/                     # Dashboard UI components
-│   │   │   ├── index.ts ✓                 # Barrel exports
-│   │   │   ├── dashboard-sidebar.tsx ✓    # Collapsible sidebar (uses context)
-│   │   │   └── dashboard-topbar.tsx ✓     # Fixed topbar with logo, search, theme toggle
+│   │   │   ├── index.ts ✓                 # Barrel exports (re-exports sidebar/topbar + card components)
+│   │   │   ├── stats-card.tsx ✓           # Single stat card component
+│   │   │   ├── recent-quotations-card.tsx ✓ # Recent quotations table card
+│   │   │   └── quick-actions-card.tsx ✓   # Quick actions panel card
 │   │   │
-│   │   └── main_workspace/                # Workspace panel components
-│   │       ├── index.ts ✓                 # Barrel exports (placeholders)
-│   │       ├── chat/                      # AI Chat panel components
-│   │       ├── files/                     # File manager panel components
-│   │       ├── quotation/                 # Quotation editor components
-│   │       └── workflow/                  # Workflow tracker components
+│   │   └── workspace/                     # Workspace panel components
+│   │       ├── index.ts ✓                 # Barrel exports for workspace panels
+│   │       ├── chat-panel.tsx ✓           # AI Chat panel placeholder
+│   │       ├── quotation-editor-panel.tsx ✓ # Quotation editor placeholder
+│   │       ├── files-panel.tsx ✓          # File manager placeholder
+│   │       └── workflow-panel.tsx ✓       # Workflow tracker placeholder
 │   │
 │   ├── home/                              # Homepage (marketing) components
 │   │   ├── index.ts ✓                     # Barrel exports
-│   │   ├── Navbar.tsx ✓                   # Sticky nav with Logo component
+│   │   ├── Navbar.tsx ✓                   # Sticky nav with Logo + theme toggle
 │   │   ├── HeroSection.tsx ✓              # Hero with headline, CTAs
 │   │   ├── FeaturesSection.tsx ✓          # Feature cards grid
 │   │   ├── HowItWorksSection.tsx ✓        # 3-step process
@@ -243,6 +244,41 @@ quoteflow_ai/
 | `(app)` | Authenticated app | Shared sidebar + topbar |
 | `(auth)` | Authentication | Split-screen |
 
+### Route Simplification (v3.0)
+
+Previously (v2.0):
+```
+(app)/(dashboard)/dashboard/page.tsx → /dashboard
+(app)/(workspace)/workspace/[quotationId]/page.tsx → /workspace/[id]
+```
+
+Now (v3.0):
+```
+(app)/dashboard/page.tsx → /dashboard
+(app)/workspace/[quotationId]/page.tsx → /workspace/[id]
+```
+
+The nested route groups `(dashboard)` and `(workspace)` were removed as they added unnecessary complexity without providing additional layout separation.
+
+### Component Organization (v3.0)
+
+**Sidebar and Topbar moved to parent folder:**
+- `components/app/sidebar.tsx` (was `components/app/dashboard/dashboard-sidebar.tsx`)
+- `components/app/topbar.tsx` (was `components/app/dashboard/dashboard-topbar.tsx`)
+
+**Reason:** These components are shared across all app pages (dashboard, workspace), not just dashboard.
+
+**Dashboard Card Components extracted:**
+- `components/app/dashboard/stats-card.tsx` - Single stat display card
+- `components/app/dashboard/recent-quotations-card.tsx` - Quotations table card
+- `components/app/dashboard/quick-actions-card.tsx` - Quick action buttons card
+
+**Workspace Panel Components created:**
+- `components/app/workspace/chat-panel.tsx` - AI Chat panel
+- `components/app/workspace/quotation-editor-panel.tsx` - Quotation editor
+- `components/app/workspace/files-panel.tsx` - File manager
+- `components/app/workspace/workflow-panel.tsx` - Workflow tracker
+
 ### Provider Hierarchy
 
 ```
@@ -252,8 +288,8 @@ app/layout.tsx (Root)
     ├── (auth)/* - Theme works here
     └── (app)/layout.tsx
         └── SidebarProvider
-            ├── (dashboard)/* - Sidebar + Theme work here
-            └── (workspace)/* - Sidebar + Theme work here
+            ├── dashboard/* - Sidebar + Theme work here
+            └── workspace/* - Sidebar + Theme work here
 ```
 
 ### Shared Components
@@ -262,15 +298,29 @@ app/layout.tsx (Root)
 |-----------|----------|---------|
 | `Logo` | `components/ui/logo.tsx` | Navbar, Topbar, Auth |
 | `SidebarProvider` | `components/app/sidebar-provider.tsx` | App layout, Sidebar |
+| Theme Toggle | `components/app/topbar.tsx`, `components/home/Navbar.tsx` | Dashboard, Homepage |
 
 ### URL Mapping
 
 | Route Group | URL | Page |
 |-------------|-----|------|
 | `(home)` | `/` | Homepage (public landing) |
-| `(app)/(dashboard)/dashboard` | `/dashboard` | Dashboard overview |
-| `(app)/(workspace)/workspace/[id]` | `/workspace/Q-2024-001` | Quotation editor |
+| `(app)/dashboard` | `/dashboard` | Dashboard overview |
+| `(app)/workspace/[id]` | `/workspace/Q-2024-001` | Quotation editor |
 | `(auth)` | `/login`, `/signup` | Auth forms |
+
+## Design Token System
+
+All styling uses design tokens from `app/globals.css`:
+
+### Color Tokens
+- **Backgrounds:** `bg-background`, `bg-card`, `bg-muted`, `bg-sidebar`
+- **Text:** `text-foreground`, `text-body`, `text-muted-foreground`, `text-label`
+- **Brand:** `bg-brand`, `text-brand`, `hover:bg-brand-hover`
+- **Status:** `bg-status-draft`, `bg-status-pending`, `bg-status-complete`
+
+### Border Radius Tokens
+- `rounded-sm` → `rounded-4xl` (from `--radius` base)
 
 ## Legend
 

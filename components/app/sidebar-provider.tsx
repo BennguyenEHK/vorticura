@@ -4,7 +4,7 @@
 // Sidebar Context Provider
 // =============================================
 // Manages sidebar collapsed/expanded state across the app.
-// Used by: layout.tsx (for main content margin), dashboard-sidebar.tsx (for width)
+// Used by: layout.tsx (for main content margin), sidebar.tsx (for width)
 
 import {
   createContext,
