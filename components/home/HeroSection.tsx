@@ -63,7 +63,7 @@ export default function HeroSection() {
             <Link href="/signup">
               <Button
                 size="lg"
-                className="bg-primary hover:bg-primary-hover text-white px-8 py-6 text-base font-medium shadow-lg shadow-slate-900/10 hover:shadow-xl hover:shadow-slate-900/20 transition-all"
+                className="bg-primary hover:bg-primary-hover text-primary-foreground px-8 py-6 text-base font-medium shadow-lg shadow-foreground/10 hover:shadow-xl hover: shadow-foreground/20 transition-all"
               >
                 Start Free Trial
                 {/* Arrow icon */}
