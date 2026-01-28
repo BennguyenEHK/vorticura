@@ -51,12 +51,12 @@ export default function HowItWorksSection() {
   return (
     <section
       id="how-it-works"
-      className="relative py-24 lg:py-32 bg-white scroll-mt-16 overflow-hidden"
+      className="relative py-24 lg:py-32 bg-background scroll-mt-16 overflow-hidden"
     >
       {/* ===== Background Decorative Elements ===== */}
       <div className="absolute inset-0" aria-hidden="true">
         {/* Subtle gradient accent */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-1/2 bg-gradient-to-b from-slate-50 to-transparent rounded-full blur-3xl opacity-60" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-1/2 bg-gradient-to-b from-gradient-subtle to-transparent rounded-full blur-3xl opacity-60" />
       </div>
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -82,7 +82,7 @@ export default function HowItWorksSection() {
         <div className="relative">
           {/* Connecting line between steps (desktop only) */}
           <div
-            className="hidden lg:block absolute top-24 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-slate-200 to-transparent"
+            className="hidden lg:block absolute top-24 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-gradient-line to-transparent"
             aria-hidden="true"
           />
 
@@ -98,7 +98,7 @@ export default function HowItWorksSection() {
                   {/* Outer glow ring */}
                   <div className="absolute inset-0 bg-brand/20 rounded-full blur-xl scale-150" />
                   {/* Main circle with icon */}
-                  <div className="relative flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-xl shadow-slate-900/20">
+                  <div className="relative flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-icon-circle-start to-icon-circle-end text-primary-foreground shadow-xl shadow-foreground/20">
                     {step.icon}
                   </div>
                   {/* Step number badge */}

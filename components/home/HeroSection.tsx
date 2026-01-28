@@ -10,14 +10,14 @@ import { Button } from "@/components/ui/button"
 // Features decorative gradient background and animated elements
 export default function HeroSection() {
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-white">
+    <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-background">
       {/* ===== Decorative Background Elements ===== */}
       {/* Gradient mesh background for depth and visual interest */}
       <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
         {/* Top-left gradient orb: sky blue with blur effect */}
-        <div className="absolute -top-1/4 -left-1/4 w-1/2 h-1/2 bg-sky-100/60 rounded-full blur-3xl" />
+        <div className="absolute -top-1/4 -left-1/4 w-1/2 h-1/2 bg-hero-orb-1 rounded-full blur-3xl" />
         {/* Bottom-right gradient orb: indigo with blur effect */}
-        <div className="absolute -bottom-1/4 -right-1/4 w-1/2 h-1/2 bg-indigo-100/40 rounded-full blur-3xl" />
+        <div className="absolute -bottom-1/4 -right-1/4 w-1/2 h-1/2 bg-hero-orb-2 rounded-full blur-3xl" />
         {/* Center accent orb: subtle sky tint */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-1/2 bg-brand-muted/50 rounded-full blur-3xl" />
 
@@ -34,7 +34,7 @@ export default function HeroSection() {
       <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-32 lg:py-40">
         <div className="text-center">
           {/* Badge/Tag above headline */}
-          <div className="inline-flex items-center gap-2 rounded-full bg-brand-muted border border-sky-200/50 px-4 py-1.5 text-sm font-medium text-brand-dark mb-8">
+          <div className="inline-flex items-center gap-2 rounded-full bg-brand-muted border border-brand/20 px-4 py-1.5 text-sm font-medium text-brand-dark mb-8">
             {/* Sparkle icon */}
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.715-5.349L10 6.477l-3.763 1.105 1.715 5.349a1 1 0 01-.285 1.05A3.989 3.989 0 015 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.788l1.599.799L9 4.323V3a1 1 0 011-1z" />
@@ -112,7 +112,7 @@ export default function HeroSection() {
 
       {/* Bottom fade gradient for section transition */}
       <div
-        className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white to-transparent"
+        className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-background to-transparent"
         aria-hidden="true"
       />
     </section>

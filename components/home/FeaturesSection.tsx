@@ -115,7 +115,7 @@ export default function FeaturesSection() {
           {features.map((feature, index) => (
             <Card
               key={feature.title}
-              className="group relative overflow-hidden border-border/50 bg-white hover:shadow-lg hover:shadow-border/50 transition-all duration-300 hover:-translate-y-1 animate-fadeIn"
+              className="group relative overflow-hidden border-border/50 bg-card hover:shadow-lg hover:shadow-border/50 transition-all duration-300 hover:-translate-y-1 animate-fadeIn"
               style={{
                 // Staggered animation delay for visual interest
                 animationDelay: `${index * 100}ms`,

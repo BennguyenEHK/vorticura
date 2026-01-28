@@ -84,7 +84,7 @@ export default function TestimonialsSection() {
   return (
     <section
       id="testimonials"
-      className="relative py-24 lg:py-32 bg-white scroll-mt-16 overflow-hidden"
+      className="relative py-24 lg:py-32 bg-background scroll-mt-16 overflow-hidden"
     >
       {/* ===== Background Decorative Elements ===== */}
       <div className="absolute inset-0" aria-hidden="true">
@@ -124,7 +124,7 @@ export default function TestimonialsSection() {
           {testimonials.map((testimonial, index) => (
             <Card
               key={testimonial.author}
-              className="border-border/50 bg-white hover:shadow-lg transition-shadow duration-300 animate-fadeIn"
+              className="border-border/50 bg-card hover:shadow-lg transition-shadow duration-300 animate-fadeIn"
               style={{
                 // Staggered animation delay
                 animationDelay: `${index * 100}ms`,
@@ -142,7 +142,7 @@ export default function TestimonialsSection() {
                 {/* Author info */}
                 <div className="mt-6 flex items-center gap-4">
                   {/* Avatar with initials */}
-                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 text-white font-medium text-sm">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-br from-icon-circle-start to-icon-circle-end text-primary-foreground font-medium text-sm">
                     {testimonial.avatar}
                   </div>
                   <div>

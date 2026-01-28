@@ -97,6 +97,14 @@
   --color-glass: var(--glass);                         /* bg-glass = translucent backdrop */
   --color-glass-heavy: var(--glass-heavy);             /* bg-glass-heavy = more opaque backdrop */
 
+  /* ----- Hero/Decorative Gradient Tokens ----- */
+  --color-hero-orb-1: var(--hero-orb-1);               /* bg-hero-orb-1 = primary decorative orb */
+  --color-hero-orb-2: var(--hero-orb-2);               /* bg-hero-orb-2 = secondary decorative orb */
+  --color-gradient-line: var(--gradient-line);         /* bg-gradient-line = connecting lines */
+  --color-gradient-subtle: var(--gradient-subtle);     /* bg-gradient-subtle = subtle section backgrounds */
+  --color-icon-circle-start: var(--icon-circle-start); /* from-icon-circle-start = icon bg gradient start */
+  --color-icon-circle-end: var(--icon-circle-end);     /* to-icon-circle-end = icon bg gradient end */
+
   /* ----- Chart Tokens ----- */
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -220,6 +228,14 @@
   /* ----- Glass/Overlay (Navbar, modals) ----- */
   --glass: oklch(1 0 0 / 80%);                     /* white/80% - navbar scrolled */
   --glass-heavy: oklch(1 0 0 / 95%);               /* white/95% - mobile menu */
+
+  /* ----- Hero/Decorative Gradients ----- */
+  --hero-orb-1: oklch(0.936 0.032 237.323 / 60%); /* sky-100/60% - top-left orb */
+  --hero-orb-2: oklch(0.924 0.038 277.117 / 40%); /* indigo-100/40% - bottom-right orb */
+  --gradient-line: oklch(0.929 0.009 264.182);     /* slate-200 - connecting lines */
+  --gradient-subtle: oklch(0.984 0.003 264.182);   /* slate-50 - subtle backgrounds */
+  --icon-circle-start: oklch(0.129 0.042 264.695); /* slate-900 - icon circle start */
+  --icon-circle-end: oklch(0.208 0.042 265.755);   /* slate-800 - icon circle end */
 }
 
 /* =============================================
@@ -318,6 +334,14 @@
   /* ----- Glass/Overlay (Dark mode) ----- */
   --glass: oklch(0.129 0.042 264.695 / 80%);       /* slate-900/80% - navbar scrolled */
   --glass-heavy: oklch(0.129 0.042 264.695 / 95%); /* slate-900/95% - mobile menu */
+
+  /* ----- Hero/Decorative Gradients (Dark mode) ----- */
+  --hero-orb-1: oklch(0.685 0.169 237.323 / 15%);  /* sky-500/15% - top-left orb */
+  --hero-orb-2: oklch(0.585 0.233 277.117 / 10%);  /* indigo-500/10% - bottom-right orb */
+  --gradient-line: oklch(1 0 0 / 10%);              /* white/10% - connecting lines */
+  --gradient-subtle: oklch(0.208 0.042 265.755);    /* slate-800 - subtle backgrounds */
+  --icon-circle-start: oklch(0.984 0.003 264.182);  /* slate-50 - icon circle start (inverted) */
+  --icon-circle-end: oklch(0.869 0.015 264.182);    /* slate-300 - icon circle end (inverted) */
 }
 
 /* =============================================
