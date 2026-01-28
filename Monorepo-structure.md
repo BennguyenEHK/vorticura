@@ -20,12 +20,14 @@ quoteflow_ai/
 │   ├── (app)/                             # Route group: Authenticated app
 │   │   ├── layout.tsx ✓                   # App layout (sidebar + topbar + SidebarProvider)
 │   │   │
-│   │   ├── (dashboard)/                   # Dashboard pages (inherits app layout)
-│   │   │   └── page.tsx ✓                 # Dashboard home page "/"
+│   │   ├── (dashboard)/                   # Dashboard route group (inherits app layout)
+│   │   │   └── dashboard/
+│   │   │       └── page.tsx ✓             # Dashboard page "/dashboard"
 │   │   │
-│   │   └── (workspace)/                   # Workspace pages (inherits app layout)
-│   │       └── [quotationId]/
-│   │           └── page.tsx ✓             # Quotation workspace "/workspace/[id]"
+│   │   └── (workspace)/                   # Workspace route group (inherits app layout)
+│   │       └── workspace/
+│   │           └── [quotationId]/
+│   │               └── page.tsx ✓         # Workspace "/workspace/[quotationId]"
 │   │
 │   ├── (auth)/                            # Route group: Authentication
 │   │   ├── layout.tsx ✓                   # Auth layout (split-screen)
@@ -265,9 +267,9 @@ app/layout.tsx (Root)
 
 | Route Group | URL | Page |
 |-------------|-----|------|
-| `(home)` | `/` | Homepage |
-| `(app)/(dashboard)` | `/` | Dashboard (when authenticated) |
-| `(app)/(workspace)/[id]` | `/workspace/Q-2024-001` | Quotation editor |
+| `(home)` | `/` | Homepage (public landing) |
+| `(app)/(dashboard)/dashboard` | `/dashboard` | Dashboard overview |
+| `(app)/(workspace)/workspace/[id]` | `/workspace/Q-2024-001` | Quotation editor |
 | `(auth)` | `/login`, `/signup` | Auth forms |
 
 ## Legend
