@@ -36,17 +36,22 @@ export const metadata: Metadata = {
   },
 };
 
+// Import global providers (ThemeProvider)
+import { Providers } from "./providers";
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    // suppressHydrationWarning required by next-themes to prevent hydration mismatch
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        {/* Wrap entire app with global providers (Theme, etc.) */}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

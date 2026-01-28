@@ -1,13 +1,25 @@
 "use client";
 
+// =============================================
+// Dashboard Top Bar Component
+// =============================================
+// Fixed header navigation with logo, search, actions, and user info
+// Includes theme toggle using next-themes
+
 import { Search, Bell, ChevronDown, Download, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Logo } from "@/components/ui/logo";
+
+// =============================================
+// Top Bar Component
+// =============================================
 
 /**
  * DashboardTopBar - Fixed header navigation with search, actions, and user info
  * Uses design tokens from globals.css for all styling
+ * Uses shared Logo component for consistent branding
  */
 export function DashboardTopBar() {
   // Theme toggle hook from next-themes
@@ -19,18 +31,16 @@ export function DashboardTopBar() {
   };
 
   return (
-    <header
-      className="fixed top-0 left-0 right-0 h-16 border-b border-border bg-card z-50"
-    >
+    <header className="fixed top-0 left-0 right-0 h-16 border-b border-border bg-card z-50">
       <div className="h-full flex items-center justify-between px-6 gap-4">
         {/* Left Section - Logo, workspace, and current document */}
         <div className="flex items-center gap-6">
-          {/* Logo and brand name */}
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-brand">
-              <span className="text-brand-foreground font-bold text-sm">Q</span>
-            </div>
-            <span className="font-semibold text-foreground">QuoteFlow</span>
+          {/* Logo and brand name - matches homepage style */}
+          <div className="flex items-center gap-2.5">
+            <Logo className="w-8 h-8" />
+            <span className="text-lg font-bold tracking-tight text-foreground">
+              QuoteFlow AI
+            </span>
           </div>
 
           {/* Workspace selector and document info */}
@@ -69,17 +79,11 @@ export function DashboardTopBar() {
               className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-placeholder"
               aria-hidden="true"
             />
-            <Input
-              placeholder="Search..."
-              className="pl-9 h-9"
-              aria-label="Search"
-            />
+            <Input placeholder="Search..." className="pl-9 h-9" aria-label="Search" />
           </div>
 
           {/* Primary CTA - Generate button with glow effect */}
-          <Button
-            className="relative overflow-visible bg-brand text-brand-foreground hover:bg-brand-hover"
-          >
+          <Button className="relative overflow-visible bg-brand text-brand-foreground hover:bg-brand-hover">
             <span className="relative z-10">Generate</span>
             {/* Glow effect behind button */}
             <div
@@ -106,6 +110,7 @@ export function DashboardTopBar() {
             className="h-9 w-9"
             aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           >
+            {/* Show sun icon in dark mode, moon icon in light mode */}
             {theme === "dark" ? (
               <Sun className="h-4 w-4" />
             ) : (

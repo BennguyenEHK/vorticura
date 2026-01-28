@@ -1,5 +1,11 @@
 "use client";
 
+// =============================================
+// Dashboard Page - Main Overview
+// =============================================
+// Displays stats overview, recent quotations, and quick actions
+// Entry point for authenticated users
+
 import { FileText, Mail, TrendingUp, Clock } from "lucide-react";
 import {
   Card,
@@ -9,6 +15,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+
+// =============================================
+// Dashboard Data (Mock)
+// =============================================
 
 // Stats data for dashboard overview cards
 const stats = [
@@ -85,6 +95,10 @@ const statusStyles = {
   complete: "bg-status-complete text-status-complete-foreground",
 };
 
+// =============================================
+// Dashboard Page Component
+// =============================================
+
 /**
  * DashboardPage - Main dashboard home with stats overview and recent activity
  * Uses design tokens from globals.css for all styling
@@ -103,7 +117,7 @@ export default function DashboardPage() {
         </Button>
       </div>
 
-      {/* Stats overview grid */}
+      {/* Stats overview grid - 4 columns on large screens */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => {
           const Icon = stat.icon;
@@ -136,7 +150,7 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {/* Recent activity section */}
+      {/* Recent activity section - 2/3 + 1/3 grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent quotations table */}
         <Card className="lg:col-span-2 bg-card">

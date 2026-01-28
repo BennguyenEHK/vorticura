@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
+import { Logo } from "@/components/ui/logo"  // Shared logo component
 
 // =============================================
 // Auth Layout Metadata
@@ -28,38 +29,11 @@ export default function AuthLayout({
         <div className="mb-8">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 transition-opacity hover:opacity-80"
+            className="inline-flex items-center gap-2.5 transition-opacity hover:opacity-80"
             aria-label="Go to QuoteFlow AI homepage"
           >
-            {/* Logo SVG */}
-            <svg
-              width="32"
-              height="32"
-              viewBox="0 0 32 32"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden="true"
-            >
-              <rect width="32" height="32" rx="8" fill="#0f172a" />
-              <path
-                d="M8 12L16 8L24 12L16 16L8 12Z"
-                fill="#38bdf8"
-              />
-              <path
-                d="M8 16L16 20L24 16"
-                stroke="#38bdf8"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M8 20L16 24L24 20"
-                stroke="#38bdf8"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            {/* Shared Logo Component */}
+            <Logo className="w-8 h-8" />
             <span className="text-xl font-bold text-foreground">QuoteFlow AI</span>
           </Link>
         </div>
@@ -88,34 +62,9 @@ export default function AuthLayout({
 
         {/* Brand Content */}
         <div className="relative z-10 max-w-lg px-8 text-center">
-          {/* Large Logo for Brand Panel */}
+          {/* Large Logo for Brand Panel - uses shared component */}
           <div className="mb-8 inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-sm">
-            <svg
-              width="48"
-              height="48"
-              viewBox="0 0 32 32"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M8 12L16 8L24 12L16 16L8 12Z"
-                fill="#38bdf8"
-              />
-              <path
-                d="M8 16L16 20L24 16"
-                stroke="#38bdf8"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M8 20L16 24L24 20"
-                stroke="#38bdf8"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <Logo className="w-12 h-12" />
           </div>
 
           {/* Headline */}

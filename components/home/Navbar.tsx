@@ -3,41 +3,7 @@
 import Link from "next/link"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-
-// =============================================
-// QuoteFlow AI Logo Component
-// =============================================
-// Reusable logo SVG with configurable size
-const Logo = ({ className = "w-8 h-8" }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 32 32"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    aria-hidden="true"
-  >
-    {/* Logo background: dark slate rounded rectangle */}
-    <rect width="32" height="32" rx="8" fill="#0f172a" />
-    {/* Top layer: filled sky-blue diamond shape */}
-    <path d="M8 12L16 8L24 12L16 16L8 12Z" fill="#38bdf8" />
-    {/* Middle layer: stroked sky-blue chevron */}
-    <path
-      d="M8 16L16 20L24 16"
-      stroke="#38bdf8"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    {/* Bottom layer: stroked sky-blue chevron */}
-    <path
-      d="M8 20L16 24L24 20"
-      stroke="#38bdf8"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-)
+import { Logo } from "@/components/ui/logo"  // Shared logo component
 
 // =============================================
 // Navigation Links Configuration

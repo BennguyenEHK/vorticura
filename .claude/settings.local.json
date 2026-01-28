@@ -24,7 +24,10 @@
       "Bash(cmd /c \"move app\\\\dashboard\\\\page.tsx app\\\\\\(dashboard\\)\\\\dashboard\\\\page.tsx\")",
       "Bash(move \"components\\\\chat\" \"components\\\\dashboard\\\\chat\")",
       "Bash(move \"components\\\\files\" \"components\\\\dashboard\\\\files\")",
-      "Bash(move \"components\\\\workflow\" \"components\\\\dashboard\\\\workflow\")"
+      "Bash(move \"components\\\\workflow\" \"components\\\\dashboard\\\\workflow\")",
+      "Bash(timeout:*)",
+      "WebFetch(domain:5038866d58bb.ngrok-free.app)",
+      "Bash(del apppage.tsx)"
     ]
   }
 }

@@ -1,5 +1,11 @@
 "use client";
 
+// =============================================
+// Dashboard Sidebar Component
+// =============================================
+// Collapsible navigation sidebar for dashboard and workspace
+// Uses SidebarProvider context for shared collapsed state
+
 import {
   LayoutDashboard,
   FileText,
@@ -9,50 +15,65 @@ import {
   Workflow,
   Settings,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
 } from "lucide-react";
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  useSidebar,
+  SIDEBAR_WIDTH_CLASSES,
+} from "@/components/app/sidebar-provider";
 
-// Props interface for sidebar customization
-interface SidebarProps {
-  className?: string;
-}
+// =============================================
+// Navigation Configuration
+// =============================================
 
 // Navigation menu structure with sections and items
 const menuSections = [
   {
     title: "Workspace",
     items: [
-      { name: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
-      { name: "Quotations", icon: FileText, href: "/dashboard/quotations" },
-    ]
+      { name: "Dashboard", icon: LayoutDashboard, href: "/" },
+      { name: "Quotations", icon: FileText, href: "/quotations" },
+    ],
   },
   {
     title: "Documents",
     items: [
-      { name: "Emails", icon: Mail, href: "/dashboard/emails" },
-      { name: "Templates", icon: FileStack, href: "/dashboard/templates" },
-      { name: "Storage", icon: FolderOpen, href: "/dashboard/storage" },
-    ]
+      { name: "Emails", icon: Mail, href: "/emails" },
+      { name: "Templates", icon: FileStack, href: "/templates" },
+      { name: "Storage", icon: FolderOpen, href: "/storage" },
+    ],
   },
   {
     title: "System",
     items: [
-      { name: "Workflow", icon: Workflow, href: "/dashboard/workflow" },
-      { name: "Settings", icon: Settings, href: "/dashboard/settings" },
-    ]
-  }
+      { name: "Workflow", icon: Workflow, href: "/workflow" },
+      { name: "Settings", icon: Settings, href: "/settings" },
+    ],
+  },
 ];
 
+// Props interface for sidebar customization
+interface SidebarProps {
+  className?: string;
+}
+
+// =============================================
+// Sidebar Component
+// =============================================
+
 /**
- * DashboardSidebar - Collapsible navigation sidebar for dashboard
+ * DashboardSidebar - Collapsible navigation sidebar for app
+ * Uses context for collapsed state (shared with layout for margin sync)
  * Uses design tokens from globals.css for all styling
  */
 export function DashboardSidebar({ className = "" }: SidebarProps) {
-  // Track collapsed state and active menu item
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [activeItem, setActiveItem] = useState("Dashboard");
+  // Get collapsed state and toggle function from context
+  const { collapsed, toggleSidebar } = useSidebar();
+
+  // Track active menu item (will be replaced with router pathname)
+  // TODO: Replace with usePathname() for actual route matching
+  const activeItem = "Dashboard";
 
   return (
     <aside
@@ -61,7 +82,7 @@ export function DashboardSidebar({ className = "" }: SidebarProps) {
         border-r border-sidebar-border
         bg-sidebar
         transition-all duration-300
-        ${isCollapsed ? "w-[72px]" : "w-60"}
+        ${collapsed ? SIDEBAR_WIDTH_CLASSES.collapsed : SIDEBAR_WIDTH_CLASSES.expanded}
         ${className}
       `}
     >
@@ -71,11 +92,12 @@ export function DashboardSidebar({ className = "" }: SidebarProps) {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setIsCollapsed(!isCollapsed)}
+            onClick={toggleSidebar}
             className="h-8 w-8"
-            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {isCollapsed ? (
+            {/* Arrow icon changes direction based on state */}
+            {collapsed ? (
               <ChevronRight className="h-4 w-4" />
             ) : (
               <ChevronLeft className="h-4 w-4" />
@@ -88,7 +110,7 @@ export function DashboardSidebar({ className = "" }: SidebarProps) {
           {menuSections.map((section, idx) => (
             <div key={idx}>
               {/* Section title - hidden when collapsed */}
-              {!isCollapsed && (
+              {!collapsed && (
                 <h3 className="px-3 mb-2 text-xs uppercase tracking-wider text-muted-foreground">
                   {section.title}
                 </h3>
@@ -103,23 +125,25 @@ export function DashboardSidebar({ className = "" }: SidebarProps) {
                   return (
                     <button
                       key={item.name}
-                      onClick={() => setActiveItem(item.name)}
                       className={`
                         w-full flex items-center gap-3 px-3 py-2 rounded-lg
                         transition-all relative group
-                        ${isActive
-                          ? "text-sidebar-foreground"
-                          : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                        ${
+                          isActive
+                            ? "text-sidebar-foreground"
+                            : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                         }
                       `}
-                      title={isCollapsed ? item.name : undefined}
+                      title={collapsed ? item.name : undefined}
                       aria-current={isActive ? "page" : undefined}
                     >
                       {/* Active indicator bar - brand accent color */}
                       {isActive && (
                         <div
                           className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r bg-brand"
-                          style={{ boxShadow: "0 0 8px oklch(0.685 0.169 237.323 / 0.3)" }}
+                          style={{
+                            boxShadow: "0 0 8px oklch(0.685 0.169 237.323 / 0.3)",
+                          }}
                         />
                       )}
 
@@ -138,9 +162,7 @@ export function DashboardSidebar({ className = "" }: SidebarProps) {
                       </div>
 
                       {/* Item label - hidden when collapsed */}
-                      {!isCollapsed && (
-                        <span className="text-sm">{item.name}</span>
-                      )}
+                      {!collapsed && <span className="text-sm">{item.name}</span>}
                     </button>
                   );
                 })}
