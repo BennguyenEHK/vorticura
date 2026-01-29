@@ -71,9 +71,10 @@ export function RFQQueueList({
   // Collapsed view - just show badge with count
   if (isCollapsed) {
     return (
-      <div className="px-3 py-2">
+      <div className="flex justify-center py-2">
+        {/* relative class anchors the absolute-positioned badge */}
         <div
-          className="flex items-center justify-center h-10 w-10 rounded-lg bg-sidebar-accent"
+          className="relative flex items-center justify-center h-10 w-10 rounded-lg bg-sidebar-accent"
           title={`${total} RFQs in queue`}
         >
           <Inbox className="h-5 w-5 text-muted-foreground" />
