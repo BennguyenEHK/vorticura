@@ -1,7 +1,7 @@
 # QuoteFlow AI - Project Structure
 
 > **Last Updated:** January 29, 2026
-> **Version:** 4.0 (Sidebar Redesign + Comms Hub + RFQ Queue)
+> **Version:** 5.0 (AI Chat FAB + Dynamic Workboard Panels)
 
 ## Overview
 
@@ -18,7 +18,9 @@ quoteflow_ai/
 │   │   └── page.tsx ✓                     # Homepage "/"
 │   │
 │   ├── (app)/                             # Route group: Authenticated app
-│   │   ├── layout.tsx ✓                   # App layout (sidebar + topbar + SidebarProvider)
+│   │   ├── layout.tsx ✓                   # App layout (sidebar + topbar + providers)
+│   │   │                                  # Includes: SidebarProvider, AIChatProvider,
+│   │   │                                  # WorkboardProvider, DndContext
 │   │   │
 │   │   ├── dashboard/                     # Dashboard route
 │   │   │   └── page.tsx ✓                 # Dashboard page "/dashboard"
@@ -26,17 +28,18 @@ quoteflow_ai/
 │   │   ├── workspace/                     # Workspace route
 │   │   │   └── [quotationId]/
 │   │   │       └── page.tsx ✓             # Workspace "/workspace/[quotationId]"
+│   │   │                                  # Uses WorkboardGrid for dynamic panels
 │   │   │
-│   │   ├── storage/                       # Storage route (NEW)
+│   │   ├── storage/                       # Storage route
 │   │   │   └── page.tsx                   # Storage page "/storage"
 │   │   │
-│   │   ├── upload/                        # Upload route (NEW)
+│   │   ├── upload/                        # Upload route
 │   │   │   └── page.tsx                   # Upload page "/upload"
 │   │   │
-│   │   ├── settings/                      # Settings route (NEW)
+│   │   ├── settings/                      # Settings route
 │   │   │   └── page.tsx                   # Settings page "/settings"
 │   │   │
-│   │   └── pipeline/                      # Pipeline View route (NEW)
+│   │   └── pipeline/                      # Pipeline View route
 │   │       └── page.tsx                   # Pipeline page "/pipeline"
 │   │
 │   ├── (auth)/                            # Route group: Authentication
@@ -54,10 +57,10 @@ quoteflow_ai/
 │   │   │   ├── me/route.ts ✓              # GET /api/auth/me
 │   │   │   └── verify/route.ts ✓          # GET /api/auth/verify
 │   │   │
-│   │   ├── rfq-queue/                     # RFQ Queue API (NEW)
+│   │   ├── rfq-queue/                     # RFQ Queue API
 │   │   │   └── route.ts ✓                 # GET/POST /api/rfq-queue
 │   │   │
-│   │   ├── comms/                         # Communications API (NEW)
+│   │   ├── comms/                         # Communications API
 │   │   │   └── route.ts ✓                 # GET/POST /api/comms
 │   │   │
 │   │   ├── webhooks/
@@ -102,12 +105,34 @@ quoteflow_ai/
 │   │   ├── topbar.tsx ✓                   # Fixed topbar with Comms Hub (updated v4.0)
 │   │   ├── sidebar-provider.tsx ✓         # SidebarProvider context for collapse state
 │   │   │
-│   │   ├── rfq-queue/                     # RFQ Queue components (NEW)
+│   │   ├── ai-chat/                       # AI Chat FAB components (NEW v5.0)
 │   │   │   ├── index.ts ✓                 # Barrel exports
-│   │   │   ├── rfq-queue-list.tsx ✓       # Scrollable RFQ list (top 4 visible)
+│   │   │   ├── ai-chat-provider.tsx ✓     # Context: state, position, docked status
+│   │   │   ├── ai-chat-fab.tsx ✓          # Floating circular icon + badge (Bot icon)
+│   │   │   ├── ai-chat-popover.tsx ✓      # Small side chatbox (click to open)
+│   │   │   └── ai-chat-panel.tsx ✓        # Full panel (when docked to Workboard)
+│   │   │
+│   │   ├── workboard/                     # Workboard panel system (NEW v5.0)
+│   │   │   ├── index.ts ✓                 # Barrel exports
+│   │   │   ├── workboard-provider.tsx ✓   # Context: layout state, panel configs
+│   │   │   ├── workboard-grid.tsx ✓       # react-grid-layout wrapper
+│   │   │   ├── workboard-panel.tsx ✓      # Generic draggable/resizable panel
+│   │   │   ├── workboard-drop-zone.tsx ✓  # Drop target for AI Chat FAB
+│   │   │   ├── panel-header.tsx ✓         # Drag handle + controls (minimize, close)
+│   │   │   ├── use-workboard-layout.ts ✓  # Hook: load/save layout to localStorage
+│   │   │   │
+│   │   │   └── panels/                    # Panel content components
+│   │   │       ├── index.ts ✓             # Barrel exports
+│   │   │       ├── workflow-panel-content.tsx ✓  # Workflow tracker content
+│   │   │       ├── pricing-panel-content.tsx ✓   # Pricing editor content
+│   │   │       └── preview-panel-content.tsx ✓   # Quotation preview content
+│   │   │
+│   │   ├── rfq-queue/                     # RFQ Queue components
+│   │   │   ├── index.ts ✓                 # Barrel exports
+│   │   │   ├── rfq-queue-list.tsx ✓       # Scrollable RFQ list (top 3 visible)
 │   │   │   └── rfq-queue-item.tsx ✓       # Individual RFQ item with status
 │   │   │
-│   │   ├── comms-hub/                     # Communications Hub components (NEW)
+│   │   ├── comms-hub/                     # Communications Hub components
 │   │   │   ├── index.ts ✓                 # Barrel exports
 │   │   │   ├── comms-hub-trigger.tsx ✓    # Topbar icon with badge
 │   │   │   ├── comms-hub-dropdown.tsx ✓   # Dropdown panel (w-360px)
@@ -119,11 +144,9 @@ quoteflow_ai/
 │   │   │   ├── recent-quotations-card.tsx ✓ # Recent quotations table card
 │   │   │   └── quick-actions-card.tsx ✓   # Quick actions panel card
 │   │   │
-│   │   └── workspace/                     # Workspace panel components
-│   │       ├── index.ts ✓                 # Barrel exports for workspace panels
+│   │   └── workspace/                     # Workspace panel components (legacy)
+│   │       ├── index.ts ✓                 # Barrel exports (backward compat)
 │   │       ├── chat-panel.tsx ✓           # AI Chat panel placeholder
-│   │       ├── quotation-editor-panel.tsx ✓ # Quotation editor placeholder
-│   │       ├── files-panel.tsx ✓          # File manager placeholder
 │   │       └── workflow-panel.tsx ✓       # Workflow tracker placeholder
 │   │
 │   ├── home/                              # Homepage (marketing) components
@@ -152,11 +175,11 @@ quoteflow_ai/
 │
 ├── lib/                                   # Business Logic & Utilities
 │   ├── services/                          # Business Logic Layer
-│   │   ├── rfq-queue/                     # RFQ Queue services (NEW)
+│   │   ├── rfq-queue/                     # RFQ Queue services
 │   │   │   ├── index.ts ✓                 # Barrel exports
 │   │   │   └── queue-manager.ts ✓         # Queue CRUD, filtering, mock data
 │   │   │
-│   │   ├── comms/                         # Communications services (NEW)
+│   │   ├── comms/                         # Communications services
 │   │   │   ├── index.ts ✓                 # Barrel exports
 │   │   │   └── comms-manager.ts ✓         # Channel & message management
 │   │   │
@@ -224,8 +247,10 @@ quoteflow_ai/
 │       └── auth-helpers.ts ✓
 │
 ├── types/                                 # TypeScript Types
-│   ├── rfq-queue.ts ✓                     # RFQ Queue types (NEW)
-│   ├── comms.ts ✓                         # Communications types (NEW)
+│   ├── ai-chat.ts ✓                       # AI Chat types (NEW v5.0)
+│   ├── workboard.ts ✓                     # Workboard types (NEW v5.0)
+│   ├── rfq-queue.ts ✓                     # RFQ Queue types
+│   ├── comms.ts ✓                         # Communications types
 │   ├── quotation.ts
 │   ├── email.ts
 │   ├── rfq.ts
@@ -271,6 +296,8 @@ quoteflow_ai/
 ├── postcss.config.mjs ✓
 ├── tsconfig.json
 ├── Dashboard_factor.md ✓                  # Dashboard design specification
+├── Chatbox_design.md ✓                    # AI Chat FAB design specification
+├── Workboard_factoring.md ✓               # Workboard panel system specification
 └── README.md
 ```
 
@@ -291,27 +318,48 @@ The sidebar has been redesigned with the following sections:
 | Section | Items | Description |
 |---------|-------|-------------|
 | **Workspace** | Dashboard, Workboard | Main navigation |
-| **RFQ Queue** | Dynamic list | Top 4 visible, scrollable for more |
+| **RFQ Queue** | Dynamic list | Top 3 visible, scrollable for more |
 | **Documents** | Storage, Upload | File management |
 | **System** | Settings, Pipeline View | Configuration & visualization |
 
-### Component Organization (v4.0)
+### Workboard Panel System (v5.0)
+
+The workspace now uses a dynamic panel system powered by `react-grid-layout`:
+
+| Feature | Description |
+|---------|-------------|
+| **Resize** | Drag panel edges to resize |
+| **Reposition** | Drag panel headers to swap positions |
+| **Auto-Pack** | Panels auto-distribute to fill space |
+| **Persistence** | Layout saved to localStorage |
+| **Lock/Unlock** | Toggle layout editing |
+
+### AI Chat FAB System (v5.0)
+
+Floating AI Chat button with drag & drop integration:
+
+| Feature | Description |
+|---------|-------------|
+| **Click** | Opens side popover chatbox |
+| **Drag** | Can be dragged to workboard |
+| **Drop** | Creates docked chat panel in grid |
+| **Undock** | Close button returns to FAB mode |
+
+### Component Organization (v5.0)
 
 **New Components Added:**
-- `components/app/rfq-queue/` - RFQ Queue sidebar list
-- `components/app/comms-hub/` - Communications Hub dropdown
-
-**New Services Added:**
-- `lib/services/rfq-queue/` - Queue management logic
-- `lib/services/comms/` - Channel & message management
-
-**New API Routes Added:**
-- `app/api/rfq-queue/` - RFQ Queue endpoints
-- `app/api/comms/` - Communications endpoints
+- `components/app/ai-chat/` - AI Chat FAB and popover system
+- `components/app/workboard/` - Dynamic panel grid system
+- `components/app/workboard/panels/` - Panel content components
 
 **New Types Added:**
-- `types/rfq-queue.ts` - Queue types & stage configurations
-- `types/comms.ts` - Channel & message types
+- `types/ai-chat.ts` - Message, Position, ChatState types
+- `types/workboard.ts` - Layout, PanelConfig, GridConfig types
+
+**Dependencies Added:**
+- `react-grid-layout` - Panel resize/reposition
+- `@dnd-kit/core` - Drag & drop for FAB
+- `@dnd-kit/utilities` - DnD utilities
 
 ### Provider Hierarchy
 
@@ -322,8 +370,11 @@ app/layout.tsx (Root)
     ├── (auth)/* - Theme works here
     └── (app)/layout.tsx
         └── SidebarProvider
-            ├── dashboard/* - Sidebar + Theme work here
-            └── workspace/* - Sidebar + Theme work here
+            └── AIChatProvider
+                └── WorkboardProvider
+                    └── DndContext
+                        ├── dashboard/* - All providers work here
+                        └── workspace/* - All providers work here
 ```
 
 ### Shared Components
@@ -332,10 +383,11 @@ app/layout.tsx (Root)
 |-----------|----------|---------|
 | `Logo` | `components/ui/logo.tsx` | Navbar, Topbar, Auth |
 | `SidebarProvider` | `components/app/sidebar-provider.tsx` | App layout, Sidebar |
+| `AIChatProvider` | `components/app/ai-chat/` | App layout, FAB, Popover, Panel |
+| `WorkboardProvider` | `components/app/workboard/` | App layout, WorkboardGrid |
 | `RFQQueueList` | `components/app/rfq-queue/` | Sidebar |
 | `CommsHubTrigger` | `components/app/comms-hub/` | Topbar |
-| `CommsHubDropdown` | `components/app/comms-hub/` | Topbar |
-| Theme Toggle | `components/app/topbar.tsx`, `components/home/Navbar.tsx` | Dashboard, Homepage |
+| Theme Toggle | `components/app/topbar.tsx` | Dashboard, Homepage |
 
 ### URL Mapping
 
