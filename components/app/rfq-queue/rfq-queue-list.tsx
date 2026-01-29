@@ -17,7 +17,7 @@ interface RFQQueueListProps {
   isCollapsed?: boolean;     // Sidebar collapsed state
   activeRFQId?: string;      // Currently active RFQ ID
   workspaceId?: string;      // Filter by workspace
-  initialLimit?: number;     // Initial visible items (default: 4)
+  initialLimit?: number;     // Initial visible items (default: 3)
 }
 
 /**
@@ -28,7 +28,7 @@ export function RFQQueueList({
   isCollapsed = false,
   activeRFQId,
   workspaceId,
-  initialLimit = 4,
+  initialLimit = 3,
 }: RFQQueueListProps) {
   // State for RFQ list
   const [rfqs, setRfqs] = useState<QueuedRFQ[]>([]);

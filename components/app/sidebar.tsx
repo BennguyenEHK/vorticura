@@ -50,7 +50,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     title: "Workspace",
     items: [
       { name: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
-      { name: "Workboard", icon: Kanban, href: "/workspace" },
+      { name: "Workboard", icon: Kanban, href: "/workspace/RFQ005" },
     ],
   },
   {
@@ -82,7 +82,7 @@ interface SidebarProps {
  * DashboardSidebar - Collapsible navigation sidebar for app
  * Features:
  * - Navigation sections: Workspace, Documents, System
- * - RFQ Queue with scrollable list (top 4 visible)
+ * - RFQ Queue with scrollable list (top 3 visible)
  * - Collapse/expand functionality
  * - Active route highlighting with brand accent
  */
@@ -152,11 +152,11 @@ export function DashboardSidebar({ className = "" }: SidebarProps) {
               </div>
             )}
 
-            {/* RFQ Queue list component */}
+            {/* RFQ Queue list component - shows top 3 RFQs */}
             <RFQQueueList
               isCollapsed={collapsed}
               activeRFQId={pathname.includes("/workspace/") ? pathname.split("/workspace/")[1] : undefined}
-              initialLimit={4}
+              initialLimit={3}
             />
           </div>
 

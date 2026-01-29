@@ -138,7 +138,7 @@ export async function getQueuedRFQs(
 
   // Apply pagination
   const offset = filters?.offset || 0;
-  const limit = filters?.limit || 4; // Default: show top 4
+  const limit = filters?.limit || 3; // Default: show top 3
   filtered = filtered.slice(offset, offset + limit);
 
   return {

@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       workspaceId: searchParams.get("workspaceId") || undefined,
       limit: searchParams.get("limit")
         ? parseInt(searchParams.get("limit")!, 10)
-        : 4, // Default: show top 4
+        : 3, // Default: show top 3
       offset: searchParams.get("offset")
         ? parseInt(searchParams.get("offset")!, 10)
         : 0,
