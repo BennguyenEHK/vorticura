@@ -107,7 +107,7 @@ export function PricingPanelContent({
               />
             </div>
             <div className="text-sm text-muted-foreground w-24 text-right">
-              +${markupAmount.toLocaleString()}
+              +${markupAmount.toLocaleString('en-US')}
             </div>
           </div>
 
@@ -142,7 +142,7 @@ export function PricingPanelContent({
               />
             </div>
             <div className="text-sm text-muted-foreground w-24 text-right">
-              +${taxAmount.toLocaleString()}
+              +${taxAmount.toLocaleString('en-US')}
             </div>
           </div>
         </div>
@@ -153,7 +153,7 @@ export function PricingPanelContent({
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-foreground">TOTAL</span>
           <span className="text-xl font-bold text-foreground">
-            ${total.toLocaleString()}
+            ${total.toLocaleString('en-US')}
           </span>
         </div>
         <Button className="w-full mt-3" size="sm">
