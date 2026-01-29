@@ -27,7 +27,16 @@
       "Bash(move \"components\\\\workflow\" \"components\\\\dashboard\\\\workflow\")",
       "Bash(timeout:*)",
       "WebFetch(domain:5038866d58bb.ngrok-free.app)",
-      "Bash(del apppage.tsx)"
+      "Bash(del apppage.tsx)",
+      "Bash(move \"C:\\\\Users\\\\LENOVO\\\\OneDrive\\\\Máy tính\\\\make_sales_agent\\\\quoteflow_ai\\\\app\\\\\\(app\\)\\\\\\(dashboard\\)\\\\dashboard\\\\page.tsx\" \"C:\\\\Users\\\\LENOVO\\\\OneDrive\\\\Máy tính\\\\make_sales_agent\\\\quoteflow_ai\\\\app\\\\\\(app\\)\\\\dashboard\\\\page.tsx\")",
+      "Bash(move \"C:\\\\Users\\\\LENOVO\\\\OneDrive\\\\Máy tính\\\\make_sales_agent\\\\quoteflow_ai\\\\app\\\\\\(app\\)\\\\\\(workspace\\)\\\\workspace\\\\[quotationId]\\\\page.tsx\" \"C:\\\\Users\\\\LENOVO\\\\OneDrive\\\\Máy tính\\\\make_sales_agent\\\\quoteflow_ai\\\\app\\\\\\(app\\)\\\\workspace\\\\[quotationId]\\\\page.tsx\")",
+      "Bash(move:*)",
+      "Bash(git mv:*)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_close"
     ]
   }
 }
