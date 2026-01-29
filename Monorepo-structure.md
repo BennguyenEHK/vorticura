@@ -1,7 +1,7 @@
 # QuoteFlow AI - Project Structure
 
-> **Last Updated:** January 28, 2026
-> **Version:** 3.0 (Route Simplification + Component Extraction)
+> **Last Updated:** January 29, 2026
+> **Version:** 4.0 (Sidebar Redesign + Comms Hub + RFQ Queue)
 
 ## Overview
 
@@ -20,12 +20,24 @@ quoteflow_ai/
 │   ├── (app)/                             # Route group: Authenticated app
 │   │   ├── layout.tsx ✓                   # App layout (sidebar + topbar + SidebarProvider)
 │   │   │
-│   │   ├── dashboard/                     # Dashboard route (simplified from nested groups)
+│   │   ├── dashboard/                     # Dashboard route
 │   │   │   └── page.tsx ✓                 # Dashboard page "/dashboard"
 │   │   │
-│   │   └── workspace/                     # Workspace route (simplified from nested groups)
-│   │       └── [quotationId]/
-│   │           └── page.tsx ✓             # Workspace "/workspace/[quotationId]"
+│   │   ├── workspace/                     # Workspace route
+│   │   │   └── [quotationId]/
+│   │   │       └── page.tsx ✓             # Workspace "/workspace/[quotationId]"
+│   │   │
+│   │   ├── storage/                       # Storage route (NEW)
+│   │   │   └── page.tsx                   # Storage page "/storage"
+│   │   │
+│   │   ├── upload/                        # Upload route (NEW)
+│   │   │   └── page.tsx                   # Upload page "/upload"
+│   │   │
+│   │   ├── settings/                      # Settings route (NEW)
+│   │   │   └── page.tsx                   # Settings page "/settings"
+│   │   │
+│   │   └── pipeline/                      # Pipeline View route (NEW)
+│   │       └── page.tsx                   # Pipeline page "/pipeline"
 │   │
 │   ├── (auth)/                            # Route group: Authentication
 │   │   ├── layout.tsx ✓                   # Auth layout (split-screen)
@@ -41,6 +53,12 @@ quoteflow_ai/
 │   │   │   ├── logout/route.ts ✓          # POST /api/auth/logout
 │   │   │   ├── me/route.ts ✓              # GET /api/auth/me
 │   │   │   └── verify/route.ts ✓          # GET /api/auth/verify
+│   │   │
+│   │   ├── rfq-queue/                     # RFQ Queue API (NEW)
+│   │   │   └── route.ts ✓                 # GET/POST /api/rfq-queue
+│   │   │
+│   │   ├── comms/                         # Communications API (NEW)
+│   │   │   └── route.ts ✓                 # GET/POST /api/comms
 │   │   │
 │   │   ├── webhooks/
 │   │   │   ├── module-update/route.ts     # POST /api/webhooks/module-update
@@ -80,12 +98,23 @@ quoteflow_ai/
 ├── components/                            # React Components
 │   ├── app/                               # App-level components (authenticated section)
 │   │   ├── index.ts ✓                     # Barrel exports for app components
-│   │   ├── sidebar.tsx ✓                  # Collapsible sidebar (moved from dashboard/)
-│   │   ├── topbar.tsx ✓                   # Fixed topbar with theme toggle (moved from dashboard/)
+│   │   ├── sidebar.tsx ✓                  # Collapsible sidebar (redesigned v4.0)
+│   │   ├── topbar.tsx ✓                   # Fixed topbar with Comms Hub (updated v4.0)
 │   │   ├── sidebar-provider.tsx ✓         # SidebarProvider context for collapse state
 │   │   │
+│   │   ├── rfq-queue/                     # RFQ Queue components (NEW)
+│   │   │   ├── index.ts ✓                 # Barrel exports
+│   │   │   ├── rfq-queue-list.tsx ✓       # Scrollable RFQ list (top 4 visible)
+│   │   │   └── rfq-queue-item.tsx ✓       # Individual RFQ item with status
+│   │   │
+│   │   ├── comms-hub/                     # Communications Hub components (NEW)
+│   │   │   ├── index.ts ✓                 # Barrel exports
+│   │   │   ├── comms-hub-trigger.tsx ✓    # Topbar icon with badge
+│   │   │   ├── comms-hub-dropdown.tsx ✓   # Dropdown panel (w-360px)
+│   │   │   └── channel-item.tsx ✓         # Individual channel card
+│   │   │
 │   │   ├── dashboard/                     # Dashboard UI components
-│   │   │   ├── index.ts ✓                 # Barrel exports (re-exports sidebar/topbar + card components)
+│   │   │   ├── index.ts ✓                 # Barrel exports
 │   │   │   ├── stats-card.tsx ✓           # Single stat card component
 │   │   │   ├── recent-quotations-card.tsx ✓ # Recent quotations table card
 │   │   │   └── quick-actions-card.tsx ✓   # Quick actions panel card
@@ -123,6 +152,14 @@ quoteflow_ai/
 │
 ├── lib/                                   # Business Logic & Utilities
 │   ├── services/                          # Business Logic Layer
+│   │   ├── rfq-queue/                     # RFQ Queue services (NEW)
+│   │   │   ├── index.ts ✓                 # Barrel exports
+│   │   │   └── queue-manager.ts ✓         # Queue CRUD, filtering, mock data
+│   │   │
+│   │   ├── comms/                         # Communications services (NEW)
+│   │   │   ├── index.ts ✓                 # Barrel exports
+│   │   │   └── comms-manager.ts ✓         # Channel & message management
+│   │   │
 │   │   ├── quotation/
 │   │   │   ├── data-processing-api.ts     # Unified data processing
 │   │   │   ├── quotation-processor.ts     # Quotation CRUD
@@ -187,6 +224,8 @@ quoteflow_ai/
 │       └── auth-helpers.ts ✓
 │
 ├── types/                                 # TypeScript Types
+│   ├── rfq-queue.ts ✓                     # RFQ Queue types (NEW)
+│   ├── comms.ts ✓                         # Communications types (NEW)
 │   ├── quotation.ts
 │   ├── email.ts
 │   ├── rfq.ts
@@ -231,6 +270,7 @@ quoteflow_ai/
 ├── package.json
 ├── postcss.config.mjs ✓
 ├── tsconfig.json
+├── Dashboard_factor.md ✓                  # Dashboard design specification
 └── README.md
 ```
 
@@ -244,40 +284,34 @@ quoteflow_ai/
 | `(app)` | Authenticated app | Shared sidebar + topbar |
 | `(auth)` | Authentication | Split-screen |
 
-### Route Simplification (v3.0)
+### Sidebar Structure (v4.0)
 
-Previously (v2.0):
-```
-(app)/(dashboard)/dashboard/page.tsx → /dashboard
-(app)/(workspace)/workspace/[quotationId]/page.tsx → /workspace/[id]
-```
+The sidebar has been redesigned with the following sections:
 
-Now (v3.0):
-```
-(app)/dashboard/page.tsx → /dashboard
-(app)/workspace/[quotationId]/page.tsx → /workspace/[id]
-```
+| Section | Items | Description |
+|---------|-------|-------------|
+| **Workspace** | Dashboard, Workboard | Main navigation |
+| **RFQ Queue** | Dynamic list | Top 4 visible, scrollable for more |
+| **Documents** | Storage, Upload | File management |
+| **System** | Settings, Pipeline View | Configuration & visualization |
 
-The nested route groups `(dashboard)` and `(workspace)` were removed as they added unnecessary complexity without providing additional layout separation.
+### Component Organization (v4.0)
 
-### Component Organization (v3.0)
+**New Components Added:**
+- `components/app/rfq-queue/` - RFQ Queue sidebar list
+- `components/app/comms-hub/` - Communications Hub dropdown
 
-**Sidebar and Topbar moved to parent folder:**
-- `components/app/sidebar.tsx` (was `components/app/dashboard/dashboard-sidebar.tsx`)
-- `components/app/topbar.tsx` (was `components/app/dashboard/dashboard-topbar.tsx`)
+**New Services Added:**
+- `lib/services/rfq-queue/` - Queue management logic
+- `lib/services/comms/` - Channel & message management
 
-**Reason:** These components are shared across all app pages (dashboard, workspace), not just dashboard.
+**New API Routes Added:**
+- `app/api/rfq-queue/` - RFQ Queue endpoints
+- `app/api/comms/` - Communications endpoints
 
-**Dashboard Card Components extracted:**
-- `components/app/dashboard/stats-card.tsx` - Single stat display card
-- `components/app/dashboard/recent-quotations-card.tsx` - Quotations table card
-- `components/app/dashboard/quick-actions-card.tsx` - Quick action buttons card
-
-**Workspace Panel Components created:**
-- `components/app/workspace/chat-panel.tsx` - AI Chat panel
-- `components/app/workspace/quotation-editor-panel.tsx` - Quotation editor
-- `components/app/workspace/files-panel.tsx` - File manager
-- `components/app/workspace/workflow-panel.tsx` - Workflow tracker
+**New Types Added:**
+- `types/rfq-queue.ts` - Queue types & stage configurations
+- `types/comms.ts` - Channel & message types
 
 ### Provider Hierarchy
 
@@ -298,6 +332,9 @@ app/layout.tsx (Root)
 |-----------|----------|---------|
 | `Logo` | `components/ui/logo.tsx` | Navbar, Topbar, Auth |
 | `SidebarProvider` | `components/app/sidebar-provider.tsx` | App layout, Sidebar |
+| `RFQQueueList` | `components/app/rfq-queue/` | Sidebar |
+| `CommsHubTrigger` | `components/app/comms-hub/` | Topbar |
+| `CommsHubDropdown` | `components/app/comms-hub/` | Topbar |
 | Theme Toggle | `components/app/topbar.tsx`, `components/home/Navbar.tsx` | Dashboard, Homepage |
 
 ### URL Mapping
@@ -306,8 +343,21 @@ app/layout.tsx (Root)
 |-------------|-----|------|
 | `(home)` | `/` | Homepage (public landing) |
 | `(app)/dashboard` | `/dashboard` | Dashboard overview |
-| `(app)/workspace/[id]` | `/workspace/Q-2024-001` | Quotation editor |
+| `(app)/workspace/[id]` | `/workspace/Q-2024-001` | Quotation workspace |
+| `(app)/storage` | `/storage` | Document storage |
+| `(app)/upload` | `/upload` | File uploads |
+| `(app)/settings` | `/settings` | App settings |
+| `(app)/pipeline` | `/pipeline` | Pipeline view |
 | `(auth)` | `/login`, `/signup` | Auth forms |
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/rfq-queue` | GET | List queued RFQs with filters |
+| `/api/rfq-queue` | POST | Update RFQ status/stage |
+| `/api/comms` | GET | List channels, status, messages |
+| `/api/comms` | POST | Update channel or mark message read |
 
 ## Design Token System
 

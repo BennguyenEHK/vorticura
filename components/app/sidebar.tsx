@@ -4,52 +4,67 @@
 // App Sidebar Component
 // =============================================
 // Collapsible navigation sidebar for dashboard and workspace
-// Moved from components/app/dashboard/dashboard-sidebar.tsx to components/app/sidebar.tsx
+// Redesigned with: Dashboard, Workboard, RFQ Queue, Documents, System sections
 // Uses SidebarProvider context for shared collapsed state
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  FileText,
-  Mail,
-  FileStack,
+  Kanban,
   FolderOpen,
-  Workflow,
+  Upload,
   Settings,
+  GitBranch,
   ChevronLeft,
   ChevronRight,
+  Inbox,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   useSidebar,
   SIDEBAR_WIDTH_CLASSES,
 } from "@/components/app/sidebar-provider";
+import { RFQQueueList } from "@/components/app/rfq-queue";
 
 // =============================================
 // Navigation Configuration
 // =============================================
 
-// Navigation menu structure with sections and items
-const menuSections = [
+// Navigation item type definition
+interface NavItem {
+  name: string;
+  icon: typeof LayoutDashboard;
+  href: string;
+}
+
+// Navigation section type definition
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
+// Navigation menu structure with sections
+const NAVIGATION_SECTIONS: NavSection[] = [
   {
     title: "Workspace",
     items: [
-      { name: "Dashboard", icon: LayoutDashboard, href: "/" },
-      { name: "Quotations", icon: FileText, href: "/quotations" },
+      { name: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
+      { name: "Workboard", icon: Kanban, href: "/workspace" },
     ],
   },
   {
     title: "Documents",
     items: [
-      { name: "Emails", icon: Mail, href: "/emails" },
-      { name: "Templates", icon: FileStack, href: "/templates" },
       { name: "Storage", icon: FolderOpen, href: "/storage" },
+      { name: "Upload", icon: Upload, href: "/upload" },
     ],
   },
   {
     title: "System",
     items: [
-      { name: "Workflow", icon: Workflow, href: "/workflow" },
       { name: "Settings", icon: Settings, href: "/settings" },
+      { name: "Pipeline View", icon: GitBranch, href: "/pipeline" },
     ],
   },
 ];
@@ -65,16 +80,26 @@ interface SidebarProps {
 
 /**
  * DashboardSidebar - Collapsible navigation sidebar for app
- * Uses context for collapsed state (shared with layout for margin sync)
- * Uses design tokens from globals.css for all styling
+ * Features:
+ * - Navigation sections: Workspace, Documents, System
+ * - RFQ Queue with scrollable list (top 4 visible)
+ * - Collapse/expand functionality
+ * - Active route highlighting with brand accent
  */
 export function DashboardSidebar({ className = "" }: SidebarProps) {
   // Get collapsed state and toggle function from context
   const { collapsed, toggleSidebar } = useSidebar();
 
-  // Track active menu item (will be replaced with router pathname)
-  // TODO: Replace with usePathname() for actual route matching
-  const activeItem = "Dashboard";
+  // Get current pathname for active state
+  const pathname = usePathname();
+
+  // Check if a nav item is active (exact match or starts with)
+  const isActive = (href: string): boolean => {
+    if (href === "/dashboard") {
+      return pathname === "/dashboard";
+    }
+    return pathname.startsWith(href);
+  };
 
   return (
     <aside
@@ -83,95 +108,156 @@ export function DashboardSidebar({ className = "" }: SidebarProps) {
         border-r border-sidebar-border
         bg-sidebar
         transition-all duration-300
+        flex flex-col
         ${collapsed ? SIDEBAR_WIDTH_CLASSES.collapsed : SIDEBAR_WIDTH_CLASSES.expanded}
         ${className}
       `}
     >
-      <div className="flex flex-col h-full">
-        {/* Collapse/Expand toggle button */}
-        <div className="flex justify-end p-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleSidebar}
-            className="h-8 w-8"
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {/* Arrow icon changes direction based on state */}
-            {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <ChevronLeft className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
+      {/* Collapse/Expand toggle button */}
+      <div className="flex justify-end p-4 flex-shrink-0">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleSidebar}
+          className="h-8 w-8"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? (
+            <ChevronRight className="h-4 w-4" />
+          ) : (
+            <ChevronLeft className="h-4 w-4" />
+          )}
+        </Button>
+      </div>
 
-        {/* Navigation menu sections */}
-        <nav className="flex-1 px-3 space-y-6" role="navigation">
-          {menuSections.map((section, idx) => (
-            <div key={idx}>
-              {/* Section title - hidden when collapsed */}
-              {!collapsed && (
-                <h3 className="px-3 mb-2 text-xs uppercase tracking-wider text-muted-foreground">
-                  {section.title}
+      {/* Main navigation content */}
+      <div className="flex-1 overflow-y-auto px-3">
+        <nav className="space-y-6" role="navigation">
+          {/* Workspace Section (Dashboard + Workboard) */}
+          <NavSectionComponent
+            section={NAVIGATION_SECTIONS[0]}
+            collapsed={collapsed}
+            isActive={isActive}
+          />
+
+          {/* RFQ Queue Section */}
+          <div>
+            {/* Section title - hidden when collapsed */}
+            {!collapsed && (
+              <div className="flex items-center justify-between px-3 mb-2">
+                <h3 className="text-xs uppercase tracking-wider text-muted-foreground">
+                  RFQ Queue
                 </h3>
-              )}
-
-              {/* Menu items within section */}
-              <div className="space-y-1">
-                {section.items.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = activeItem === item.name;
-
-                  return (
-                    <button
-                      key={item.name}
-                      className={`
-                        w-full flex items-center gap-3 px-3 py-2 rounded-lg
-                        transition-all relative group
-                        ${
-                          isActive
-                            ? "text-sidebar-foreground"
-                            : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                        }
-                      `}
-                      title={collapsed ? item.name : undefined}
-                      aria-current={isActive ? "page" : undefined}
-                    >
-                      {/* Active indicator bar - brand accent color */}
-                      {isActive && (
-                        <div
-                          className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r bg-brand"
-                          style={{
-                            boxShadow: "0 0 8px oklch(0.685 0.169 237.323 / 0.3)",
-                          }}
-                        />
-                      )}
-
-                      {/* Icon with glow effect for active state */}
-                      <div className="relative">
-                        <Icon
-                          className={`h-5 w-5 ${isActive ? "relative z-10 text-brand" : ""}`}
-                        />
-                        {/* Glow effect behind active icon */}
-                        {isActive && (
-                          <div
-                            className="absolute inset-0 blur-md bg-brand-light opacity-20"
-                            aria-hidden="true"
-                          />
-                        )}
-                      </div>
-
-                      {/* Item label - hidden when collapsed */}
-                      {!collapsed && <span className="text-sm">{item.name}</span>}
-                    </button>
-                  );
-                })}
+                <Inbox className="h-3 w-3 text-muted-foreground" />
               </div>
-            </div>
-          ))}
+            )}
+
+            {/* RFQ Queue list component */}
+            <RFQQueueList
+              isCollapsed={collapsed}
+              activeRFQId={pathname.includes("/workspace/") ? pathname.split("/workspace/")[1] : undefined}
+              initialLimit={4}
+            />
+          </div>
+
+          {/* Documents Section */}
+          <NavSectionComponent
+            section={NAVIGATION_SECTIONS[1]}
+            collapsed={collapsed}
+            isActive={isActive}
+          />
+
+          {/* System Section */}
+          <NavSectionComponent
+            section={NAVIGATION_SECTIONS[2]}
+            collapsed={collapsed}
+            isActive={isActive}
+          />
         </nav>
       </div>
     </aside>
+  );
+}
+
+// =============================================
+// Navigation Section Sub-Component
+// =============================================
+
+interface NavSectionComponentProps {
+  section: NavSection;
+  collapsed: boolean;
+  isActive: (href: string) => boolean;
+}
+
+/**
+ * NavSectionComponent - Renders a navigation section with items
+ */
+function NavSectionComponent({
+  section,
+  collapsed,
+  isActive,
+}: NavSectionComponentProps) {
+  return (
+    <div>
+      {/* Section title - hidden when collapsed */}
+      {!collapsed && (
+        <h3 className="px-3 mb-2 text-xs uppercase tracking-wider text-muted-foreground">
+          {section.title}
+        </h3>
+      )}
+
+      {/* Menu items within section */}
+      <div className="space-y-1">
+        {section.items.map((item) => {
+          const Icon = item.icon;
+          const active = isActive(item.href);
+
+          return (
+            <Link
+              key={item.name}
+              href={item.href}
+              className={`
+                w-full flex items-center gap-3 px-3 py-2 rounded-lg
+                transition-all relative group
+                ${active
+                  ? "text-sidebar-foreground"
+                  : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                }
+              `}
+              title={collapsed ? item.name : undefined}
+              aria-current={active ? "page" : undefined}
+            >
+              {/* Active indicator bar - brand accent color */}
+              {active && (
+                <div
+                  className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r bg-brand"
+                  style={{
+                    boxShadow: "0 0 8px oklch(0.685 0.169 237.323 / 0.3)",
+                  }}
+                  aria-hidden="true"
+                />
+              )}
+
+              {/* Icon with glow effect for active state */}
+              <div className="relative flex-shrink-0">
+                <Icon
+                  className={`h-5 w-5 ${active ? "relative z-10 text-brand" : ""}`}
+                />
+                {/* Glow effect behind active icon */}
+                {active && (
+                  <div
+                    className="absolute inset-0 blur-md bg-brand-light opacity-20"
+                    aria-hidden="true"
+                  />
+                )}
+              </div>
+
+              {/* Item label - hidden when collapsed */}
+              {!collapsed && <span className="text-sm">{item.name}</span>}
+            </Link>
+          );
+        })}
+      </div>
+    </div>
   );
 }
