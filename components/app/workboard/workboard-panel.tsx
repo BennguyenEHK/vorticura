@@ -47,7 +47,6 @@ export function WorkboardPanel({
         bg-card rounded-lg border border-border
         shadow-sm
         flex flex-col
-        overflow-hidden
         transition-all duration-200
         ${className}
       `}

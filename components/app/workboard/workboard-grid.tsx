@@ -7,13 +7,12 @@
 // Enables drag-to-resize and drag-to-reposition panels
 
 import { useMemo, useCallback, useRef } from "react";
-import { GridLayout, useContainerWidth } from "react-grid-layout";
+import { GridLayout, useContainerWidth, type Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import { useWorkboard } from "./workboard-provider";
 import { WorkboardPanel } from "./workboard-panel";
 import { WorkboardDropZone } from "./workboard-drop-zone";
 import { DEFAULT_GRID_CONFIG } from "@/types/workboard";
-import type { LayoutItem } from "@/types/workboard";
 
 // Panel content components
 import { WorkflowPanelContent } from "./panels/workflow-panel-content";
@@ -50,8 +49,8 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
 
   // Handle layout change from react-grid-layout
   const handleLayoutChange = useCallback(
-    (newLayout: LayoutItem[]) => {
-      updateLayout(newLayout);
+    (newLayout: Layout) => {
+      updateLayout([...newLayout]); // Convert readonly to mutable array
     },
     [updateLayout]
   );
