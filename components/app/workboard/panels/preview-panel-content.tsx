@@ -117,7 +117,7 @@ export function PreviewPanelContent({
                     ${item.price.toFixed(2)}
                   </td>
                   <td className="py-2 text-right text-foreground">
-                    ${(item.qty * item.price).toLocaleString()}
+                    ${(item.qty * item.price).toLocaleString('en-US')}
                   </td>
                 </tr>
               ))}
@@ -130,19 +130,19 @@ export function PreviewPanelContent({
           <div className="flex justify-between">
             <span className="text-muted-foreground">Subtotal:</span>
             <span className="text-foreground">
-              ${quotationData.subtotal.toLocaleString()}
+              ${quotationData.subtotal.toLocaleString('en-US')}
             </span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Tax (7%):</span>
             <span className="text-foreground">
-              ${quotationData.tax.toLocaleString()}
+              ${quotationData.tax.toLocaleString('en-US')}
             </span>
           </div>
           <div className="flex justify-between pt-2 border-t border-border font-bold">
             <span className="text-foreground">TOTAL:</span>
             <span className="text-foreground text-base">
-              ${quotationData.total.toLocaleString()}
+              ${quotationData.total.toLocaleString('en-US')}
             </span>
           </div>
         </div>
