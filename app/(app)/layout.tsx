@@ -24,6 +24,9 @@ import { AIChatProvider, useAIChat, AIChatFab, AIChatPopover } from "@/component
 // Import Workboard provider for panel management
 import { WorkboardProvider, useWorkboard } from "@/components/app/workboard";
 
+// Import horizontal scroll container for narrow viewports
+import { HorizontalScrollContainer } from "@/components/app/horizontal-scroll-container";
+
 // =============================================
 // DnD Handler Component
 // =============================================
@@ -105,7 +108,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
   const { collapsed } = useSidebar();
 
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden">
+    <div className="min-h-screen bg-background">
       {/* Fixed top navigation bar */}
       <DashboardTopBar />
 
@@ -120,13 +123,15 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
           min-h-screen
           transition-all duration-300
           bg-muted
-          overflow-x-hidden
         `}
       >
-        {/* Content wrapper with consistent padding */}
-        <div className="p-6">
-          {children}
-        </div>
+        {/* Horizontal scroll container with scroll buttons for narrow viewports */}
+        <HorizontalScrollContainer className="min-h-[calc(100vh-64px)]">
+          {/* Content wrapper with consistent padding */}
+          <div className="p-6 min-w-[800px]">
+            {children}
+          </div>
+        </HorizontalScrollContainer>
       </main>
 
       {/* AI Chat Floating Action Button */}

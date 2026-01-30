@@ -108,7 +108,7 @@ export interface GridConfig {
 
 /** Default grid configuration */
 export const DEFAULT_GRID_CONFIG: GridConfig = {
-  cols: 12,
+  cols: 13,
   rowHeight: 100,
   margin: [16, 16],
   containerPadding: [0, 0],
