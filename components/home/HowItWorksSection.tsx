@@ -101,8 +101,8 @@ export default function HowItWorksSection() {
                   <div className="relative flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-icon-circle-start to-icon-circle-end text-primary-foreground shadow-xl shadow-foreground/20">
                     {step.icon}
                   </div>
-                  {/* Step number badge */}
-                  <div className="absolute -top-2 -right-2 flex items-center justify-center w-8 h-8 rounded-full bg-brand text-white text-sm font-bold shadow-lg">
+                  {/* Step number badge - uses brand-foreground for contrast on brand bg */}
+                  <div className="absolute -top-2 -right-2 flex items-center justify-center w-8 h-8 rounded-full bg-brand text-brand-foreground text-sm font-bold shadow-lg">
                     {step.number.replace("0", "")}
                   </div>
                 </div>

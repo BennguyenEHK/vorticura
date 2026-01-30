@@ -43,9 +43,10 @@ export default function HeroSection() {
           </div>
 
           {/* Main Headline */}
+          {/* Gradient text uses brand color tokens for theme consistency */}
           <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold tracking-tight text-foreground leading-[1.1]">
             Create Professional
-            <span className="block mt-2 bg-gradient-to-r from-sky-500 via-sky-400 to-indigo-500 bg-clip-text text-transparent">
+            <span className="block mt-2 bg-gradient-to-r from-brand via-brand-light to-brand-dark bg-clip-text text-transparent">
               Quotations in Seconds
             </span>
           </h1>

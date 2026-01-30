@@ -1,7 +1,7 @@
 # QuoteFlow AI - Project Structure
 
 > **Last Updated:** January 30, 2026
-> **Version:** 5.1 (Gridstack.js Migration + Panel Sync)
+> **Version:** 5.2 (Design Token Standardization)
 
 ## Overview
 
@@ -143,6 +143,8 @@ quoteflow_ai/
 │   │   │   ├── stats-card.tsx ✓           # Single stat card component
 │   │   │   ├── recent-quotations-card.tsx ✓ # Recent quotations table card
 │   │   │   └── quick-actions-card.tsx ✓   # Quick actions panel card
+│   │   │
+│   │   ├── horizontal-scroll-container.tsx ✓ # Horizontal scroll with nav buttons (NEW v5.2)
 │   │   │
 │   │   └── workspace/                     # Workspace panel components (legacy)
 │   │       ├── index.ts ✓                 # Barrel exports (backward compat)
@@ -413,18 +415,47 @@ app/layout.tsx (Root)
 | `/api/comms` | GET | List channels, status, messages |
 | `/api/comms` | POST | Update channel or mark message read |
 
-## Design Token System
+## Design Token System (v5.2 Standardized)
 
-All styling uses design tokens from `app/globals.css`:
+All styling uses design tokens from `app/globals.css`. **v5.2 standardizes all components to use tokens instead of hardcoded Tailwind values.**
 
-### Color Tokens
-- **Backgrounds:** `bg-background`, `bg-card`, `bg-muted`, `bg-sidebar`
-- **Text:** `text-foreground`, `text-body`, `text-muted-foreground`, `text-label`
-- **Brand:** `bg-brand`, `text-brand`, `hover:bg-brand-hover`
-- **Status:** `bg-status-draft`, `bg-status-pending`, `bg-status-complete`
+### Color Tokens (Complete List)
+
+| Category | Tokens | Usage |
+|----------|--------|-------|
+| **Backgrounds** | `bg-background`, `bg-card`, `bg-muted`, `bg-sidebar`, `bg-secondary`, `bg-accent`, `bg-popover` | Page, card, section backgrounds |
+| **Text** | `text-foreground`, `text-body`, `text-muted-foreground`, `text-label`, `text-placeholder`, `text-on-dark` | Typography hierarchy |
+| **Primary** | `bg-primary`, `text-primary-foreground`, `bg-primary-hover` | Buttons, CTAs |
+| **Brand** | `bg-brand`, `text-brand`, `bg-brand-hover`, `bg-brand-muted`, `text-brand-light`, `text-brand-dark` | Brand accent color (sky palette) |
+| **Status** | `bg-status-draft`, `bg-status-pending`, `bg-status-complete` + foreground variants | Status badges |
+| **Destructive** | `bg-destructive`, `text-error`, `bg-error-bg`, `border-error-border` | Error states |
+| **Borders** | `border-border`, `ring-ring` | Input borders, focus rings |
+| **Glass** | `bg-glass`, `bg-glass-heavy` | Navbar overlays, modals |
+| **Hero** | `bg-hero-orb-1`, `bg-hero-orb-2`, `bg-gradient-line`, `bg-gradient-subtle` | Decorative gradients |
+| **Avatar** | `bg-avatar`, `text-avatar-foreground` | User avatars |
+| **Chart** | `bg-chart-1` to `bg-chart-5` | Data visualization |
+| **Sidebar** | `bg-sidebar`, `text-sidebar-foreground`, `border-sidebar-border` | Dashboard sidebar |
 
 ### Border Radius Tokens
-- `rounded-sm` → `rounded-4xl` (from `--radius` base)
+- `rounded-sm` → `rounded-4xl` (from `--radius` base: 0.625rem)
+
+### Token Mapping (Hardcoded → Token)
+
+| Old Value | New Token |
+|-----------|-----------|
+| `slate-900` | `primary` or `foreground` |
+| `slate-800` | `primary-hover` |
+| `slate-700` | `label` |
+| `slate-600` | `body` |
+| `slate-500` | `muted-foreground` |
+| `slate-400` | `placeholder` |
+| `slate-200` | `border` |
+| `slate-100` | `secondary` or `accent` |
+| `slate-50` | `muted` |
+| `sky-500` | `brand` |
+| `sky-600` | `brand-hover` |
+| `sky-400` | `brand-light` |
+| `red-500` | `destructive` or `error` |
 
 ## Legend
 

@@ -85,12 +85,13 @@ export default function PricingSection() {
       className="relative py-24 lg:py-32 bg-muted scroll-mt-16"
     >
       {/* ===== Background Pattern ===== */}
+      {/* Note: Dot pattern uses CSS variable for theme-aware color */}
       <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
-        {/* Subtle dot pattern */}
+        {/* Subtle dot pattern - uses foreground color via CSS variable */}
         <div
           className="absolute inset-0 opacity-[0.02]"
           style={{
-            backgroundImage: `radial-gradient(circle at 1px 1px, #0f172a 1px, transparent 0)`,
+            backgroundImage: `radial-gradient(circle at 1px 1px, hsl(var(--foreground)) 1px, transparent 0)`,
             backgroundSize: "32px 32px",
           }}
         />
@@ -128,7 +129,8 @@ export default function PricingSection() {
               {/* Popular badge for highlighted tier */}
               {tier.badge && (
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                  <span className="inline-flex items-center px-4 py-1 rounded-full text-sm font-semibold bg-brand text-white shadow-lg">
+                  {/* Badge uses brand-foreground for contrast on brand background */}
+                  <span className="inline-flex items-center px-4 py-1 rounded-full text-sm font-semibold bg-brand text-brand-foreground shadow-lg">
                     {tier.badge}
                   </span>
                 </div>

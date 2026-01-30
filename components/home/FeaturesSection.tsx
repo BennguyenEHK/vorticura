@@ -123,8 +123,9 @@ export default function FeaturesSection() {
             >
               <CardContent className="p-6 lg:p-8">
                 {/* Feature Icon with gradient background */}
+                {/* Icon uses white text for contrast against gradient, shadow uses foreground token */}
                 <div
-                  className={`inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br ${feature.gradient} text-white mb-5 shadow-lg shadow-slate-900/5`}
+                  className={`inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br ${feature.gradient} text-on-dark mb-5 shadow-lg shadow-foreground/5`}
                 >
                   {feature.icon}
                 </div>

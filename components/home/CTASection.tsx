@@ -12,16 +12,18 @@ export default function CTASection() {
   return (
     <section className="relative py-24 lg:py-32 overflow-hidden">
       {/* ===== Gradient Background ===== */}
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />
+      {/* Dark gradient using primary/foreground tokens for theme consistency */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary-hover to-primary" />
 
       {/* ===== Decorative Background Elements ===== */}
+      {/* Glowing orbs using brand color tokens */}
       <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
-        {/* Top-left glow */}
-        <div className="absolute -top-1/4 -left-1/4 w-1/2 h-1/2 bg-sky-500/10 rounded-full blur-3xl" />
-        {/* Bottom-right glow */}
-        <div className="absolute -bottom-1/4 -right-1/4 w-1/2 h-1/2 bg-indigo-500/10 rounded-full blur-3xl" />
-        {/* Center accent */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3/4 h-1/2 bg-sky-500/5 rounded-full blur-3xl" />
+        {/* Top-left glow - brand color with opacity */}
+        <div className="absolute -top-1/4 -left-1/4 w-1/2 h-1/2 bg-brand/10 rounded-full blur-3xl" />
+        {/* Bottom-right glow - hero orb token */}
+        <div className="absolute -bottom-1/4 -right-1/4 w-1/2 h-1/2 bg-hero-orb-2 rounded-full blur-3xl" />
+        {/* Center accent - brand with lower opacity */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3/4 h-1/2 bg-brand/5 rounded-full blur-3xl" />
 
         {/* Grid pattern overlay */}
         <div
@@ -35,10 +37,11 @@ export default function CTASection() {
       {/* ===== CTA Content ===== */}
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-3xl mx-auto">
-          {/* Headline */}
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-white leading-tight">
+          {/* Headline - uses on-dark token for white text on dark bg */}
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-on-dark leading-tight">
             Ready to transform your
-            <span className="block mt-2 bg-gradient-to-r from-sky-400 to-sky-300 bg-clip-text text-transparent">
+            {/* Gradient text uses brand-light token colors */}
+            <span className="block mt-2 bg-gradient-to-r from-brand-light to-brand-muted bg-clip-text text-transparent">
               quotation workflow?
             </span>
           </h2>
@@ -51,11 +54,11 @@ export default function CTASection() {
 
           {/* CTA Buttons */}
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            {/* Primary CTA */}
+            {/* Primary CTA - uses brand-foreground for text on brand bg */}
             <Button
               asChild
               size="lg"
-              className="bg-brand hover:bg-brand-hover text-white px-8 py-6 text-base font-medium shadow-lg shadow-brand/25 hover:shadow-xl hover:shadow-brand/30 transition-all"
+              className="bg-brand hover:bg-brand-hover text-brand-foreground px-8 py-6 text-base font-medium shadow-lg shadow-brand/25 hover:shadow-xl hover:shadow-brand/30 transition-all"
             >
               <Link href="/signup">
                 Start Free Trial
@@ -74,12 +77,12 @@ export default function CTASection() {
                 </svg>
               </Link>
             </Button>
-            {/* Secondary CTA */}
+            {/* Secondary CTA - uses on-dark token for text on dark bg */}
             <Button
               asChild
               variant="outline"
               size="lg"
-              className="px-8 py-6 text-base font-medium border-border text-white hover:bg-primary-hover hover:text-white"
+              className="px-8 py-6 text-base font-medium border-border text-on-dark hover:bg-primary-hover hover:text-on-dark"
             >
               <Link href="#pricing">
                 View Pricing

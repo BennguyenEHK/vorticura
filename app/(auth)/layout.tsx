@@ -50,8 +50,9 @@ export default function AuthLayout({
       </section>
 
       {/* ===== Right Panel: Brand Area (60% on desktop, hidden on mobile) ===== */}
+      {/* Uses semantic gradient tokens: primary (dark) to primary-hover (slightly lighter) */}
       <section
-        className="relative hidden lg:flex lg:w-3/5 lg:flex-col lg:items-center lg:justify-center lg:bg-gradient-to-br lg:from-slate-900 lg:via-slate-800 lg:to-slate-900"
+        className="relative hidden lg:flex lg:w-3/5 lg:flex-col lg:items-center lg:justify-center lg:bg-gradient-to-br lg:from-primary lg:via-primary-hover lg:to-primary"
         aria-hidden="true" // Decorative panel, not essential for accessibility
       >
         {/* Decorative Background Pattern */}
@@ -63,12 +64,13 @@ export default function AuthLayout({
         {/* Brand Content */}
         <div className="relative z-10 max-w-lg px-8 text-center">
           {/* Large Logo for Brand Panel - uses shared component */}
-          <div className="mb-8 inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-sm">
+          {/* Uses background/10 for semi-transparent overlay on always-dark brand panel */}
+          <div className="mb-8 inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-background/10 backdrop-blur-sm">
             <Logo className="w-12 h-12" />
           </div>
 
-          {/* Headline */}
-          <h1 className="mb-4 text-4xl font-bold tracking-tight text-white">
+          {/* Headline - uses on-dark token for text on dark backgrounds */}
+          <h1 className="mb-4 text-4xl font-bold tracking-tight text-on-dark">
             Streamline Your Quotations
           </h1>
 

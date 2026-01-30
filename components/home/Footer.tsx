@@ -6,6 +6,7 @@ import Link from "next/link"
 // QuoteFlow AI Logo Component
 // =============================================
 // Reusable logo SVG for footer branding
+// Note: Using CSS variables for theme-aware colors
 const Logo = ({ className = "w-8 h-8" }: { className?: string }) => (
   <svg
     className={className}
@@ -14,18 +15,20 @@ const Logo = ({ className = "w-8 h-8" }: { className?: string }) => (
     xmlns="http://www.w3.org/2000/svg"
     aria-hidden="true"
   >
-    <rect width="32" height="32" rx="8" fill="#0f172a" />
-    <path d="M8 12L16 8L24 12L16 16L8 12Z" fill="#38bdf8" />
+    {/* Background uses primary/foreground color for dark theme support */}
+    <rect width="32" height="32" rx="8" className="fill-primary" />
+    {/* Logo paths use brand color for consistent branding */}
+    <path d="M8 12L16 8L24 12L16 16L8 12Z" className="fill-brand" />
     <path
       d="M8 16L16 20L24 16"
-      stroke="#38bdf8"
+      className="stroke-brand"
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
     />
     <path
       d="M8 20L16 24L24 20"
-      stroke="#38bdf8"
+      className="stroke-brand"
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
