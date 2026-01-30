@@ -105,7 +105,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
   const { collapsed } = useSidebar();
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden">
       {/* Fixed top navigation bar */}
       <DashboardTopBar />
 
@@ -120,6 +120,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
           min-h-screen
           transition-all duration-300
           bg-muted
+          overflow-x-hidden
         `}
       >
         {/* Content wrapper with consistent padding */}

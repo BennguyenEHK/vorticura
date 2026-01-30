@@ -36,7 +36,10 @@
       "mcp__playwright__browser_click",
       "mcp__playwright__browser_take_screenshot",
       "mcp__playwright__browser_snapshot",
-      "mcp__playwright__browser_close"
+      "mcp__playwright__browser_close",
+      "Bash(npm install:*)",
+      "Bash(del \"components\\\\app\\\\workspace\\\\files-panel.tsx\")",
+      "Bash(del \"components\\\\app\\\\workspace\\\\quotation-editor-panel.tsx\")"
     ]
   }
 }
