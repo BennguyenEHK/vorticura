@@ -51,6 +51,8 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
   const isSyncingRef = useRef(false);
   // Track timeout ID for cleanup to prevent memory leaks
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Track requestAnimationFrame ID for deferred panel registration
+  const rafIdRef = useRef<number | null>(null);
 
   // Get workboard state and actions from context
   const { layout, panels, isLocked, updateLayout, setActivePanel } =
@@ -151,6 +153,10 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
       if (syncTimeoutRef.current) {
         clearTimeout(syncTimeoutRef.current);
       }
+      // Cancel any pending animation frame
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
       // Destroy Gridstack instance
       if (gridInstanceRef.current) {
         gridInstanceRef.current.destroy(false);
@@ -174,7 +180,7 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
   // =============================================
   // CRITICAL: Unified sync effect for panels and layout
   // Combines panel registration and layout positioning
-  // to avoid race conditions when adding new panels
+  // Uses requestAnimationFrame to ensure DOM is painted before registration
   // =============================================
 
   useEffect(() => {
@@ -195,83 +201,150 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
       (id) => !currentPanelIds.includes(id)
     );
 
-    // Set flag to prevent change event loops
-    isSyncingRef.current = true;
+    // Update tracking ref immediately to prevent duplicate processing
+    prevPanelsRef.current = currentPanelIds;
 
-    // Start batch mode for performance (group all updates)
-    grid.batchUpdate(true);
+    // =========================================
+    // STEP 1: Handle removals synchronously
+    // Removed panels can be processed immediately
+    // =========================================
+    if (removedPanelIds.length > 0) {
+      isSyncingRef.current = true;
+      grid.batchUpdate(true);
 
-    // STEP 1: Register new panels FIRST (before layout update)
-    // This ensures new panels exist in Gridstack before positioning
-    addedPanelIds.forEach((panelId) => {
-      const element = gridRef.current?.querySelector(
-        `[gs-id="${panelId}"]`
-      ) as HTMLElement;
-
-      const layoutItem = layout.find((l) => l.i === panelId);
-
-      if (element && layoutItem) {
+      removedPanelIds.forEach((panelId) => {
         const existingItems = grid.getGridItems();
-        const isAlreadyTracked = existingItems.some(
+        const elementToRemove = existingItems.find(
           (el) => el.getAttribute("gs-id") === panelId
         );
 
-        if (!isAlreadyTracked) {
-          // Register existing DOM element as Gridstack widget
-          grid.makeWidget(element, {
-            id: panelId,
-            x: layoutItem.x,
-            y: layoutItem.y,
-            w: layoutItem.w,
-            h: layoutItem.h,
-            minW: layoutItem.minW ?? 2,
-            minH: layoutItem.minH ?? 1,
+        if (elementToRemove) {
+          grid.removeWidget(elementToRemove);
+        }
+      });
+
+      grid.batchUpdate(false);
+    }
+
+    // =========================================
+    // STEP 2: Handle additions with requestAnimationFrame
+    // Defer registration until browser has painted the DOM
+    // This fixes the race condition when docking AI Chat
+    // =========================================
+    if (addedPanelIds.length > 0) {
+      // Cancel any pending registration
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+
+      // Use double-RAF to ensure DOM is fully painted
+      // First RAF: scheduled after current paint
+      // Second RAF: ensures layout is complete
+      rafIdRef.current = requestAnimationFrame(() => {
+        rafIdRef.current = requestAnimationFrame(() => {
+          const currentGrid = gridInstanceRef.current;
+          if (!currentGrid || !isInitializedRef.current) return;
+
+          isSyncingRef.current = true;
+          currentGrid.batchUpdate(true);
+
+          // Register new panels
+          addedPanelIds.forEach((panelId) => {
+            const element = gridRef.current?.querySelector(
+              `[gs-id="${panelId}"]`
+            ) as HTMLElement;
+
+            const layoutItem = layout.find((l) => l.i === panelId);
+
+            if (element && layoutItem) {
+              const existingItems = currentGrid.getGridItems();
+              const isAlreadyTracked = existingItems.some(
+                (el) => el.getAttribute("gs-id") === panelId
+              );
+
+              if (!isAlreadyTracked) {
+                // Register existing DOM element as Gridstack widget
+                currentGrid.makeWidget(element, {
+                  id: panelId,
+                  x: layoutItem.x,
+                  y: layoutItem.y,
+                  w: layoutItem.w,
+                  h: layoutItem.h,
+                  minW: layoutItem.minW ?? 2,
+                  minH: layoutItem.minH ?? 1,
+                });
+              }
+            }
+          });
+
+          // Update positions for all panels after registration
+          layout.forEach((item) => {
+            const element = gridRef.current?.querySelector(
+              `[gs-id="${item.i}"]`
+            ) as HTMLElement;
+
+            if (element) {
+              currentGrid.update(element, {
+                x: item.x,
+                y: item.y,
+                w: item.w,
+                h: item.h,
+              });
+            }
+          });
+
+          currentGrid.batchUpdate(false);
+
+          // Clear sync flag after updates settle
+          if (syncTimeoutRef.current) {
+            clearTimeout(syncTimeoutRef.current);
+          }
+          syncTimeoutRef.current = setTimeout(() => {
+            isSyncingRef.current = false;
+          }, 100);
+        });
+      });
+    } else if (removedPanelIds.length === 0) {
+      // =========================================
+      // STEP 3: Handle layout-only updates (no additions/removals)
+      // Update existing panel positions synchronously
+      // =========================================
+      isSyncingRef.current = true;
+      grid.batchUpdate(true);
+
+      layout.forEach((item) => {
+        const element = gridRef.current?.querySelector(
+          `[gs-id="${item.i}"]`
+        ) as HTMLElement;
+
+        if (element) {
+          grid.update(element, {
+            x: item.x,
+            y: item.y,
+            w: item.w,
+            h: item.h,
           });
         }
+      });
+
+      grid.batchUpdate(false);
+
+      // Clear sync flag after a tick
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
       }
-    });
-
-    // STEP 2: Update ALL panel positions (now including newly registered ones)
-    layout.forEach((item) => {
-      const element = gridRef.current?.querySelector(
-        `[gs-id="${item.i}"]`
-      ) as HTMLElement;
-
-      if (element) {
-        grid.update(element, {
-          x: item.x,
-          y: item.y,
-          w: item.w,
-          h: item.h,
-        });
+      syncTimeoutRef.current = setTimeout(() => {
+        isSyncingRef.current = false;
+      }, 100);
+    } else {
+      // Removals happened, clear sync flag
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
       }
-    });
-
-    // STEP 3: Remove deleted panels
-    removedPanelIds.forEach((panelId) => {
-      const existingItems = grid.getGridItems();
-      const elementToRemove = existingItems.find(
-        (el) => el.getAttribute("gs-id") === panelId
-      );
-
-      if (elementToRemove) {
-        grid.removeWidget(elementToRemove);
-      }
-    });
-
-    // End batch mode and apply all updates
-    grid.batchUpdate(false);
-
-    // Update tracking ref for next comparison
-    prevPanelsRef.current = currentPanelIds;
-
-    // Clear sync flag after a tick
-    if (syncTimeoutRef.current) {
-      clearTimeout(syncTimeoutRef.current);
+      syncTimeoutRef.current = setTimeout(() => {
+        isSyncingRef.current = false;
+      }, 100);
     }
-    syncTimeoutRef.current = setTimeout(() => {
-      isSyncingRef.current = false;
-    }, 100);
   }, [panels, layout]);
 
   // =============================================
