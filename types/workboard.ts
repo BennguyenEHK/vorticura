@@ -90,32 +90,26 @@ export interface WorkboardContextType extends WorkboardState, WorkboardActions {
 // Grid Configuration
 // =============================================
 
-/** Gridstack configuration */
+/** Gridstack configuration (compatible with Gridstack.js v12+) */
 export interface GridConfig {
-  cols: number;                // Number of columns (default: 12)
-  rowHeight: number;           // Base row height in pixels
-  margin: [number, number];    // Gap between panels [x, y]
-  containerPadding: [number, number]; // Outer padding [x, y]
-  isDraggable: boolean;        // Enable drag globally
-  isResizable: boolean;        // Enable resize globally
+  column: number;              // Number of columns (default: 12)
+  cellHeight: number;          // Cell height in pixels (row height)
+  margin: number;              // Gap between panels in pixels (Gridstack uses single number)
+  float: boolean;              // Allow floating items (false = auto-pack)
+  animate: boolean;            // Enable animations during drag/resize
   draggableHandle: string;     // CSS selector for drag handle
-  resizeHandles: Array<"s" | "w" | "e" | "n" | "sw" | "nw" | "se" | "ne">;
-  compactType: "vertical" | "horizontal" | null; // Auto-pack direction
-  preventCollision: boolean;   // Prevent overlap during drag
+  resizeHandles: string;       // Resize handles ("e, se, s, sw, w")
 }
 
-/** Default grid configuration */
+/** Default grid configuration for Gridstack.js */
 export const DEFAULT_GRID_CONFIG: GridConfig = {
-  cols: 12,
-  rowHeight: 100,
-  margin: [16, 16],
-  containerPadding: [0, 0],
-  isDraggable: true,
-  isResizable: true,
-  draggableHandle: ".panel-drag-handle",
-  resizeHandles: ["se", "e", "s"],
-  compactType: "horizontal",
-  preventCollision: false,
+  column: 12,                  // 12-column grid layout
+  cellHeight: 100,             // 100px per row unit
+  margin: 12,                  // 12px gap between panels (better for grab)
+  float: false,                // Auto-pack panels (no floating)
+  animate: true,               // Smooth animations
+  draggableHandle: ".panel-drag-handle",  // Drag by panel header
+  resizeHandles: "e, se, s, sw, w",       // All side handles for resize
 };
 
 // =============================================
