@@ -138,17 +138,17 @@ export const COLS = {
 
 /** Default 3-panel layout (before AI Chat drop) */
 export const DEFAULT_LAYOUT_3_PANELS: LayoutItem[] = [
-  { i: "workflow", x: 6, y: 0, w: 6, h: 2, minW: 3, minH: 1 },
-  { i: "pricing",  x: 6, y: 2, w: 6, h: 5, minW: 3, minH: 1 },
-  { i: "preview",  x: 0, y: 0, w: 6, h: 7, minW: 3, minH: 1 },
+  { i: "workflow", x: 6, y: 0, w: 6, h: 3, minW: 3, minH: 1 },
+  { i: "pricing",  x: 6, y: 3, w: 6, h: 6, minW: 3, minH: 1 },
+  { i: "preview",  x: 0, y: 0, w: 6, h: 9, minW: 3, minH: 1 },
 ];
 
 /** Default 4-panel layout (after AI Chat drop) */
 export const DEFAULT_LAYOUT_4_PANELS: LayoutItem[] = [
-  { i: "chat",     x: 6, y: 0, w: 6, h: 2, minW: 3, minH: 1 },
-  { i: "workflow", x: 6, y: 2, w: 6, h: 2, minW: 3, minH: 1 },
-  { i: "pricing",  x: 6, y: 4, w: 6, h: 3, minW: 3, minH: 1 },
-  { i: "preview",  x: 0, y: 0, w: 6, h: 7, minW: 3, minH: 1 },
+  { i: "chat",     x: 6, y: 0, w: 6, h: 3, minW: 3, minH: 1 },
+  { i: "workflow", x: 6, y: 3, w: 6, h: 3, minW: 3, minH: 1 },
+  { i: "pricing",  x: 6, y: 6, w: 6, h: 4, minW: 3, minH: 1 },
+  { i: "preview",  x: 0, y: 0, w: 6, h: 10, minW: 3, minH: 1 },
 ];
 
 /** Stacked layout for mobile (vertical stack) */

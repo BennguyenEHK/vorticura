@@ -49,8 +49,7 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
   const prevPanelsRef = useRef<string[]>([]);
   // Flag to prevent layout update loops during sync
   const isSyncingRef = useRef(false);
-  // Track timeout IDs for cleanup to prevent memory leaks
-  const addWidgetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Track timeout ID for cleanup to prevent memory leaks
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Get workboard state and actions from context
@@ -148,10 +147,7 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
 
     // Cleanup on unmount
     return () => {
-      // Clear any pending timeouts to prevent memory leaks
-      if (addWidgetTimeoutRef.current) {
-        clearTimeout(addWidgetTimeoutRef.current);
-      }
+      // Clear any pending timeout to prevent memory leaks
       if (syncTimeoutRef.current) {
         clearTimeout(syncTimeoutRef.current);
       }
@@ -176,8 +172,9 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
   }, [isLocked]);
 
   // =============================================
-  // CRITICAL: Sync panels with Gridstack
-  // Handles adding/removing panels dynamically
+  // CRITICAL: Unified sync effect for panels and layout
+  // Combines panel registration and layout positioning
+  // to avoid race conditions when adding new panels
   // =============================================
 
   useEffect(() => {
@@ -198,90 +195,49 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
       (id) => !currentPanelIds.includes(id)
     );
 
-    // Process additions - add new widgets to Gridstack
-    if (addedPanelIds.length > 0) {
-      // Clear any existing timeout to prevent duplicate calls
-      if (addWidgetTimeoutRef.current) {
-        clearTimeout(addWidgetTimeoutRef.current);
-      }
-      // Small delay to ensure DOM is rendered
-      addWidgetTimeoutRef.current = setTimeout(() => {
-        addedPanelIds.forEach((panelId) => {
-          // Find the DOM element for this panel
-          const element = gridRef.current?.querySelector(
-            `[gs-id="${panelId}"]`
-          ) as HTMLElement;
-
-          // Find the layout config for this panel
-          const layoutItem = layout.find((l) => l.i === panelId);
-
-          if (element && layoutItem) {
-            // Check if already tracked by Gridstack
-            const existingItems = grid.getGridItems();
-            const isAlreadyTracked = existingItems.some(
-              (el) => el.getAttribute("gs-id") === panelId
-            );
-
-            if (!isAlreadyTracked) {
-              // Register existing DOM element as Gridstack widget
-              // makeWidget() is for existing elements, addWidget() creates new ones
-              grid.makeWidget(element, {
-                id: panelId,
-                x: layoutItem.x,
-                y: layoutItem.y,
-                w: layoutItem.w,
-                h: layoutItem.h,
-                minW: layoutItem.minW ?? 2,
-                minH: layoutItem.minH ?? 1,
-              });
-            }
-          }
-        });
-      }, 50); // 50ms delay for DOM render
-    }
-
-    // Process removals - remove widgets from Gridstack
-    removedPanelIds.forEach((panelId) => {
-      const existingItems = grid.getGridItems();
-      const elementToRemove = existingItems.find(
-        (el) => el.getAttribute("gs-id") === panelId
-      );
-
-      if (elementToRemove) {
-        // Remove widget from Gridstack
-        // Note: In Gridstack v12+, removeWidget takes only the element
-        grid.removeWidget(elementToRemove);
-      }
-    });
-
-    // Update tracking ref for next comparison
-    prevPanelsRef.current = currentPanelIds;
-  }, [panels, layout]);
-
-  // =============================================
-  // CRITICAL: Sync layout positions with Gridstack
-  // Handles resetLayout and external layout changes
-  // =============================================
-
-  useEffect(() => {
-    const grid = gridInstanceRef.current;
-    if (!grid || !isInitializedRef.current) return;
-
     // Set flag to prevent change event loops
     isSyncingRef.current = true;
 
     // Start batch mode for performance (group all updates)
-    // In Gridstack v12+, batchUpdate(true) starts batch mode
     grid.batchUpdate(true);
 
-    // Update each widget's position from React state
+    // STEP 1: Register new panels FIRST (before layout update)
+    // This ensures new panels exist in Gridstack before positioning
+    addedPanelIds.forEach((panelId) => {
+      const element = gridRef.current?.querySelector(
+        `[gs-id="${panelId}"]`
+      ) as HTMLElement;
+
+      const layoutItem = layout.find((l) => l.i === panelId);
+
+      if (element && layoutItem) {
+        const existingItems = grid.getGridItems();
+        const isAlreadyTracked = existingItems.some(
+          (el) => el.getAttribute("gs-id") === panelId
+        );
+
+        if (!isAlreadyTracked) {
+          // Register existing DOM element as Gridstack widget
+          grid.makeWidget(element, {
+            id: panelId,
+            x: layoutItem.x,
+            y: layoutItem.y,
+            w: layoutItem.w,
+            h: layoutItem.h,
+            minW: layoutItem.minW ?? 2,
+            minH: layoutItem.minH ?? 1,
+          });
+        }
+      }
+    });
+
+    // STEP 2: Update ALL panel positions (now including newly registered ones)
     layout.forEach((item) => {
       const element = gridRef.current?.querySelector(
         `[gs-id="${item.i}"]`
       ) as HTMLElement;
 
       if (element) {
-        // Update widget position/size in Gridstack
         grid.update(element, {
           x: item.x,
           y: item.y,
@@ -291,18 +247,32 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
       }
     });
 
+    // STEP 3: Remove deleted panels
+    removedPanelIds.forEach((panelId) => {
+      const existingItems = grid.getGridItems();
+      const elementToRemove = existingItems.find(
+        (el) => el.getAttribute("gs-id") === panelId
+      );
+
+      if (elementToRemove) {
+        grid.removeWidget(elementToRemove);
+      }
+    });
+
     // End batch mode and apply all updates
-    // In Gridstack v12+, batchUpdate(false) commits the batch
     grid.batchUpdate(false);
 
-    // Clear sync flag after a tick (with cleanup)
+    // Update tracking ref for next comparison
+    prevPanelsRef.current = currentPanelIds;
+
+    // Clear sync flag after a tick
     if (syncTimeoutRef.current) {
       clearTimeout(syncTimeoutRef.current);
     }
     syncTimeoutRef.current = setTimeout(() => {
       isSyncingRef.current = false;
     }, 100);
-  }, [layout]);
+  }, [panels, layout]);
 
   // =============================================
   // Prepare items for rendering
