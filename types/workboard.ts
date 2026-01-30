@@ -2,9 +2,7 @@
 // Workboard Type Definitions
 // =============================================
 // Types for the dynamic, resizable panel grid system
-// Uses react-grid-layout for panel management
-
-import type { Layout as RGLLayout } from "react-grid-layout";
+// Uses Gridstack.js for panel management with auto-fill
 
 // =============================================
 // Panel Types
@@ -30,10 +28,10 @@ export interface PanelConfig {
 }
 
 // =============================================
-// Layout Types (react-grid-layout compatible)
+// Layout Types (Gridstack compatible)
 // =============================================
 
-/** Single layout item for react-grid-layout */
+/** Single layout item for Gridstack */
 export interface LayoutItem {
   i: string;                   // Panel ID (matches PanelConfig.id)
   x: number;                   // Grid column (0-11 in 12-col grid)
@@ -92,7 +90,7 @@ export interface WorkboardContextType extends WorkboardState, WorkboardActions {
 // Grid Configuration
 // =============================================
 
-/** react-grid-layout configuration */
+/** Gridstack configuration */
 export interface GridConfig {
   cols: number;                // Number of columns (default: 12)
   rowHeight: number;           // Base row height in pixels
@@ -116,7 +114,7 @@ export const DEFAULT_GRID_CONFIG: GridConfig = {
   isResizable: true,
   draggableHandle: ".panel-drag-handle",
   resizeHandles: ["se", "e", "s"],
-  compactType: "vertical",
+  compactType: "horizontal",
   preventCollision: false,
 };
 
