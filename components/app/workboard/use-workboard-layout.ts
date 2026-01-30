@@ -36,7 +36,7 @@ interface UseWorkboardLayoutReturn {
 // Constants
 // =============================================
 
-const CURRENT_VERSION = 1; // Increment when layout structure changes
+const CURRENT_VERSION = 2; // Increment when layout structure changes
 
 // =============================================
 // Hook

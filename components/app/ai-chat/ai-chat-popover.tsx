@@ -33,10 +33,11 @@ export function AIChatPopover() {
   const [inputValue, setInputValue] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages arrive (container-scoped, not page)
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    const container = messagesEndRef.current?.parentElement;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
     }
   }, [messages]);
 
