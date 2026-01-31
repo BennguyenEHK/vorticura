@@ -30,6 +30,16 @@ export interface PanelConfig {
 }
 
 // =============================================
+// Hidden Panel Types (for toggle visibility)
+// =============================================
+
+/** Stored info for a hidden panel - preserves layout position for restoration */
+export interface HiddenPanelInfo {
+  layout: LayoutItem;          // Saved position/size before hiding
+  config: PanelConfig;         // Saved panel configuration
+}
+
+// =============================================
 // Layout Types (react-grid-layout compatible)
 // =============================================
 
@@ -69,6 +79,7 @@ export interface WorkboardState {
   activePanel: string | null;  // Currently focused panel ID
   breakpoint: string;          // Current responsive breakpoint
   isDraggingOver: boolean;     // AI Chat FAB is being dragged over
+  hiddenPanels: Map<string, HiddenPanelInfo>; // Panels hidden via toggle (preserves position)
 }
 
 /** Workboard context actions */
@@ -83,6 +94,8 @@ export interface WorkboardActions {
   setDraggingOver: (dragging: boolean) => void; // Set drag over state
   resetLayout: () => void;                      // Reset to default layout
   saveLayout: () => void;                       // Save layout to localStorage
+  togglePanelVisibility: (id: string) => void;  // Toggle panel hide/show (preserves position)
+  isPanelVisible: (id: string) => boolean;      // Check if panel is currently visible
 }
 
 /** Combined workboard context type */

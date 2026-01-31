@@ -20,6 +20,7 @@ import type {
   LayoutItem,
   PanelConfig,
   PanelType,
+  HiddenPanelInfo,
 } from "@/types/workboard";
 import {
   DEFAULT_LAYOUT_3_PANELS,
@@ -47,6 +48,7 @@ const initialState: WorkboardState = {
   activePanel: null,
   breakpoint: "lg",
   isDraggingOver: false,
+  hiddenPanels: new Map<string, HiddenPanelInfo>(), // Track hidden panels with their saved positions
 };
 
 // =============================================
@@ -227,6 +229,62 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
     }
   }, [state.layout, state.panels]);
 
+  /** Toggle panel visibility - hide/show panel while preserving its position */
+  const togglePanelVisibility = useCallback((id: string) => {
+    setState((prev) => {
+      // Check if panel is currently visible
+      const isVisible = prev.panels.some((p) => p.id === id);
+
+      if (isVisible) {
+        // HIDE: Save current layout position and config, then remove from active panels
+        const layoutItem = prev.layout.find((l) => l.i === id);
+        const panelConfig = prev.panels.find((p) => p.id === id);
+
+        // Guard: Only proceed if both exist
+        if (!layoutItem || !panelConfig) return prev;
+
+        // Create new hidden panels map with this panel added
+        const newHiddenPanels = new Map(prev.hiddenPanels);
+        newHiddenPanels.set(id, {
+          layout: { ...layoutItem },    // Clone to preserve original position
+          config: { ...panelConfig },   // Clone to preserve original config
+        });
+
+        return {
+          ...prev,
+          layout: prev.layout.filter((l) => l.i !== id),   // Remove from layout
+          panels: prev.panels.filter((p) => p.id !== id),  // Remove from panels
+          hiddenPanels: newHiddenPanels,
+        };
+      } else {
+        // SHOW: Restore panel from hidden state at its original position
+        const savedInfo = prev.hiddenPanels.get(id);
+
+        // Guard: Only proceed if we have saved info
+        if (!savedInfo) return prev;
+
+        // Create new hidden panels map with this panel removed
+        const newHiddenPanels = new Map(prev.hiddenPanels);
+        newHiddenPanels.delete(id);
+
+        return {
+          ...prev,
+          layout: [...prev.layout, savedInfo.layout],   // Restore to layout
+          panels: [...prev.panels, savedInfo.config],   // Restore to panels
+          hiddenPanels: newHiddenPanels,
+        };
+      }
+    });
+  }, []);
+
+  /** Check if a panel is currently visible (not hidden) */
+  const isPanelVisible = useCallback(
+    (id: string) => {
+      return state.panels.some((p) => p.id === id);
+    },
+    [state.panels]
+  );
+
   // Auto-save layout when it changes
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -252,6 +310,8 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
     setDraggingOver,
     resetLayout,
     saveLayout,
+    togglePanelVisibility,  // Toggle panel hide/show
+    isPanelVisible,         // Check panel visibility
   };
 
   return (

@@ -1,7 +1,7 @@
 # QuoteFlow AI - Project Structure
 
-> **Last Updated:** January 30, 2026
-> **Version:** 5.3 (react-grid-layout + Custom Auto-Fill)
+> **Last Updated:** January 31, 2026
+> **Version:** 5.4 (Panel Toggle Buttons)
 
 ## Overview
 
@@ -326,7 +326,7 @@ The sidebar has been redesigned with the following sections:
 | **Documents** | Storage, Upload | File management |
 | **System** | Settings, Pipeline View | Configuration & visualization |
 
-### Workboard Panel System (v5.3)
+### Workboard Panel System (v5.4)
 
 The workspace now uses a dynamic panel system powered by `react-grid-layout` with custom auto-fill:
 
@@ -339,6 +339,23 @@ The workspace now uses a dynamic panel system powered by `react-grid-layout` wit
 | **Lock/Unlock** | Toggle layout editing (static mode) |
 | **React-Native** | Native React component - no sync issues |
 | **Drop Zone** | AI Chat FAB can be dropped to create docked panel |
+| **Panel Toggle** | Circular buttons to hide/show individual panels (NEW v5.4) |
+
+#### Panel Toggle Buttons (v5.4)
+
+Three circular toggle buttons in the workspace header allow users to hide/show individual panels:
+
+| Button | Icon | Panel | Behavior |
+|--------|------|-------|----------|
+| Workflow | `GitBranch` | Workflow tracker | Hide/show with position preserved |
+| Pricing | `DollarSign` | Pricing editor | Hide/show with position preserved |
+| Preview | `FileText` | Quotation preview | Hide/show with position preserved |
+
+**States:**
+- **Active (visible)**: `bg-primary text-primary-foreground` - Panel is showing
+- **Inactive (hidden)**: `bg-muted text-muted-foreground` - Panel is hidden
+
+**Position Preservation:** When a panel is hidden, its layout position and size are saved. When shown again, the panel restores to its exact previous position.
 
 > **Note:** Migrated back from Gridstack.js due to race conditions with React's rendering model (see Grid.md for analysis).
 
@@ -362,7 +379,7 @@ Floating AI Chat button with drag & drop integration:
 
 **New Types Added:**
 - `types/ai-chat.ts` - Message, Position, ChatState types
-- `types/workboard.ts` - Layout, PanelConfig, GridConfig types
+- `types/workboard.ts` - Layout, PanelConfig, GridConfig, HiddenPanelInfo types
 
 **Dependencies Used:**
 - `react-grid-layout` (v2.2+) - Panel resize/reposition with custom auto-fill

@@ -8,7 +8,7 @@
 "use client";
 
 import { use } from "react";
-import { Lock, Unlock, RotateCcw } from "lucide-react";
+import { Lock, Unlock, RotateCcw, GitBranch, DollarSign, FileText } from "lucide-react";
 import { WorkboardGrid, useWorkboard } from "@/components/app/workboard";
 import { Button } from "@/components/ui/button";
 
@@ -23,15 +23,27 @@ interface WorkspacePageProps {
 }
 
 // =============================================
+// Panel Toggle Configuration
+// =============================================
+
+/** Config for panel toggle buttons - maps panel id to icon */
+const PANEL_TOGGLES = [
+  { id: "workflow", icon: GitBranch, label: "Workflow" },
+  { id: "pricing", icon: DollarSign, label: "Pricing" },
+  { id: "preview", icon: FileText, label: "Preview" },
+] as const;
+
+// =============================================
 // Workspace Header Component
 // =============================================
 
 /**
  * WorkspaceHeader - Header with title and layout controls
+ * Includes panel toggle buttons for hiding/showing individual panels
  */
 function WorkspaceHeader({ quotationId }: { quotationId: string }) {
-  // Get workboard state and actions
-  const { isLocked, setLocked, resetLayout } = useWorkboard();
+  // Get workboard state and actions (including panel visibility controls)
+  const { isLocked, setLocked, resetLayout, togglePanelVisibility, isPanelVisible } = useWorkboard();
 
   return (
     <div className="flex items-center justify-between mb-6">
@@ -47,6 +59,33 @@ function WorkspaceHeader({ quotationId }: { quotationId: string }) {
 
       {/* Layout controls */}
       <div className="flex items-center gap-2">
+        {/* Panel toggle buttons - circular buttons to hide/show panels */}
+        {PANEL_TOGGLES.map(({ id, icon: Icon, label }) => {
+          const isVisible = isPanelVisible(id);
+          return (
+            <Button
+              key={id}
+              variant="ghost"
+              size="icon"
+              onClick={() => togglePanelVisibility(id)}
+              className={`
+                h-9 w-9 rounded-full border transition-all duration-200
+                ${isVisible
+                  ? "bg-primary text-primary-foreground border-primary hover:bg-primary-hover"
+                  : "bg-muted text-muted-foreground border-border hover:bg-secondary"
+                }
+              `}
+              aria-label={`${isVisible ? "Hide" : "Show"} ${label} panel`}
+              title={`${isVisible ? "Hide" : "Show"} ${label}`}
+            >
+              <Icon className="h-4 w-4" />
+            </Button>
+          );
+        })}
+
+        {/* Separator between toggles and actions */}
+        <div className="h-6 w-px bg-border mx-1" />
+
         {/* Reset layout button */}
         <Button
           variant="outline"
