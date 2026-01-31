@@ -176,14 +176,10 @@ export function PreviewPanelContent({
     setSelection({ text: selectedText, position: { top, left } });
   }, [showNotePopover]);
 
-  // Listen for text selection changes - scoped to content area only
+  // Listen for text selection changes on document level
   useEffect(() => {
-    const contentEl = contentRef.current;
-    if (!contentEl) return;
-
-    // Add listener to content element instead of document for better scoping
-    contentEl.addEventListener("mouseup", handleTextSelection);
-    return () => contentEl.removeEventListener("mouseup", handleTextSelection);
+    document.addEventListener("mouseup", handleTextSelection);
+    return () => document.removeEventListener("mouseup", handleTextSelection);
   }, [handleTextSelection]);
 
   // Focus note input when popover opens
