@@ -36,7 +36,7 @@ interface UseWorkboardLayoutReturn {
 // Constants
 // =============================================
 
-const CURRENT_VERSION = 3; // Increment when layout structure changes (v3: Gridstack migration)
+const CURRENT_VERSION = 4; // Increment when layout structure changes (v4: react-grid-layout + auto-fill)
 
 // =============================================
 // Hook

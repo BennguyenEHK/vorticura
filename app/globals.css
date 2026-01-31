@@ -393,48 +393,29 @@
 }
 
 /* =============================================
- * GRIDSTACK CUSTOM STYLES
+ * REACT-GRID-LAYOUT CUSTOM STYLES
  * ============================================= */
 
-/* Reset Gridstack default background */
-.grid-stack {
+/* Workboard grid styling - uses design tokens */
+.workboard-grid {
   background: transparent;
   min-height: 100%;
 }
 
-/* Grid item styling */
-.grid-stack-item {
+/* Resize handle styling for react-grid-layout */
+.react-grid-item > .react-resizable-handle {
   background: transparent;
 }
 
-.grid-stack-item-content {
-  background: transparent;
-  overflow: visible;
-  inset: 0;
-}
-
-/* Placeholder when dragging */
-.grid-stack-placeholder > .placeholder-content {
-  background-color: var(--brand-muted);
-  border: 2px dashed var(--brand);
-  border-radius: var(--radius);
-  opacity: 0.5;
-}
-
-/* Resize handles styling */
-.grid-stack > .grid-stack-item > .ui-resizable-handle {
-  background: transparent;
-}
-
-.grid-stack > .grid-stack-item > .ui-resizable-se {
-  background: transparent;
+/* SE corner resize handle */
+.react-grid-item > .react-resizable-handle-se {
   width: 20px;
   height: 20px;
   bottom: 4px;
   right: 4px;
 }
 
-.grid-stack > .grid-stack-item > .ui-resizable-se::after {
+.react-grid-item > .react-resizable-handle-se::after {
   content: "";
   position: absolute;
   right: 4px;
@@ -447,19 +428,27 @@
   transition: opacity 0.2s;
 }
 
-.grid-stack > .grid-stack-item:hover > .ui-resizable-se::after {
+.react-grid-item:hover > .react-resizable-handle-se::after {
   opacity: 1;
   border-color: var(--brand);
 }
 
-/* Dragging state */
-.grid-stack > .grid-stack-item.ui-draggable-dragging {
+/* Dragging state for react-grid-layout */
+.react-grid-item.react-draggable-dragging {
   z-index: 100;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
 }
 
+/* Placeholder styling when dragging */
+.react-grid-placeholder {
+  background-color: var(--brand-muted);
+  border: 2px dashed var(--brand);
+  border-radius: var(--radius);
+  opacity: 0.5;
+}
+
 /* Dark mode adjustments */
-.dark .grid-stack-placeholder > .placeholder-content {
+.dark .react-grid-placeholder {
   background-color: var(--brand-muted);
   opacity: 0.3;
 }

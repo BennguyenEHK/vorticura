@@ -1,7 +1,7 @@
 # QuoteFlow AI - Project Structure
 
 > **Last Updated:** January 30, 2026
-> **Version:** 5.2 (Design Token Standardization)
+> **Version:** 5.3 (react-grid-layout + Custom Auto-Fill)
 
 ## Overview
 
@@ -112,10 +112,10 @@ quoteflow_ai/
 │   │   │   ├── ai-chat-popover.tsx ✓      # Small side chatbox (click to open)
 │   │   │   └── ai-chat-panel.tsx ✓        # Full panel (when docked to Workboard)
 │   │   │
-│   │   ├── workboard/                     # Workboard panel system (NEW v5.0)
+│   │   ├── workboard/                     # Workboard panel system (v5.3)
 │   │   │   ├── index.ts ✓                 # Barrel exports
 │   │   │   ├── workboard-provider.tsx ✓   # Context: layout state, panel configs
-│   │   │   ├── workboard-grid.tsx ✓       # Gridstack.js wrapper with React sync
+│   │   │   ├── workboard-grid.tsx ✓       # react-grid-layout with custom auto-fill
 │   │   │   ├── workboard-panel.tsx ✓      # Generic draggable/resizable panel
 │   │   │   ├── workboard-drop-zone.tsx ✓  # Drop target for AI Chat FAB
 │   │   │   ├── panel-header.tsx ✓         # Drag handle + controls (minimize, close)
@@ -214,6 +214,8 @@ quoteflow_ai/
 │   │       └── workspace-service.ts ✓     # Workspace isolation
 │   │
 │   ├── utils/                             # Helper Functions
+│   │   ├── grid-layout.ts ✓               # Custom auto-fill for react-grid-layout (NEW v5.3)
+│   │   │
 │   │   ├── formatting/
 │   │   │   ├── currency.ts
 │   │   │   ├── date.ts
@@ -324,19 +326,21 @@ The sidebar has been redesigned with the following sections:
 | **Documents** | Storage, Upload | File management |
 | **System** | Settings, Pipeline View | Configuration & visualization |
 
-### Workboard Panel System (v5.1)
+### Workboard Panel System (v5.3)
 
-The workspace now uses a dynamic panel system powered by `Gridstack.js` (v12+):
+The workspace now uses a dynamic panel system powered by `react-grid-layout` with custom auto-fill:
 
 | Feature | Description |
 |---------|-------------|
-| **Resize** | Drag panel edges (e, se, s, sw, w handles) to resize |
+| **Resize** | Drag panel edges (se, e, s handles) to resize |
 | **Reposition** | Drag panel headers to swap positions |
-| **Auto-Pack** | Panels auto-fill available space (float: false) |
+| **Custom Auto-Fill** | Panels expand to fill horizontal gaps (lib/utils/grid-layout.ts) |
 | **Persistence** | Layout saved to localStorage with versioning |
-| **Lock/Unlock** | Toggle layout editing (staticGrid mode) |
-| **React Sync** | Dynamic panel add/remove with Gridstack sync |
+| **Lock/Unlock** | Toggle layout editing (static mode) |
+| **React-Native** | Native React component - no sync issues |
 | **Drop Zone** | AI Chat FAB can be dropped to create docked panel |
+
+> **Note:** Migrated back from Gridstack.js due to race conditions with React's rendering model (see Grid.md for analysis).
 
 ### AI Chat FAB System (v5.0)
 
@@ -360,10 +364,13 @@ Floating AI Chat button with drag & drop integration:
 - `types/ai-chat.ts` - Message, Position, ChatState types
 - `types/workboard.ts` - Layout, PanelConfig, GridConfig types
 
-**Dependencies Added:**
-- `gridstack` (v12+) - Panel resize/reposition with auto-fill
+**Dependencies Used:**
+- `react-grid-layout` (v2.2+) - Panel resize/reposition with custom auto-fill
 - `@dnd-kit/core` - Drag & drop for FAB
 - `@dnd-kit/utilities` - DnD utilities
+
+**Removed Dependencies:**
+- `gridstack` - Removed due to React sync issues (see Grid.md)
 
 ### Provider Hierarchy
 

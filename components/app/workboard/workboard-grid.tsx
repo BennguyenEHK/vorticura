@@ -1,25 +1,31 @@
 "use client";
 
 // =============================================
-// Workboard Grid (Gridstack.js)
+// Workboard Grid (react-grid-layout + Auto-Fill)
 // =============================================
-// Main grid layout component using Gridstack.js
-// Enables drag-to-resize, drag-to-reposition, and auto-fill
-// Includes React-Gridstack synchronization for dynamic panels
+// Main grid layout component using react-grid-layout
+// Enables drag-to-resize, drag-to-reposition with custom auto-fill
+// Migrated back from Gridstack to fix race conditions (see Grid.md)
 
-import { useEffect, useRef, useCallback } from "react";
-import { GridStack, GridStackNode } from "gridstack";
-import "gridstack/dist/gridstack.min.css";
+import { useMemo, useCallback, useRef, useEffect } from "react";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const ReactGridLayout = require("react-grid-layout");
+const { WidthProvider } = ReactGridLayout;
+import "react-grid-layout/css/styles.css";
 import { useWorkboard } from "./workboard-provider";
 import { WorkboardPanel } from "./workboard-panel";
 import { WorkboardDropZone } from "./workboard-drop-zone";
-import { DEFAULT_GRID_CONFIG } from "@/types/workboard";
+import { DEFAULT_GRID_CONFIG, type LayoutItem } from "@/types/workboard";
+import { compactAndFill } from "@/lib/utils/grid-layout";
 
 // Panel content components
 import { WorkflowPanelContent } from "./panels/workflow-panel-content";
 import { PricingPanelContent } from "./panels/pricing-panel-content";
 import { PreviewPanelContent } from "./panels/preview-panel-content";
 import { AIChatPanel } from "../ai-chat/ai-chat-panel";
+
+// Create width-aware GridLayout using WidthProvider HOC
+const GridLayout = WidthProvider(ReactGridLayout);
 
 // =============================================
 // Grid Component
@@ -31,39 +37,83 @@ interface WorkboardGridProps {
 
 /**
  * WorkboardGrid - Main grid layout for workboard panels
+ *
  * Features:
  * - Drag edges to resize panels
  * - Drag headers to reposition panels
  * - Drop zone for AI Chat FAB
- * - Auto-fill available space
- * - React-Gridstack state synchronization
+ * - Custom auto-fill to expand panels into empty gaps
+ * - React-native implementation (no sync issues like Gridstack)
  */
 export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
-  // =============================================
-  // Refs for Gridstack instance management
-  // =============================================
-  const gridRef = useRef<HTMLDivElement>(null);
-  const gridInstanceRef = useRef<GridStack | null>(null);
-  const isInitializedRef = useRef(false);
-  // Track previous panels to detect additions/removals
-  const prevPanelsRef = useRef<string[]>([]);
-  // Flag to prevent layout update loops during sync
-  const isSyncingRef = useRef(false);
-  // Track timeout ID for cleanup to prevent memory leaks
-  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  // Track requestAnimationFrame ID for deferred panel registration
-  const rafIdRef = useRef<number | null>(null);
+  // Track if this is the initial render to skip auto-fill
+  const isInitialRenderRef = useRef(true);
+
+  // Track previous panel count for detecting additions/removals
+  const prevPanelCountRef = useRef<number>(0);
 
   // Get workboard state and actions from context
   const { layout, panels, isLocked, updateLayout, setActivePanel } =
     useWorkboard();
 
   // =============================================
+  // Auto-Fill Effect
+  // =============================================
+
+  /**
+   * Apply auto-fill when panels are removed
+   * This fills horizontal gaps left by removed panels
+   */
+  useEffect(() => {
+    // Skip on initial render
+    if (isInitialRenderRef.current) {
+      isInitialRenderRef.current = false;
+      prevPanelCountRef.current = panels.length;
+      return;
+    }
+
+    // Detect if a panel was removed (count decreased)
+    const panelRemoved = panels.length < prevPanelCountRef.current;
+    prevPanelCountRef.current = panels.length;
+
+    // Run auto-fill when a panel is removed
+    if (panelRemoved && layout.length > 0) {
+      const filledLayout = compactAndFill(layout, DEFAULT_GRID_CONFIG.cols);
+
+      // Only update if layout actually changed
+      const hasChanged = filledLayout.some((item) => {
+        const orig = layout.find((l) => l.i === item.i);
+        return orig && (orig.w !== item.w || orig.x !== item.x);
+      });
+
+      if (hasChanged) {
+        updateLayout(filledLayout);
+      }
+    }
+  }, [panels.length, layout, updateLayout]);
+
+  // =============================================
+  // Layout Change Handler
+  // =============================================
+
+  /**
+   * Handle layout change from react-grid-layout
+   * Called when user drags or resizes panels
+   */
+  const handleLayoutChange = useCallback(
+    (newLayout: LayoutItem[]) => {
+      // Update state with new layout
+      updateLayout(newLayout);
+    },
+    [updateLayout]
+  );
+
+  // =============================================
   // Panel Content Resolver
   // =============================================
 
   /**
-   * Get the content component for a panel type
+   * Get content component for panel type
    * Maps panel.type to the corresponding React component
    */
   const getPanelContent = useCallback(
@@ -82,7 +132,7 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
           return <PreviewPanelContent />;
         default:
           return (
-            <div className="p-4 text-muted-foreground">
+            <div className="flex h-full items-center justify-center p-4 text-muted-foreground">
               Unknown panel type: {panel.type}
             </div>
           );
@@ -92,283 +142,21 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
   );
 
   // =============================================
-  // Initialize Gridstack (runs once on mount)
+  // Memoized Layout for Grid
   // =============================================
 
-  useEffect(() => {
-    // Skip if already initialized or no container
-    if (!gridRef.current || isInitializedRef.current) return;
-
-    // Initialize Gridstack with centralized config from types/workboard.ts
-    const grid = GridStack.init(
-      {
-        column: DEFAULT_GRID_CONFIG.column,           // 12-column grid
-        cellHeight: DEFAULT_GRID_CONFIG.cellHeight,   // 100px per row unit
-        margin: DEFAULT_GRID_CONFIG.margin,           // Gap between panels
-        float: DEFAULT_GRID_CONFIG.float,             // Auto-pack panels
-        animate: DEFAULT_GRID_CONFIG.animate,         // Smooth animations
-        draggable: {
-          handle: DEFAULT_GRID_CONFIG.draggableHandle, // Drag by header
-        },
-        resizable: {
-          handles: DEFAULT_GRID_CONFIG.resizeHandles, // Resize from edges
-        },
-        staticGrid: isLocked,                         // Lock state from context
-      },
-      gridRef.current
-    );
-
-    // Store grid instance for later use
-    gridInstanceRef.current = grid;
-    isInitializedRef.current = true;
-    // Initialize panel tracking
-    prevPanelsRef.current = panels.map((p) => p.id);
-
-    // =============================================
-    // Handle Gridstack layout changes (user drag/resize)
-    // =============================================
-    grid.on("change", (_event: Event, items: GridStackNode[]) => {
-      // Skip if we're syncing from React state (prevent loops)
-      if (isSyncingRef.current) return;
-
-      if (items && items.length > 0) {
-        // Convert Gridstack format to our layout format
-        const newLayout = items.map((item) => ({
-          i: item.id || "",
-          x: item.x || 0,
-          y: item.y || 0,
-          w: item.w || 1,
-          h: item.h || 1,
-          minW: item.minW,
-          minH: item.minH,
-        }));
-        // Update React state with new positions
-        updateLayout(newLayout);
-      }
-    });
-
-    // Cleanup on unmount
-    return () => {
-      // Clear any pending timeout to prevent memory leaks
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current);
-      }
-      // Cancel any pending animation frame
-      if (rafIdRef.current) {
-        cancelAnimationFrame(rafIdRef.current);
-      }
-      // Destroy Gridstack instance
-      if (gridInstanceRef.current) {
-        gridInstanceRef.current.destroy(false);
-        gridInstanceRef.current = null;
-        isInitializedRef.current = false;
-      }
-    };
-  }, []); // Empty deps - only run once on mount
-
-  // =============================================
-  // Sync locked state with Gridstack
-  // =============================================
-
-  useEffect(() => {
-    if (gridInstanceRef.current) {
-      // Toggle static mode (disables drag/resize when locked)
-      gridInstanceRef.current.setStatic(isLocked);
-    }
-  }, [isLocked]);
-
-  // =============================================
-  // CRITICAL: Unified sync effect for panels and layout
-  // Combines panel registration and layout positioning
-  // Uses requestAnimationFrame to ensure DOM is painted before registration
-  // =============================================
-
-  useEffect(() => {
-    const grid = gridInstanceRef.current;
-    if (!grid || !isInitializedRef.current) return;
-
-    // Get current panel IDs
-    const currentPanelIds = panels.map((p) => p.id);
-    const prevPanelIds = prevPanelsRef.current;
-
-    // Find newly added panels
-    const addedPanelIds = currentPanelIds.filter(
-      (id) => !prevPanelIds.includes(id)
-    );
-
-    // Find removed panels
-    const removedPanelIds = prevPanelIds.filter(
-      (id) => !currentPanelIds.includes(id)
-    );
-
-    // Update tracking ref immediately to prevent duplicate processing
-    prevPanelsRef.current = currentPanelIds;
-
-    // =========================================
-    // STEP 1: Handle removals synchronously
-    // Removed panels can be processed immediately
-    // =========================================
-    if (removedPanelIds.length > 0) {
-      isSyncingRef.current = true;
-      grid.batchUpdate(true);
-
-      removedPanelIds.forEach((panelId) => {
-        const existingItems = grid.getGridItems();
-        const elementToRemove = existingItems.find(
-          (el) => el.getAttribute("gs-id") === panelId
-        );
-
-        if (elementToRemove) {
-          grid.removeWidget(elementToRemove);
-        }
-      });
-
-      grid.batchUpdate(false);
-    }
-
-    // =========================================
-    // STEP 2: Handle additions with requestAnimationFrame
-    // Defer registration until browser has painted the DOM
-    // This fixes the race condition when docking AI Chat
-    // =========================================
-    if (addedPanelIds.length > 0) {
-      // Cancel any pending registration
-      if (rafIdRef.current) {
-        cancelAnimationFrame(rafIdRef.current);
-      }
-
-      // Use double-RAF to ensure DOM is fully painted
-      // First RAF: scheduled after current paint
-      // Second RAF: ensures layout is complete
-      rafIdRef.current = requestAnimationFrame(() => {
-        rafIdRef.current = requestAnimationFrame(() => {
-          const currentGrid = gridInstanceRef.current;
-          if (!currentGrid || !isInitializedRef.current) return;
-
-          isSyncingRef.current = true;
-          currentGrid.batchUpdate(true);
-
-          // Register new panels
-          addedPanelIds.forEach((panelId) => {
-            const element = gridRef.current?.querySelector(
-              `[gs-id="${panelId}"]`
-            ) as HTMLElement;
-
-            const layoutItem = layout.find((l) => l.i === panelId);
-
-            if (element && layoutItem) {
-              const existingItems = currentGrid.getGridItems();
-              const isAlreadyTracked = existingItems.some(
-                (el) => el.getAttribute("gs-id") === panelId
-              );
-
-              if (!isAlreadyTracked) {
-                // Register existing DOM element as Gridstack widget
-                currentGrid.makeWidget(element, {
-                  id: panelId,
-                  x: layoutItem.x,
-                  y: layoutItem.y,
-                  w: layoutItem.w,
-                  h: layoutItem.h,
-                  minW: layoutItem.minW ?? 2,
-                  minH: layoutItem.minH ?? 1,
-                });
-              }
-            }
-          });
-
-          // Update positions for all panels after registration
-          layout.forEach((item) => {
-            const element = gridRef.current?.querySelector(
-              `[gs-id="${item.i}"]`
-            ) as HTMLElement;
-
-            if (element) {
-              currentGrid.update(element, {
-                x: item.x,
-                y: item.y,
-                w: item.w,
-                h: item.h,
-              });
-            }
-          });
-
-          currentGrid.batchUpdate(false);
-
-          // Clear sync flag after updates settle
-          if (syncTimeoutRef.current) {
-            clearTimeout(syncTimeoutRef.current);
-          }
-          syncTimeoutRef.current = setTimeout(() => {
-            isSyncingRef.current = false;
-          }, 100);
-        });
-      });
-    } else if (removedPanelIds.length === 0) {
-      // =========================================
-      // STEP 3: Handle layout-only updates (no additions/removals)
-      // Update existing panel positions synchronously
-      // =========================================
-      isSyncingRef.current = true;
-      grid.batchUpdate(true);
-
-      layout.forEach((item) => {
-        const element = gridRef.current?.querySelector(
-          `[gs-id="${item.i}"]`
-        ) as HTMLElement;
-
-        if (element) {
-          grid.update(element, {
-            x: item.x,
-            y: item.y,
-            w: item.w,
-            h: item.h,
-          });
-        }
-      });
-
-      grid.batchUpdate(false);
-
-      // Clear sync flag after a tick
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current);
-      }
-      syncTimeoutRef.current = setTimeout(() => {
-        isSyncingRef.current = false;
-      }, 100);
-    } else {
-      // Removals happened, clear sync flag
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current);
-      }
-      syncTimeoutRef.current = setTimeout(() => {
-        isSyncingRef.current = false;
-      }, 100);
-    }
-  }, [panels, layout]);
-
-  // =============================================
-  // Prepare items for rendering
-  // =============================================
-
-  const getGridstackItems = () => {
-    return panels.map((panel) => {
-      // Find layout position for this panel
-      const layoutItem = layout.find((l) => l.i === panel.id);
-      return {
-        id: panel.id,
-        x: layoutItem?.x ?? 0,
-        y: layoutItem?.y ?? 0,
-        w: layoutItem?.w ?? 6,
-        h: layoutItem?.h ?? 3,
-        minW: layoutItem?.minW ?? 2,
-        minH: layoutItem?.minH ?? 1,
-        panel,
-      };
-    });
-  };
-
-  const items = getGridstackItems();
+  /**
+   * Prepare layout items with lock state applied
+   * Converts our LayoutItem format to react-grid-layout format
+   */
+  const gridLayout = useMemo(
+    () =>
+      layout.map((item) => ({
+        ...item,
+        static: isLocked, // Lock all panels when layout is locked
+      })),
+    [layout, isLocked]
+  );
 
   // =============================================
   // Render
@@ -376,36 +164,43 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
 
   return (
     <WorkboardDropZone className={className}>
-      {/* Gridstack container */}
-      <div ref={gridRef} className="grid-stack w-full">
-        {items.map((item) => (
+      {/* WidthProvider handles width measurement automatically */}
+      <GridLayout
+        className="workboard-grid"
+        layout={gridLayout}
+        cols={DEFAULT_GRID_CONFIG.cols}
+        rowHeight={DEFAULT_GRID_CONFIG.rowHeight}
+        margin={DEFAULT_GRID_CONFIG.margin}
+        containerPadding={DEFAULT_GRID_CONFIG.containerPadding}
+        isDraggable={!isLocked && DEFAULT_GRID_CONFIG.isDraggable}
+        isResizable={!isLocked && DEFAULT_GRID_CONFIG.isResizable}
+        draggableHandle={DEFAULT_GRID_CONFIG.draggableHandle}
+        resizeHandles={DEFAULT_GRID_CONFIG.resizeHandles}
+        compactType={DEFAULT_GRID_CONFIG.compactType}
+        preventCollision={DEFAULT_GRID_CONFIG.preventCollision}
+        onLayoutChange={handleLayoutChange}
+        useCSSTransforms={true}
+        measureBeforeMount={false}
+      >
+        {/* Render each panel */}
+        {panels.map((panel) => (
           <div
-            key={item.id}
-            className="grid-stack-item"
-            gs-id={item.id}
-            gs-x={item.x}
-            gs-y={item.y}
-            gs-w={item.w}
-            gs-h={item.h}
-            gs-min-w={item.minW}
-            gs-min-h={item.minH}
-            onClick={() => setActivePanel(item.id)}
+            key={panel.id}
+            onClick={() => setActivePanel(panel.id)}
+            className="h-full"
           >
-            {/* Gridstack item content wrapper */}
-            <div className="grid-stack-item-content h-full">
-              <WorkboardPanel
-                id={item.panel.id}
-                title={item.panel.title}
-                icon={item.panel.icon}
-                isMinimized={item.panel.isMinimized}
-                isClosable={item.panel.isClosable}
-              >
-                {getPanelContent(item.id)}
-              </WorkboardPanel>
-            </div>
+            <WorkboardPanel
+              id={panel.id}
+              title={panel.title}
+              icon={panel.icon}
+              isMinimized={panel.isMinimized}
+              isClosable={panel.isClosable}
+            >
+              {getPanelContent(panel.id)}
+            </WorkboardPanel>
           </div>
         ))}
-      </div>
+      </GridLayout>
     </WorkboardDropZone>
   );
 }

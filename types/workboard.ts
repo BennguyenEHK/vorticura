@@ -2,7 +2,9 @@
 // Workboard Type Definitions
 // =============================================
 // Types for the dynamic, resizable panel grid system
-// Uses Gridstack.js for panel management with auto-fill
+// Uses react-grid-layout with custom auto-fill for gap filling
+
+import type { Layout as RGLLayout } from "react-grid-layout";
 
 // =============================================
 // Panel Types
@@ -28,10 +30,10 @@ export interface PanelConfig {
 }
 
 // =============================================
-// Layout Types (Gridstack compatible)
+// Layout Types (react-grid-layout compatible)
 // =============================================
 
-/** Single layout item for Gridstack */
+/** Single layout item for react-grid-layout */
 export interface LayoutItem {
   i: string;                   // Panel ID (matches PanelConfig.id)
   x: number;                   // Grid column (0-11 in 12-col grid)
@@ -90,26 +92,32 @@ export interface WorkboardContextType extends WorkboardState, WorkboardActions {
 // Grid Configuration
 // =============================================
 
-/** Gridstack configuration (compatible with Gridstack.js v12+) */
+/** react-grid-layout configuration */
 export interface GridConfig {
-  column: number;              // Number of columns (default: 12)
-  cellHeight: number;          // Cell height in pixels (row height)
-  margin: number;              // Gap between panels in pixels (Gridstack uses single number)
-  float: boolean;              // Allow floating items (false = auto-pack)
-  animate: boolean;            // Enable animations during drag/resize
+  cols: number;                // Number of columns (default: 12)
+  rowHeight: number;           // Base row height in pixels
+  margin: [number, number];    // Gap between panels [x, y]
+  containerPadding: [number, number]; // Outer padding [x, y]
+  isDraggable: boolean;        // Enable drag globally
+  isResizable: boolean;        // Enable resize globally
   draggableHandle: string;     // CSS selector for drag handle
-  resizeHandles: string;       // Resize handles ("e, se, s, sw, w")
+  resizeHandles: Array<"s" | "w" | "e" | "n" | "sw" | "nw" | "se" | "ne">;
+  compactType: "vertical" | "horizontal" | null; // Auto-pack direction
+  preventCollision: boolean;   // Prevent overlap during drag
 }
 
-/** Default grid configuration for Gridstack.js */
+/** Default grid configuration for react-grid-layout */
 export const DEFAULT_GRID_CONFIG: GridConfig = {
-  column: 12,                  // 12-column grid layout
-  cellHeight: 100,             // 100px per row unit
-  margin: 12,                  // 12px gap between panels (better for grab)
-  float: false,                // Auto-pack panels (no floating)
-  animate: true,               // Smooth animations
-  draggableHandle: ".panel-drag-handle",  // Drag by panel header
-  resizeHandles: "e, se, s, sw, w",       // All side handles for resize
+  cols: 12,
+  rowHeight: 100,
+  margin: [16, 16],
+  containerPadding: [0, 0],
+  isDraggable: true,
+  isResizable: true,
+  draggableHandle: ".panel-drag-handle",
+  resizeHandles: ["se", "e", "s"],
+  compactType: "vertical",
+  preventCollision: false,
 };
 
 // =============================================
@@ -138,17 +146,17 @@ export const COLS = {
 
 /** Default 3-panel layout (before AI Chat drop) */
 export const DEFAULT_LAYOUT_3_PANELS: LayoutItem[] = [
-  { i: "workflow", x: 6, y: 0, w: 6, h: 3, minW: 3, minH: 1 },
-  { i: "pricing",  x: 6, y: 3, w: 6, h: 6, minW: 3, minH: 1 },
-  { i: "preview",  x: 0, y: 0, w: 6, h: 9, minW: 3, minH: 1 },
+  { i: "workflow", x: 6, y: 0, w: 6, h: 2, minW: 3, minH: 1 },
+  { i: "pricing",  x: 6, y: 2, w: 6, h: 5, minW: 3, minH: 1 },
+  { i: "preview",  x: 0, y: 0, w: 6, h: 7, minW: 3, minH: 1 },
 ];
 
 /** Default 4-panel layout (after AI Chat drop) */
 export const DEFAULT_LAYOUT_4_PANELS: LayoutItem[] = [
-  { i: "chat",     x: 6, y: 0, w: 6, h: 3, minW: 3, minH: 1 },
-  { i: "workflow", x: 6, y: 3, w: 6, h: 3, minW: 3, minH: 1 },
-  { i: "pricing",  x: 6, y: 6, w: 6, h: 4, minW: 3, minH: 1 },
-  { i: "preview",  x: 0, y: 0, w: 6, h: 10, minW: 3, minH: 1 },
+  { i: "chat",     x: 6, y: 0, w: 6, h: 2, minW: 3, minH: 1 },
+  { i: "workflow", x: 6, y: 2, w: 6, h: 2, minW: 3, minH: 1 },
+  { i: "pricing",  x: 6, y: 4, w: 6, h: 3, minW: 3, minH: 1 },
+  { i: "preview",  x: 0, y: 0, w: 6, h: 7, minW: 3, minH: 1 },
 ];
 
 /** Stacked layout for mobile (vertical stack) */
