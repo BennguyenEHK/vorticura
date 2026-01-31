@@ -17,6 +17,3 @@ export { WorkboardDropZone } from "./workboard-drop-zone";
 
 // Panel header with drag handle and controls
 export { PanelHeader } from "./panel-header";
-
-// Hook for persisting layout to localStorage
-export { useWorkboardLayout } from "./use-workboard-layout";
