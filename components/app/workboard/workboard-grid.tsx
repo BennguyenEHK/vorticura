@@ -8,9 +8,7 @@
 // Migrated back from Gridstack to fix race conditions (see Grid.md)
 
 import { useMemo, useCallback, useRef, useEffect } from "react";
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const ReactGridLayout = require("react-grid-layout");
-const { WidthProvider } = ReactGridLayout;
+import { useContainerWidth, GridLayout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import { useWorkboard } from "./workboard-provider";
 import { WorkboardPanel } from "./workboard-panel";
@@ -23,9 +21,6 @@ import { WorkflowPanelContent } from "./panels/workflow-panel-content";
 import { PricingPanelContent } from "./panels/pricing-panel-content";
 import { PreviewPanelContent } from "./panels/preview-panel-content";
 import { AIChatPanel } from "../ai-chat/ai-chat-panel";
-
-// Create width-aware GridLayout using WidthProvider HOC
-const GridLayout = WidthProvider(ReactGridLayout);
 
 // =============================================
 // Grid Component
@@ -46,6 +41,9 @@ interface WorkboardGridProps {
  * - React-native implementation (no sync issues like Gridstack)
  */
 export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
+  // Use built-in hook for container width measurement
+  const { width, containerRef, mounted } = useContainerWidth();
+
   // Track if this is the initial render to skip auto-fill
   const isInitialRenderRef = useRef(true);
 
@@ -164,43 +162,48 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
 
   return (
     <WorkboardDropZone className={className}>
-      {/* WidthProvider handles width measurement automatically */}
-      <GridLayout
-        className="workboard-grid"
-        layout={gridLayout}
-        cols={DEFAULT_GRID_CONFIG.cols}
-        rowHeight={DEFAULT_GRID_CONFIG.rowHeight}
-        margin={DEFAULT_GRID_CONFIG.margin}
-        containerPadding={DEFAULT_GRID_CONFIG.containerPadding}
-        isDraggable={!isLocked && DEFAULT_GRID_CONFIG.isDraggable}
-        isResizable={!isLocked && DEFAULT_GRID_CONFIG.isResizable}
-        draggableHandle={DEFAULT_GRID_CONFIG.draggableHandle}
-        resizeHandles={DEFAULT_GRID_CONFIG.resizeHandles}
-        compactType={DEFAULT_GRID_CONFIG.compactType}
-        preventCollision={DEFAULT_GRID_CONFIG.preventCollision}
-        onLayoutChange={handleLayoutChange}
-        useCSSTransforms={true}
-        measureBeforeMount={false}
-      >
-        {/* Render each panel */}
-        {panels.map((panel) => (
-          <div
-            key={panel.id}
-            onClick={() => setActivePanel(panel.id)}
-            className="h-full"
+      {/* Container div with ref for width measurement */}
+      <div ref={containerRef} className="w-full">
+        {/* Only render grid when mounted and width is available */}
+        {mounted && width > 0 && (
+          <GridLayout
+            className="workboard-grid"
+            layout={gridLayout}
+            width={width}
+            cols={DEFAULT_GRID_CONFIG.cols}
+            rowHeight={DEFAULT_GRID_CONFIG.rowHeight}
+            margin={DEFAULT_GRID_CONFIG.margin}
+            containerPadding={DEFAULT_GRID_CONFIG.containerPadding}
+            isDraggable={!isLocked && DEFAULT_GRID_CONFIG.isDraggable}
+            isResizable={!isLocked && DEFAULT_GRID_CONFIG.isResizable}
+            draggableHandle={DEFAULT_GRID_CONFIG.draggableHandle}
+            resizeHandles={DEFAULT_GRID_CONFIG.resizeHandles}
+            compactType={DEFAULT_GRID_CONFIG.compactType}
+            preventCollision={DEFAULT_GRID_CONFIG.preventCollision}
+            onLayoutChange={handleLayoutChange}
+            useCSSTransforms={true}
           >
-            <WorkboardPanel
-              id={panel.id}
-              title={panel.title}
-              icon={panel.icon}
-              isMinimized={panel.isMinimized}
-              isClosable={panel.isClosable}
-            >
-              {getPanelContent(panel.id)}
-            </WorkboardPanel>
-          </div>
-        ))}
-      </GridLayout>
+            {/* Render each panel */}
+            {panels.map((panel) => (
+              <div
+                key={panel.id}
+                onClick={() => setActivePanel(panel.id)}
+                className="h-full"
+              >
+                <WorkboardPanel
+                  id={panel.id}
+                  title={panel.title}
+                  icon={panel.icon}
+                  isMinimized={panel.isMinimized}
+                  isClosable={panel.isClosable}
+                >
+                  {getPanelContent(panel.id)}
+                </WorkboardPanel>
+              </div>
+            ))}
+          </GridLayout>
+        )}
+      </div>
     </WorkboardDropZone>
   );
 }
