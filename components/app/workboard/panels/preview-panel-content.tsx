@@ -331,6 +331,7 @@ export function PreviewPanelContent({
               size="sm"
               className="h-8 gap-1.5 bg-primary text-primary-foreground shadow-lg"
               onClick={handleAddNote}
+              onMouseUp={(e) => e.stopPropagation()} // Prevent mouseup from bubbling to contentRef and clearing selection
             >
               <MessageSquarePlus className="w-3.5 h-3.5" />
               Add Note
@@ -338,7 +339,7 @@ export function PreviewPanelContent({
           </div>
         )}
 
-        {/* Note input popover */}
+        {/* Note input popover - stopPropagation prevents mouseup from interfering */}
         {showNotePopover && selection && (
           <div
             className="absolute z-20 w-64 bg-popover border border-border rounded-lg shadow-xl p-3 animate-in fade-in-0 zoom-in-95 duration-150"
@@ -346,6 +347,7 @@ export function PreviewPanelContent({
               top: Math.max(0, selection.position.top),
               left: Math.max(0, Math.min(selection.position.left, 200)),
             }}
+            onMouseUp={(e) => e.stopPropagation()} // Prevent clicks inside popover from triggering handleTextSelection
           >
             {/* Selected text preview */}
             <div className="mb-2">
@@ -364,8 +366,8 @@ export function PreviewPanelContent({
               className="w-full h-16 px-2 py-1.5 text-xs bg-card border border-border rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-placeholder"
             />
 
-            {/* Actions */}
-            <div className="flex justify-end gap-1.5 mt-2">
+            {/* Actions - stopPropagation prevents mouseup from clearing selection */}
+            <div className="flex justify-end gap-1.5 mt-2" onMouseUp={(e) => e.stopPropagation()}>
               <Button
                 variant="ghost"
                 size="sm"
