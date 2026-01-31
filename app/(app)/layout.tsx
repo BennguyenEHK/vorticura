@@ -16,6 +16,7 @@ import {
 } from "@/components/app/sidebar-provider";
 
 // Import DnD context for AI Chat FAB drag & drop
+import { useState, useEffect } from "react";
 import { DndContext, DragEndEvent, useSensor, useSensors, PointerSensor, TouchSensor } from "@dnd-kit/core";
 
 // Import AI Chat components
@@ -34,8 +35,21 @@ import { HorizontalScrollContainer } from "@/components/app/horizontal-scroll-co
 /**
  * DndHandler - Handles drag & drop events for AI Chat FAB
  * Must be inside both AIChatProvider and WorkboardProvider
+ *
+ * Note: Uses mounted state to prevent hydration mismatch.
+ * @dnd-kit generates aria-describedby IDs using a global counter that can
+ * differ between SSR and client hydration. By only rendering DndContext
+ * after mount, we ensure consistent hydration.
  */
 function DndHandler({ children }: { children: React.ReactNode }) {
+  // Track mounted state to prevent SSR hydration mismatch with @dnd-kit
+  // See: https://github.com/clauderic/dnd-kit/issues/926
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Get AI Chat actions
   const { setDocked, setDragging } = useAIChat();
 
@@ -82,6 +96,12 @@ function DndHandler({ children }: { children: React.ReactNode }) {
       addPanel("chat");
     }
   };
+
+  // Render children without DndContext during SSR/initial hydration
+  // This prevents aria-describedby mismatch between server and client
+  if (!mounted) {
+    return <>{children}</>;
+  }
 
   return (
     <DndContext
