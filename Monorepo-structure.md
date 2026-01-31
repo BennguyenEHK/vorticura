@@ -1,7 +1,7 @@
 # QuoteFlow AI - Project Structure
 
 > **Last Updated:** January 31, 2026
-> **Version:** 5.4 (Panel Toggle Buttons)
+> **Version:** 5.5 (Preview Panel Approval Workflow)
 
 ## Overview
 
@@ -125,7 +125,7 @@ quoteflow_ai/
 │   │   │       ├── index.ts ✓             # Barrel exports
 │   │   │       ├── workflow-panel-content.tsx ✓  # Workflow tracker content
 │   │   │       ├── pricing-panel-content.tsx ✓   # Pricing editor content
-│   │   │       └── preview-panel-content.tsx ✓   # Quotation preview content
+│   │   │       └── preview-panel-content.tsx ✓   # Quotation preview + approval workflow (v5.5)
 │   │   │
 │   │   ├── rfq-queue/                     # RFQ Queue components
 │   │   │   ├── index.ts ✓                 # Barrel exports
@@ -357,6 +357,31 @@ Three circular toggle buttons in the workspace header allow users to hide/show i
 
 **Position Preservation:** When a panel is hidden, its layout position and size are saved. When shown again, the panel restores to its exact previous position.
 
+#### Preview Panel Approval Workflow (v5.5)
+
+The Preview panel now includes a complete approval workflow for AI-generated content:
+
+| Section | Features |
+|---------|----------|
+| **Header** | Edit button, Revert button (↺), Download button, Version badge |
+| **Content** | Selectable text with floating "Add Note" tooltip |
+| **Footer** | Collapsible feedback section, Regenerate button, Approve button |
+
+**Inline Feedback Flow:**
+1. User selects text in preview → "Add Note" button appears above selection
+2. Click → popover opens with textarea for feedback
+3. Save → note stored with selected text reference
+4. Notes displayed in collapsible feedback section
+
+**Smart Tooltip Positioning:**
+- Tooltip appears **above** selection if enough space, otherwise **below**
+- Horizontal position clamped within container bounds
+- Only triggers for selections **inside** the content area
+
+**Action Buttons:**
+- **Regenerate** (outline): Only enabled when feedback exists, sends all notes to AI
+- **Approve** (success/green): Finalizes the content using `bg-success` token
+
 > **Note:** Migrated back from Gridstack.js due to race conditions with React's rendering model (see Grid.md for analysis).
 
 ### AI Chat FAB System (v5.0)
@@ -452,6 +477,7 @@ All styling uses design tokens from `app/globals.css`. **v5.2 standardizes all c
 | **Primary** | `bg-primary`, `text-primary-foreground`, `bg-primary-hover` | Buttons, CTAs |
 | **Brand** | `bg-brand`, `text-brand`, `bg-brand-hover`, `bg-brand-muted`, `text-brand-light`, `text-brand-dark` | Brand accent color (sky palette) |
 | **Status** | `bg-status-draft`, `bg-status-pending`, `bg-status-complete` + foreground variants | Status badges |
+| **Success** | `bg-success`, `text-success-foreground`, `bg-success-hover`, `bg-success-muted` | Approve buttons (emerald palette) |
 | **Destructive** | `bg-destructive`, `text-error`, `bg-error-bg`, `border-error-border` | Error states |
 | **Borders** | `border-border`, `ring-ring` | Input borders, focus rings |
 | **Glass** | `bg-glass`, `bg-glass-heavy` | Navbar overlays, modals |
@@ -480,6 +506,9 @@ All styling uses design tokens from `app/globals.css`. **v5.2 standardizes all c
 | `sky-600` | `brand-hover` |
 | `sky-400` | `brand-light` |
 | `red-500` | `destructive` or `error` |
+| `emerald-500` | `success` |
+| `emerald-600` | `success-hover` |
+| `emerald-50` | `success-muted` |
 
 ## Legend
 

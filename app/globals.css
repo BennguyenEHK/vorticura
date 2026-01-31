@@ -67,6 +67,12 @@
   --color-status-complete: var(--status-complete); /* bg-status-complete = emerald-100 */
   --color-status-complete-foreground: var(--status-complete-foreground);
 
+  /* ----- Success/Approve Action Tokens (emerald-500 based) ----- */
+  --color-success: var(--success);                 /* bg-success = emerald-500 */
+  --color-success-foreground: var(--success-foreground);
+  --color-success-hover: var(--success-hover);     /* hover:bg-success-hover = emerald-600 */
+  --color-success-muted: var(--success-muted);     /* bg-success-muted = emerald-50 */
+
   /* ----- Avatar Tokens ----- */
   --color-avatar: var(--avatar);                   /* bg-avatar = indigo-500 */
   --color-avatar-foreground: var(--avatar-foreground);
@@ -192,6 +198,12 @@
   --status-complete: oklch(0.962 0.044 156.743);   /* #d1fae5 - emerald-100 */
   --status-complete-foreground: oklch(0.448 0.119 160.197); /* #047857 - emerald-700 */
 
+  /* ----- Success/Approve Action Colors ----- */
+  --success: oklch(0.696 0.17 162.48);             /* #10b981 - emerald-500 */
+  --success-foreground: oklch(1 0 0);              /* #ffffff - white */
+  --success-hover: oklch(0.596 0.145 163.225);     /* #059669 - emerald-600 */
+  --success-muted: oklch(0.962 0.044 156.743);     /* #ecfdf5 - emerald-50 */
+
   /* ----- Avatar Colors ----- */
   --avatar: oklch(0.585 0.233 277.117);            /* #6366f1 - indigo-500 */
   --avatar-foreground: oklch(1 0 0);               /* #ffffff - white */
@@ -297,6 +309,12 @@
   --status-pending-foreground: oklch(0.776 0.152 231.836); /* sky-400 */
   --status-complete: oklch(0.312 0.044 264.182);   /* slate-700 */
   --status-complete-foreground: oklch(0.696 0.17 162.48); /* emerald-500 */
+
+  /* ----- Success/Approve Action Colors (Dark Mode) ----- */
+  --success: oklch(0.696 0.17 162.48);             /* emerald-500 (same on dark) */
+  --success-foreground: oklch(1 0 0);              /* white */
+  --success-hover: oklch(0.765 0.177 163.223);     /* emerald-400 (lighter on dark) */
+  --success-muted: oklch(0.312 0.044 264.182);     /* slate-700 */
 
   /* ----- Avatar Colors (Dark Mode) ----- */
   --avatar: oklch(0.585 0.233 277.117);            /* indigo-500 (same on dark) */
