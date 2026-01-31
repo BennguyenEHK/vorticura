@@ -39,7 +39,22 @@
       "mcp__playwright__browser_close",
       "Bash(npm install:*)",
       "Bash(del \"components\\\\app\\\\workspace\\\\files-panel.tsx\")",
-      "Bash(del \"components\\\\app\\\\workspace\\\\quotation-editor-panel.tsx\")"
+      "Bash(del \"components\\\\app\\\\workspace\\\\quotation-editor-panel.tsx\")",
+      "mcp__playwright__browser_fill_form",
+      "mcp__playwright__browser_wait_for",
+      "mcp__playwright__browser_type",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:gridstackjs.com)",
+      "Bash(git show:*)",
+      "mcp__playwright__browser_press_key",
+      "Bash(powershell -Command:*)",
+      "Bash(if exist temp_workboard_grid_rgl.tsx del /f temp_workboard_grid_rgl.tsx)",
+      "Bash(if exist temp_workboard_provider_rgl.tsx del /f temp_workboard_provider_rgl.tsx)",
+      "Bash(if exist temp_workboard_types_rgl.ts del /f temp_workboard_types_rgl.ts)",
+      "Bash(del:*)",
+      "Bash(node -e:*)"
     ]
   }
 }

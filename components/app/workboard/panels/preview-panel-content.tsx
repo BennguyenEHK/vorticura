@@ -134,21 +134,35 @@ export function PreviewPanelContent({
     const windowSelection = window.getSelection();
     const selectedText = windowSelection?.toString().trim();
 
-    // Early return if no text selected or content ref not available
+        // Early return if no text selected or content ref not available
     if (!selectedText || selectedText.length === 0 || !contentRef.current) {
       if (!showNotePopover) setSelection(null);
+
+      console.warn("[SelectionGuard] No text selected or contentRef unavailable", {
+        selectedText,
+        hasContentRef: !!contentRef.current,
+      });
+
       return;
     }
 
-    // IMPORTANT: Verify selection is actually inside the content area
     const anchorNode = windowSelection?.anchorNode;
     if (!anchorNode || !contentRef.current.contains(anchorNode)) {
       if (!showNotePopover) setSelection(null);
+
+      console.warn("[SelectionGuard] Selection outside content area", {
+        anchorNode,
+      });
+
       return;
     }
 
     const range = windowSelection?.getRangeAt(0);
-    if (!range) return;
+    if (!range) {
+      console.error("[SelectionGuard] Failed to get selection range");
+      return;
+    }
+
 
     const rect = range.getBoundingClientRect();
     const contentRect = contentRef.current.getBoundingClientRect();
@@ -327,6 +341,7 @@ export function PreviewPanelContent({
               size="sm"
               className="h-8 gap-1.5 bg-primary text-primary-foreground shadow-lg"
               onClick={handleAddNote}
+              onMouseDown={(e) => e.preventDefault()} // Prevent browser from clearing text selection on button click
               onMouseUp={(e) => e.stopPropagation()} // Prevent mouseup from bubbling to contentRef and clearing selection
             >
               <MessageSquarePlus className="w-3.5 h-3.5" />
