@@ -1,11 +1,14 @@
 // =============================================
 // Grid Layout Utilities
 // =============================================
-// Custom auto-fill implementation for react-grid-layout
+// Custom utilities for react-grid-layout with allowOverlap mode
 // Features:
 // - Fills horizontal gaps when panels are resized or removed
-// - Calculates fixed grid height to prevent unlimited expansion
-// - Detects panel swaps and exchanges sizes between swapped panels
+// - Calculates grid height based on panel layout
+// - Overlap-based swap: resolves panel overlaps by swapping positions
+//
+// Key approach: With allowOverlap=true, RGL doesn't push panels.
+// We detect overlaps after drag and resolve by swapping positions.
 
 import type { LayoutItem, SwapResult } from "@/types/workboard";
 
@@ -389,8 +392,10 @@ export function calculateGridHeight(
 }
 
 // =============================================
-// Panel Swap Detection & Size Exchange
+// Overlap-Based Panel Swap (New Algorithm)
 // =============================================
+// With allowOverlap=true, RGL doesn't push panels during drag.
+// When panels overlap after drag, we resolve by swapping positions.
 
 /**
  * Check if two layout items overlap in position
@@ -407,8 +412,127 @@ function itemsOverlap(a: LayoutItem, b: LayoutItem): boolean {
 }
 
 /**
+ * Resolve overlaps by swapping panel positions
+ *
+ * This function is designed for allowOverlap=true mode where:
+ * - RGL doesn't push panels during drag
+ * - The dragged panel may overlap other panels after drag
+ * - We need to move overlapped panels to the dragged panel's old position
+ *
+ * Algorithm:
+ * 1. Find the dragged panel in both old and new layouts
+ * 2. Find all panels that now overlap with the dragged panel
+ * 3. Move overlapped panels to the dragged panel's old position
+ * 4. Exchange sizes between dragged and overlapped panels
+ *
+ * @param draggedPanelId - ID of the panel that was dragged
+ * @param oldLayout - Layout before drag (snapshot)
+ * @param newLayout - Layout after drag (from RGL)
+ * @returns Layout with overlaps resolved by swapping
+ */
+export function resolveOverlapSwap(
+  draggedPanelId: string,
+  oldLayout: LayoutItem[],
+  newLayout: LayoutItem[]
+): LayoutItem[] {
+  // Clone layout to avoid mutation
+  const resultLayout = newLayout.map(item => ({ ...item }));
+
+  // Find dragged panel in both layouts
+  const draggedOld = oldLayout.find(item => item.i === draggedPanelId);
+  const draggedNewIndex = resultLayout.findIndex(item => item.i === draggedPanelId);
+  const draggedNew = draggedNewIndex >= 0 ? resultLayout[draggedNewIndex] : null;
+
+  // If we can't find the dragged panel, return as-is
+  if (!draggedOld || !draggedNew) {
+    return resultLayout;
+  }
+
+  // Check if the dragged panel actually moved
+  const hasMoved = draggedOld.x !== draggedNew.x || draggedOld.y !== draggedNew.y;
+  if (!hasMoved) {
+    return resultLayout;
+  }
+
+  // Find all panels that overlap with the dragged panel's NEW position
+  const overlappedPanels: Array<{ index: number; oldItem: LayoutItem; newItem: LayoutItem }> = [];
+
+  for (let i = 0; i < resultLayout.length; i++) {
+    const panel = resultLayout[i];
+
+    // Skip the dragged panel itself
+    if (panel.i === draggedPanelId) continue;
+
+    // Check if this panel overlaps with dragged panel's new position
+    if (itemsOverlap(draggedNew, panel)) {
+      const oldItem = oldLayout.find(o => o.i === panel.i);
+      if (oldItem) {
+        overlappedPanels.push({ index: i, oldItem, newItem: panel });
+      }
+    }
+  }
+
+  // If no overlaps, return as-is
+  if (overlappedPanels.length === 0) {
+    return resultLayout;
+  }
+
+  // Calculate the total size of overlapped panels (for size exchange)
+  // We'll move all overlapped panels to the dragged panel's old position
+  // and distribute them there
+
+  // For simple case (1 overlapped panel or panels stacked vertically):
+  // Move overlapped panels to dragged panel's old position
+
+  // Store dragged panel's old position and size for the swap
+  const draggedOldPos = { x: draggedOld.x, y: draggedOld.y };
+  const draggedOldSize = { w: draggedOld.w, h: draggedOld.h };
+
+  // Calculate total height of overlapped panels
+  const totalOverlappedHeight = overlappedPanels.reduce((sum, p) => sum + p.oldItem.h, 0);
+
+  // Move overlapped panels to dragged panel's old position
+  let currentY = draggedOldPos.y;
+
+  for (const { index, oldItem } of overlappedPanels) {
+    // Move panel to dragged panel's old X position
+    resultLayout[index].x = draggedOldPos.x;
+    resultLayout[index].y = currentY;
+
+    // If single panel swap, exchange sizes
+    if (overlappedPanels.length === 1) {
+      // Exchange width with dragged panel's old width
+      resultLayout[index].w = draggedOldSize.w;
+      // Keep original height or exchange if heights are compatible
+      resultLayout[index].h = oldItem.h;
+    }
+
+    currentY += resultLayout[index].h;
+  }
+
+  // Update dragged panel to take the combined space of overlapped panels
+  if (overlappedPanels.length === 1) {
+    // Single swap: dragged takes overlapped panel's old size
+    const overlappedOld = overlappedPanels[0].oldItem;
+    resultLayout[draggedNewIndex].w = overlappedOld.w;
+    // Keep dragged panel's height or adjust based on available space
+    // For now, keep the height as RGL positioned it
+  }
+
+  return resultLayout;
+}
+
+// =============================================
+// Legacy Panel Swap Detection (Deprecated)
+// =============================================
+// This algorithm was designed for push-based collision (preventCollision=false).
+// It doesn't work with allowOverlap=true because only the dragged panel moves.
+// Use resolveOverlapSwap() instead for overlap-based swap detection.
+
+/**
  * Check if a panel has significantly moved to a new position
  * Returns true if the panel center has moved across columns
+ * @deprecated Use resolveOverlapSwap instead
  */
 function hasPanelMoved(oldItem: LayoutItem, newItem: LayoutItem): boolean {
   // Check if position changed significantly (different column or row)
@@ -419,6 +543,8 @@ function hasPanelMoved(oldItem: LayoutItem, newItem: LayoutItem): boolean {
 
 /**
  * Detect if panels swapped positions and exchange their sizes
+ * @deprecated This function doesn't work with allowOverlap=true mode.
+ * Use resolveOverlapSwap() instead which handles overlap-based swapping.
  *
  * Algorithm:
  * 1. Find panels that changed position from old to new layout

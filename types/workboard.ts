@@ -115,8 +115,9 @@ export interface GridConfig {
   isResizable: boolean;        // Enable resize globally
   draggableHandle: string;     // CSS selector for drag handle
   resizeHandles: Array<"s" | "w" | "e" | "n" | "sw" | "nw" | "se" | "ne">;
-  compactType: "vertical" | "horizontal" | null; // Auto-pack direction
+  compactType: "vertical" | "horizontal" | null; // Auto-pack direction (null = no compaction)
   preventCollision: boolean;   // Prevent overlap during drag
+  allowOverlap: boolean;       // Allow panels to overlap (enables swap behavior)
 }
 
 /** Default grid configuration for react-grid-layout */
@@ -129,8 +130,9 @@ export const DEFAULT_GRID_CONFIG: GridConfig = {
   isResizable: true,
   draggableHandle: ".panel-drag-handle",
   resizeHandles: ["se", "e", "s"],
-  compactType: "vertical",
+  compactType: null,           // Disable compaction to allow free positioning
   preventCollision: false,
+  allowOverlap: true,          // Enable overlap for swap-based repositioning
 };
 
 // =============================================
