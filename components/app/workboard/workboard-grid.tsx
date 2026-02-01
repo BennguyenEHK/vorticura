@@ -8,11 +8,17 @@
 // - Drag-to-resize, drag-to-reposition
 // - Custom auto-fill for horizontal gap filling
 // - Fixed grid height constraint to prevent unlimited expansion
-// - Panel swap detection with size exchange
+// - Panel swap detection with size exchange (manual implementation)
 // Migrated back from Gridstack to fix race conditions (see Grid.md)
+//
+// Note: Swap detection and height constraint are MANUAL implementations
+// that hook into react-grid-layout's callbacks - not built-in features.
 
 import { useMemo, useCallback, useRef, useEffect, useState } from "react";
-import { useContainerWidth, GridLayout } from "react-grid-layout";
+// Use legacy API for flat props (cols, rowHeight, margin, etc.)
+// The new v2 API uses config objects (gridConfig, dragConfig) but legacy supports flat props
+import { ReactGridLayout } from "react-grid-layout/legacy";
+import { useContainerWidth, type Layout, type LayoutItem as RGLLayoutItem } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import { useWorkboard } from "./workboard-provider";
 import { WorkboardPanel } from "./workboard-panel";
@@ -23,6 +29,15 @@ import {
   calculateGridHeight,
   detectAndSwapPanels
 } from "@/lib/utils/grid-layout";
+
+// =============================================
+// Helper: Convert readonly Layout to mutable LayoutItem[]
+// =============================================
+// react-grid-layout v2 uses readonly Layout type, but our functions
+// need mutable arrays. This helper safely converts between them.
+const toMutableLayout = (layout: Layout): LayoutItem[] => {
+  return layout.map(item => ({ ...item }));
+};
 
 // Panel content components
 import { WorkflowPanelContent } from "./panels/workflow-panel-content";
@@ -121,42 +136,58 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
   }, [panels.length, layout, updateLayout]);
 
   // =============================================
-  // Drag Event Handlers
+  // Drag Event Handlers (Manual Swap Implementation)
   // =============================================
+  // These callbacks implement our custom swap detection logic.
+  // react-grid-layout doesn't have built-in swap with size exchange.
 
   /**
    * Handle drag start - capture pre-drag layout for swap detection
+   * EventCallback signature: (layout, oldItem, newItem, placeholder, event, element?) => void
    */
-  const handleDragStart = useCallback(() => {
-    // Store current layout before drag begins
-    preDragLayoutRef.current = layout.map(item => ({ ...item }));
-    setIsDragging(true);
-  }, [layout]);
+  const handleDragStart = useCallback(
+    (
+      _layout: Layout,
+      _oldItem: RGLLayoutItem | null,
+      _newItem: RGLLayoutItem | null,
+      _placeholder: RGLLayoutItem | null,
+      _event: Event,
+      _element?: HTMLElement
+    ) => {
+      // Store current layout before drag begins (convert to mutable)
+      preDragLayoutRef.current = layout.map(item => ({ ...item }));
+      setIsDragging(true);
+    },
+    [layout]
+  );
 
   /**
    * Handle drag stop - detect swaps and exchange sizes
-   * Callback signature: (layout, oldItem, newItem, placeholder, e, element) => void
+   * EventCallback signature: (layout, oldItem, newItem, placeholder, event, element?) => void
    */
   const handleDragStop = useCallback(
     (
-      newLayout: LayoutItem[],
-      _oldItem: LayoutItem,
-      _newItem: LayoutItem,
-      _placeholder: LayoutItem | null,
-      _e: MouseEvent,
-      _element: HTMLElement
+      newLayout: Layout,
+      _oldItem: RGLLayoutItem | null,
+      _newItem: RGLLayoutItem | null,
+      _placeholder: RGLLayoutItem | null,
+      _event: Event,
+      _element?: HTMLElement
     ) => {
       setIsDragging(false);
 
-      // Detect if panels swapped positions
-      const swapResult = detectAndSwapPanels(preDragLayoutRef.current, newLayout);
+      // Convert readonly Layout to mutable LayoutItem[]
+      const mutableLayout = toMutableLayout(newLayout);
+
+      // Detect if panels swapped positions (our manual implementation)
+      const swapResult = detectAndSwapPanels(preDragLayoutRef.current, mutableLayout);
 
       if (swapResult.swapped) {
         // Swap detected - use layout with exchanged sizes
         updateLayout(swapResult.layout);
       } else {
         // No swap - use layout as-is
-        updateLayout(newLayout);
+        updateLayout(mutableLayout);
       }
     },
     [updateLayout]
@@ -172,11 +203,12 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
    * Swap detection is done in handleDragStop for final positions
    */
   const handleLayoutChange = useCallback(
-    (newLayout: LayoutItem[]) => {
+    (newLayout: Layout) => {
       // Only update during non-drag operations (resize, etc.)
       // Drag operations are handled by handleDragStop for swap detection
       if (!isDragging) {
-        updateLayout(newLayout);
+        // Convert readonly Layout to mutable LayoutItem[]
+        updateLayout(toMutableLayout(newLayout));
       }
     },
     [updateLayout, isDragging]
@@ -249,8 +281,9 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
         }}
       >
         {/* Only render grid when mounted and width is available */}
+        {/* Using ReactGridLayout from legacy API for flat props support */}
         {mounted && width > 0 && (
-          <GridLayout
+          <ReactGridLayout
             className="workboard-grid"
             layout={gridLayout}
             width={width}
@@ -287,7 +320,7 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
                 </WorkboardPanel>
               </div>
             ))}
-          </GridLayout>
+          </ReactGridLayout>
         )}
       </div>
     </WorkboardDropZone>
