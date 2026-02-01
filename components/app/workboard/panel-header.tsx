@@ -5,6 +5,10 @@
 // =============================================
 // Header component for workboard panels
 // Contains: drag handle, title, minimize/close controls
+//
+// Close button behavior:
+// - Chat panel: Undocks to FAB (removePanel + setDocked)
+// - Other panels: Hides panel (togglePanelVisibility) - can restore via toggle icons
 
 import {
   GripVertical,
@@ -42,7 +46,7 @@ interface PanelHeaderProps {
   title: string;                 // Panel title
   icon?: string;                 // Lucide icon name
   isMinimized?: boolean;         // Collapsed state
-  isClosable?: boolean;          // Show close button
+  isClosable?: boolean;          // Legacy prop - no longer used (all panels have close button)
 }
 
 /**
@@ -51,31 +55,41 @@ interface PanelHeaderProps {
  * - Drag handle (grip icon)
  * - Panel title with icon
  * - Minimize button
- * - Close button (for closable panels)
+ * - Close button (all panels - hides or undocks based on panel type)
  */
 export function PanelHeader({
   id,
   title,
   icon,
   isMinimized = false,
-  isClosable = false,
+  // isClosable is now ignored - all panels have close button
 }: PanelHeaderProps) {
-  // Get workboard actions
-  const { toggleMinimize, removePanel } = useWorkboard();
+  // Get workboard actions (including togglePanelVisibility for hide/show)
+  const { toggleMinimize, removePanel, togglePanelVisibility } = useWorkboard();
 
   // Get AI Chat actions for undocking
   const { setDocked } = useAIChat();
 
-  // Get icon component
+  // Get icon component from icon name
   const IconComponent = icon ? iconMap[icon] : null;
 
-  // Handle close/remove panel
+  // Determine if this is the chat panel (different close behavior)
+  const isChatPanel = id === "chat";
+
+  /**
+   * Handle close/hide panel
+   * - Chat panel: Undock to FAB mode (removePanel + setDocked)
+   * - Other panels: Hide panel with position preserved (togglePanelVisibility)
+   */
   const handleClose = () => {
-    // If this is the chat panel, undock it (return to FAB)
-    if (id === "chat") {
+    if (isChatPanel) {
+      // Chat panel: undock it (return to floating FAB)
       setDocked(false);
+      removePanel(id);
+    } else {
+      // Other panels: hide with position preserved (can restore via toggle icons)
+      togglePanelVisibility(id);
     }
-    removePanel(id);
   };
 
   return (
@@ -93,10 +107,10 @@ export function PanelHeader({
     >
       {/* Left side: drag handle + icon + title */}
       <div className="flex items-center gap-2">
-        {/* Drag handle icon */}
+        {/* Drag handle icon - indicates draggable area */}
         <GripVertical className="w-4 h-4 text-muted-foreground" />
 
-        {/* Panel icon */}
+        {/* Panel icon - visual identifier */}
         {IconComponent && (
           <IconComponent className="w-4 h-4 text-muted-foreground" />
         )}
@@ -107,7 +121,7 @@ export function PanelHeader({
 
       {/* Right side: action buttons */}
       <div className="flex items-center gap-1">
-        {/* Minimize button */}
+        {/* Minimize button - collapse panel to header only */}
         <Button
           variant="ghost"
           size="icon"
@@ -117,6 +131,7 @@ export function PanelHeader({
             toggleMinimize(id);
           }}
           aria-label={isMinimized ? "Expand panel" : "Minimize panel"}
+          title={isMinimized ? "Expand" : "Minimize"}
         >
           {isMinimized ? (
             <Square className="w-3 h-3" />
@@ -125,21 +140,22 @@ export function PanelHeader({
           )}
         </Button>
 
-        {/* Close button (only for closable panels) */}
-        {isClosable && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive"
-            onClick={(e) => {
-              e.stopPropagation(); // Prevent drag start
-              handleClose();
-            }}
-            aria-label="Close panel"
-          >
-            <X className="w-3 h-3" />
-          </Button>
-        )}
+        {/* Close button - all panels have this now */}
+        {/* Chat: "Close panel" (undocks to FAB) */}
+        {/* Others: "Hide panel" (can restore via toggle icons in header) */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive"
+          onClick={(e) => {
+            e.stopPropagation(); // Prevent drag start
+            handleClose();
+          }}
+          aria-label={isChatPanel ? "Close panel" : "Hide panel"}
+          title={isChatPanel ? "Close" : "Hide"}
+        >
+          <X className="w-3 h-3" />
+        </Button>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 # QuoteFlow AI - Project Structure
 
 > **Last Updated:** January 31, 2026
-> **Version:** 5.5 (Preview Panel Approval Workflow)
+> **Version:** 5.6 (Panel Close Button Enhancement)
 
 ## Overview
 
@@ -118,7 +118,7 @@ quoteflow_ai/
 │   │   │   ├── workboard-grid.tsx ✓       # react-grid-layout with custom auto-fill
 │   │   │   ├── workboard-panel.tsx ✓      # Generic draggable/resizable panel
 │   │   │   ├── workboard-drop-zone.tsx ✓  # Drop target for AI Chat FAB
-│   │   │   ├── panel-header.tsx ✓         # Drag handle + controls (minimize, close)
+│   │   │   ├── panel-header.tsx ✓         # Drag handle + controls (minimize, close/hide v5.6)
 │   │   │   ├── use-workboard-layout.ts ✓  # Hook: load/save layout to localStorage
 │   │   │   │
 │   │   │   └── panels/                    # Panel content components
@@ -356,6 +356,27 @@ Three circular toggle buttons in the workspace header allow users to hide/show i
 - **Inactive (hidden)**: `bg-muted text-muted-foreground` - Panel is hidden
 
 **Position Preservation:** When a panel is hidden, its layout position and size are saved. When shown again, the panel restores to its exact previous position.
+
+#### Panel Close Buttons (v5.6)
+
+All panels now have a close button (X) in their header. The behavior differs based on panel type:
+
+| Panel | Close Button | Behavior | Restore Method |
+|-------|--------------|----------|----------------|
+| Workflow | "Hide panel" | Hides panel, preserves position | Click toggle icon in header |
+| Pricing | "Hide panel" | Hides panel, preserves position | Click toggle icon in header |
+| Preview | "Hide panel" | Hides panel, preserves position | Click toggle icon in header |
+| Chat | "Close panel" | Undocks to FAB mode | Drag FAB back to workboard |
+
+**Close Button Styling:**
+- Normal: `ghost` variant, `h-6 w-6`
+- Hover: `hover:bg-destructive/10 hover:text-destructive`
+- Icon: `X` from lucide-react, `w-3 h-3`
+
+**User Flow:**
+1. Click close (X) on Workflow/Pricing/Preview → Panel hides → Toggle icon turns gray
+2. Click gray toggle icon in workspace header → Panel restores at saved position
+3. Click close (X) on Chat → Panel removed → Returns to floating FAB mode
 
 #### Preview Panel Approval Workflow (v5.5)
 
