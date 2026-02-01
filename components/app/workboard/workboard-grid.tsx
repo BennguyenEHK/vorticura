@@ -77,6 +77,9 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
   // Track which panel is being dragged (for overlap-based swap detection)
   const draggedPanelIdRef = useRef<string | null>(null);
 
+  // Track if we just finished a drag (to skip onLayoutChange after handleDragStop)
+  const justFinishedDragRef = useRef(false);
+
   // Track if user is currently dragging (to capture pre-drag state)
   const [isDragging, setIsDragging] = useState(false);
 
@@ -162,6 +165,8 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
       _event: Event,
       _element?: HTMLElement
     ) => {
+      // Mark that we just finished drag - prevents handleLayoutChange from firing
+      justFinishedDragRef.current = true;
       setIsDragging(false);
 
       // Convert readonly Layout to mutable LayoutItem[]
@@ -198,6 +203,13 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
    */
   const handleLayoutChange = useCallback(
     (newLayout: Layout) => {
+      // Skip if we just finished a drag - handleDragStop already updated layout
+      // This prevents infinite loop: handleDragStop -> updateLayout -> onLayoutChange -> updateLayout...
+      if (justFinishedDragRef.current) {
+        justFinishedDragRef.current = false;
+        return;
+      }
+
       // Only update during non-drag operations (resize, etc.)
       // Drag operations are handled by handleDragStop for swap detection
       if (!isDragging) {

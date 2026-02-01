@@ -477,46 +477,39 @@ export function resolveOverlapSwap(
     return resultLayout;
   }
 
-  // Calculate the total size of overlapped panels (for size exchange)
-  // We'll move all overlapped panels to the dragged panel's old position
-  // and distribute them there
-
-  // For simple case (1 overlapped panel or panels stacked vertically):
-  // Move overlapped panels to dragged panel's old position
-
   // Store dragged panel's old position and size for the swap
   const draggedOldPos = { x: draggedOld.x, y: draggedOld.y };
   const draggedOldSize = { w: draggedOld.w, h: draggedOld.h };
 
-  // Calculate total height of overlapped panels
+  // Calculate total height of overlapped panels (for multi-panel swap)
   const totalOverlappedHeight = overlappedPanels.reduce((sum, p) => sum + p.oldItem.h, 0);
 
-  // Move overlapped panels to dragged panel's old position
-  let currentY = draggedOldPos.y;
+  // For single panel swap: exchange sizes completely
+  if (overlappedPanels.length === 1) {
+    const { index: overlappedIndex, oldItem: overlappedOld } = overlappedPanels[0];
 
-  for (const { index, oldItem } of overlappedPanels) {
-    // Move panel to dragged panel's old X position
-    resultLayout[index].x = draggedOldPos.x;
-    resultLayout[index].y = currentY;
+    // Move overlapped panel to dragged panel's old position with dragged panel's old size
+    resultLayout[overlappedIndex].x = draggedOldPos.x;
+    resultLayout[overlappedIndex].y = draggedOldPos.y;
+    resultLayout[overlappedIndex].w = draggedOldSize.w;
+    resultLayout[overlappedIndex].h = draggedOldSize.h;
 
-    // If single panel swap, exchange sizes
-    if (overlappedPanels.length === 1) {
-      // Exchange width with dragged panel's old width
+    // Update dragged panel to take overlapped panel's old size
+    resultLayout[draggedNewIndex].w = overlappedOld.w;
+    resultLayout[draggedNewIndex].h = overlappedOld.h;
+  } else {
+    // Multi-panel swap: stack overlapped panels at dragged panel's old position
+    let currentY = draggedOldPos.y;
+
+    for (const { index } of overlappedPanels) {
+      resultLayout[index].x = draggedOldPos.x;
+      resultLayout[index].y = currentY;
       resultLayout[index].w = draggedOldSize.w;
-      // Keep original height or exchange if heights are compatible
-      resultLayout[index].h = oldItem.h;
+      // Keep original heights for multi-panel case
+      currentY += resultLayout[index].h;
     }
 
-    currentY += resultLayout[index].h;
-  }
-
-  // Update dragged panel to take the combined space of overlapped panels
-  if (overlappedPanels.length === 1) {
-    // Single swap: dragged takes overlapped panel's old size
-    const overlappedOld = overlappedPanels[0].oldItem;
-    resultLayout[draggedNewIndex].w = overlappedOld.w;
-    // Keep dragged panel's height or adjust based on available space
-    // For now, keep the height as RGL positioned it
+    // Dragged panel keeps its new size in multi-panel case
   }
 
   return resultLayout;
