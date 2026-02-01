@@ -211,3 +211,15 @@ export const WORKBOARD_LAYOUT_STORAGE_KEY = "quoteflow-workboard-layout";
 
 /** LocalStorage key for AI Chat FAB position */
 export const AI_CHAT_POSITION_STORAGE_KEY = "quoteflow-ai-chat-position";
+
+// =============================================
+// Swap Detection Types
+// =============================================
+
+/** Result of swap detection between panels */
+export interface SwapResult {
+  layout: LayoutItem[];           // Layout with swapped sizes applied
+  swapped: boolean;               // Whether a swap was detected
+  panelA?: string;                // First panel involved in swap
+  panelB?: string;                // Second panel involved in swap
+}

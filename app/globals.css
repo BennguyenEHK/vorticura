@@ -470,3 +470,18 @@
   background-color: var(--brand-muted);
   opacity: 0.3;
 }
+
+/* =============================================
+ * GRID HEIGHT CONSTRAINT STYLES
+ * ============================================= */
+
+/* Constrained grid - prevents panels from expanding beyond calculated height */
+.workboard-grid-constrained {
+  overflow: hidden;               /* Prevent panels from escaping grid bounds */
+  position: relative;             /* Contain absolute positioned children */
+}
+
+/* Visual indicator during drag when approaching grid boundary */
+.workboard-grid-constrained.at-boundary {
+  box-shadow: inset 0 -4px 8px -4px var(--brand);
+}

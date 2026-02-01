@@ -1,7 +1,7 @@
 # QuoteFlow AI - Project Structure
 
 > **Last Updated:** January 31, 2026
-> **Version:** 5.6 (Panel Close Button Enhancement)
+> **Version:** 5.7 (Grid Height Constraint & Panel Swap Size Exchange)
 
 ## Overview
 
@@ -214,7 +214,7 @@ quoteflow_ai/
 │   │       └── workspace-service.ts ✓     # Workspace isolation
 │   │
 │   ├── utils/                             # Helper Functions
-│   │   ├── grid-layout.ts ✓               # Custom auto-fill for react-grid-layout (NEW v5.3)
+│   │   ├── grid-layout.ts ✓               # Grid utilities: auto-fill, height calc, swap detection (v5.7)
 │   │   │
 │   │   ├── formatting/
 │   │   │   ├── currency.ts
@@ -326,7 +326,7 @@ The sidebar has been redesigned with the following sections:
 | **Documents** | Storage, Upload | File management |
 | **System** | Settings, Pipeline View | Configuration & visualization |
 
-### Workboard Panel System (v5.4)
+### Workboard Panel System (v5.7)
 
 The workspace now uses a dynamic panel system powered by `react-grid-layout` with custom auto-fill:
 
@@ -339,7 +339,36 @@ The workspace now uses a dynamic panel system powered by `react-grid-layout` wit
 | **Lock/Unlock** | Toggle layout editing (static mode) |
 | **React-Native** | Native React component - no sync issues |
 | **Drop Zone** | AI Chat FAB can be dropped to create docked panel |
-| **Panel Toggle** | Circular buttons to hide/show individual panels (NEW v5.4) |
+| **Panel Toggle** | Circular buttons to hide/show individual panels (v5.4) |
+| **Grid Height Constraint** | Fixed grid height prevents unlimited vertical expansion (NEW v5.7) |
+| **Swap Size Exchange** | When panels swap positions, their sizes are also exchanged (NEW v5.7) |
+
+#### Grid Height Constraint (v5.7)
+
+The grid container now has a fixed height calculated from the panel layout:
+
+| Aspect | Behavior |
+|--------|----------|
+| **Calculation** | `height = maxRows × rowHeight + (maxRows - 1) × marginY` |
+| **Purpose** | Prevents panels from being pushed below grid boundary |
+| **Effect** | When dragging panels, they swap horizontally instead of stacking vertically |
+| **CSS Class** | `.workboard-grid-constrained` with `overflow: hidden` |
+
+#### Panel Swap with Size Exchange (v5.7)
+
+When panels swap positions during drag operations:
+
+| Step | Action |
+|------|--------|
+| 1. **Pre-drag Snapshot** | Layout captured before drag starts |
+| 2. **Swap Detection** | On drag stop, detect if Panel A now occupies Panel B's old position (and vice versa) |
+| 3. **Size Exchange** | Panel A gets Panel B's original size, Panel B gets Panel A's original size |
+| 4. **Constraints** | `minW`, `minH`, `maxW`, `maxH` are also exchanged |
+
+**Example:**
+- Preview (6×7) dragged to Workflow's position
+- Preview becomes 6×2 (Workflow's original size)
+- Workflow becomes 6×7 (Preview's original size)
 
 #### Panel Toggle Buttons (v5.4)
 
@@ -425,7 +454,7 @@ Floating AI Chat button with drag & drop integration:
 
 **New Types Added:**
 - `types/ai-chat.ts` - Message, Position, ChatState types
-- `types/workboard.ts` - Layout, PanelConfig, GridConfig, HiddenPanelInfo types
+- `types/workboard.ts` - Layout, PanelConfig, GridConfig, HiddenPanelInfo, SwapResult types
 
 **Dependencies Used:**
 - `react-grid-layout` (v2.2+) - Panel resize/reposition with custom auto-fill
@@ -485,9 +514,17 @@ app/layout.tsx (Root)
 | `/api/comms` | GET | List channels, status, messages |
 | `/api/comms` | POST | Update channel or mark message read |
 
-## Design Token System (v5.2 Standardized)
+## Design Token System (v5.7 Standardized)
 
 All styling uses design tokens from `app/globals.css`. **v5.2 standardizes all components to use tokens instead of hardcoded Tailwind values.**
+
+### Grid Layout Classes (v5.7)
+
+| Class | Purpose |
+|-------|---------|
+| `.workboard-grid` | Base grid styling |
+| `.workboard-grid-constrained` | Fixed height grid with overflow hidden |
+| `.react-grid-placeholder` | Placeholder styling during drag |
 
 ### Color Tokens (Complete List)
 

@@ -4,17 +4,25 @@
 // Workboard Grid (react-grid-layout + Auto-Fill)
 // =============================================
 // Main grid layout component using react-grid-layout
-// Enables drag-to-resize, drag-to-reposition with custom auto-fill
+// Features:
+// - Drag-to-resize, drag-to-reposition
+// - Custom auto-fill for horizontal gap filling
+// - Fixed grid height constraint to prevent unlimited expansion
+// - Panel swap detection with size exchange
 // Migrated back from Gridstack to fix race conditions (see Grid.md)
 
-import { useMemo, useCallback, useRef, useEffect } from "react";
+import { useMemo, useCallback, useRef, useEffect, useState } from "react";
 import { useContainerWidth, GridLayout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import { useWorkboard } from "./workboard-provider";
 import { WorkboardPanel } from "./workboard-panel";
 import { WorkboardDropZone } from "./workboard-drop-zone";
 import { DEFAULT_GRID_CONFIG, type LayoutItem } from "@/types/workboard";
-import { compactAndFill } from "@/lib/utils/grid-layout";
+import {
+  compactAndFill,
+  calculateGridHeight,
+  detectAndSwapPanels
+} from "@/lib/utils/grid-layout";
 
 // Panel content components
 import { WorkflowPanelContent } from "./panels/workflow-panel-content";
@@ -50,9 +58,31 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
   // Track previous panel count for detecting additions/removals
   const prevPanelCountRef = useRef<number>(0);
 
+  // Store pre-drag layout snapshot for swap detection
+  const preDragLayoutRef = useRef<LayoutItem[]>([]);
+
+  // Track if user is currently dragging (to capture pre-drag state)
+  const [isDragging, setIsDragging] = useState(false);
+
   // Get workboard state and actions from context
   const { layout, panels, isLocked, updateLayout, setActivePanel } =
     useWorkboard();
+
+  // =============================================
+  // Grid Height Calculation (Constraint)
+  // =============================================
+
+  /**
+   * Calculate fixed grid height to prevent unlimited vertical expansion
+   * This creates a "frame" that panels cannot escape
+   */
+  const gridHeight = useMemo(() => {
+    return calculateGridHeight(
+      layout,
+      DEFAULT_GRID_CONFIG.rowHeight,
+      DEFAULT_GRID_CONFIG.margin
+    );
+  }, [layout]);
 
   // =============================================
   // Auto-Fill Effect
@@ -91,19 +121,65 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
   }, [panels.length, layout, updateLayout]);
 
   // =============================================
+  // Drag Event Handlers
+  // =============================================
+
+  /**
+   * Handle drag start - capture pre-drag layout for swap detection
+   */
+  const handleDragStart = useCallback(() => {
+    // Store current layout before drag begins
+    preDragLayoutRef.current = layout.map(item => ({ ...item }));
+    setIsDragging(true);
+  }, [layout]);
+
+  /**
+   * Handle drag stop - detect swaps and exchange sizes
+   * Callback signature: (layout, oldItem, newItem, placeholder, e, element) => void
+   */
+  const handleDragStop = useCallback(
+    (
+      newLayout: LayoutItem[],
+      _oldItem: LayoutItem,
+      _newItem: LayoutItem,
+      _placeholder: LayoutItem | null,
+      _e: MouseEvent,
+      _element: HTMLElement
+    ) => {
+      setIsDragging(false);
+
+      // Detect if panels swapped positions
+      const swapResult = detectAndSwapPanels(preDragLayoutRef.current, newLayout);
+
+      if (swapResult.swapped) {
+        // Swap detected - use layout with exchanged sizes
+        updateLayout(swapResult.layout);
+      } else {
+        // No swap - use layout as-is
+        updateLayout(newLayout);
+      }
+    },
+    [updateLayout]
+  );
+
+  // =============================================
   // Layout Change Handler
   // =============================================
 
   /**
    * Handle layout change from react-grid-layout
-   * Called when user drags or resizes panels
+   * Called continuously during drag/resize operations
+   * Swap detection is done in handleDragStop for final positions
    */
   const handleLayoutChange = useCallback(
     (newLayout: LayoutItem[]) => {
-      // Update state with new layout
-      updateLayout(newLayout);
+      // Only update during non-drag operations (resize, etc.)
+      // Drag operations are handled by handleDragStop for swap detection
+      if (!isDragging) {
+        updateLayout(newLayout);
+      }
     },
-    [updateLayout]
+    [updateLayout, isDragging]
   );
 
   // =============================================
@@ -162,8 +238,16 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
 
   return (
     <WorkboardDropZone className={className}>
-      {/* Container div with ref for width measurement */}
-      <div ref={containerRef} className="w-full">
+      {/* Container div with ref for width measurement and height constraint */}
+      <div
+        ref={containerRef}
+        className="w-full workboard-grid-constrained"
+        style={{
+          // Fixed height based on panel layout - prevents unlimited expansion
+          height: gridHeight > 0 ? `${gridHeight}px` : "auto",
+          minHeight: `${DEFAULT_GRID_CONFIG.rowHeight}px`,
+        }}
+      >
         {/* Only render grid when mounted and width is available */}
         {mounted && width > 0 && (
           <GridLayout
@@ -181,6 +265,8 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
             compactType={DEFAULT_GRID_CONFIG.compactType}
             preventCollision={DEFAULT_GRID_CONFIG.preventCollision}
             onLayoutChange={handleLayoutChange}
+            onDragStart={handleDragStart}
+            onDragStop={handleDragStop}
             useCSSTransforms={true}
           >
             {/* Render each panel */}

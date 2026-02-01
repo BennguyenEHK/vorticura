@@ -2,9 +2,12 @@
 // Grid Layout Utilities
 // =============================================
 // Custom auto-fill implementation for react-grid-layout
-// Fills horizontal gaps when panels are resized or removed
+// Features:
+// - Fills horizontal gaps when panels are resized or removed
+// - Calculates fixed grid height to prevent unlimited expansion
+// - Detects panel swaps and exchanges sizes between swapped panels
 
-import type { LayoutItem } from "@/types/workboard";
+import type { LayoutItem, SwapResult } from "@/types/workboard";
 
 // =============================================
 // Types
@@ -354,4 +357,167 @@ function canPlace(
   }
 
   return true;
+}
+
+// =============================================
+// Grid Height Calculation
+// =============================================
+
+/**
+ * Calculate the fixed grid height based on panel layout
+ * This constrains the grid to prevent unlimited vertical expansion
+ *
+ * @param layout - Current layout items
+ * @param rowHeight - Height of each grid row in pixels
+ * @param margin - Margin between panels [x, y]
+ * @returns Grid height in pixels
+ */
+export function calculateGridHeight(
+  layout: LayoutItem[],
+  rowHeight: number,
+  margin: [number, number]
+): number {
+  if (layout.length === 0) return rowHeight; // Minimum 1 row height
+
+  // Find the maximum bottom edge (y + h) across all panels
+  const maxBottom = layout.reduce((max, item) => Math.max(max, item.y + item.h), 0);
+
+  // Calculate pixel height: rows × rowHeight + (rows - 1) × marginY
+  // Formula: totalHeight = maxBottom * rowHeight + (maxBottom - 1) * margin[1]
+  const marginTotal = maxBottom > 0 ? (maxBottom - 1) * margin[1] : 0;
+  return maxBottom * rowHeight + marginTotal;
+}
+
+// =============================================
+// Panel Swap Detection & Size Exchange
+// =============================================
+
+/**
+ * Check if two layout items overlap in position
+ * Used to detect if one panel moved into another's space
+ */
+function itemsOverlap(a: LayoutItem, b: LayoutItem): boolean {
+  // Check if rectangles overlap
+  return !(
+    a.x + a.w <= b.x ||  // a is left of b
+    b.x + b.w <= a.x ||  // b is left of a
+    a.y + a.h <= b.y ||  // a is above b
+    b.y + b.h <= a.y     // b is above a
+  );
+}
+
+/**
+ * Check if a panel has significantly moved to a new position
+ * Returns true if the panel center has moved across columns
+ */
+function hasPanelMoved(oldItem: LayoutItem, newItem: LayoutItem): boolean {
+  // Check if position changed significantly (different column or row)
+  const xChanged = Math.abs(oldItem.x - newItem.x) >= 1;
+  const yChanged = Math.abs(oldItem.y - newItem.y) >= 1;
+  return xChanged || yChanged;
+}
+
+/**
+ * Detect if panels swapped positions and exchange their sizes
+ *
+ * Algorithm:
+ * 1. Find panels that changed position from old to new layout
+ * 2. For each moved panel A, check if another panel B now occupies A's old position
+ * 3. If both panels swapped positions, exchange their sizes (w, h)
+ *
+ * @param oldLayout - Layout before drag operation
+ * @param newLayout - Layout after drag operation (from react-grid-layout)
+ * @returns SwapResult with layout containing exchanged sizes if swap detected
+ */
+export function detectAndSwapPanels(
+  oldLayout: LayoutItem[],
+  newLayout: LayoutItem[]
+): SwapResult {
+  // Early exit if layouts are empty or have different lengths
+  if (oldLayout.length === 0 || newLayout.length !== oldLayout.length) {
+    return { layout: newLayout, swapped: false };
+  }
+
+  // Clone new layout to avoid mutation
+  const resultLayout = newLayout.map(item => ({ ...item }));
+
+  // Find panels that moved significantly
+  const movedPanels: Array<{ id: string; oldItem: LayoutItem; newItem: LayoutItem }> = [];
+
+  for (const newItem of newLayout) {
+    const oldItem = oldLayout.find(o => o.i === newItem.i);
+    if (oldItem && hasPanelMoved(oldItem, newItem)) {
+      movedPanels.push({ id: newItem.i, oldItem, newItem });
+    }
+  }
+
+  // Need at least 2 moved panels for a swap
+  if (movedPanels.length < 2) {
+    return { layout: newLayout, swapped: false };
+  }
+
+  // Check for pairwise swaps: Panel A moved to B's old position AND B moved to A's old position
+  for (let i = 0; i < movedPanels.length; i++) {
+    for (let j = i + 1; j < movedPanels.length; j++) {
+      const panelA = movedPanels[i];
+      const panelB = movedPanels[j];
+
+      // Check if A is now in B's old area (overlap check)
+      const aInBOldArea = itemsOverlap(panelA.newItem, panelB.oldItem);
+      // Check if B is now in A's old area (overlap check)
+      const bInAOldArea = itemsOverlap(panelB.newItem, panelA.oldItem);
+
+      // If both conditions are true, this is a swap
+      if (aInBOldArea && bInAOldArea) {
+        // Find the items in result layout and exchange sizes
+        const resultA = resultLayout.find(r => r.i === panelA.id);
+        const resultB = resultLayout.find(r => r.i === panelB.id);
+
+        if (resultA && resultB) {
+          // Store original sizes from OLD layout (before any changes)
+          const oldSizeA = { w: panelA.oldItem.w, h: panelA.oldItem.h };
+          const oldSizeB = { w: panelB.oldItem.w, h: panelB.oldItem.h };
+
+          // Exchange sizes: A gets B's old size, B gets A's old size
+          resultA.w = oldSizeB.w;
+          resultA.h = oldSizeB.h;
+          resultB.w = oldSizeA.w;
+          resultB.h = oldSizeA.h;
+
+          // Respect min/max constraints
+          if (panelB.oldItem.minW) resultA.minW = panelB.oldItem.minW;
+          if (panelB.oldItem.minH) resultA.minH = panelB.oldItem.minH;
+          if (panelB.oldItem.maxW) resultA.maxW = panelB.oldItem.maxW;
+          if (panelB.oldItem.maxH) resultA.maxH = panelB.oldItem.maxH;
+
+          if (panelA.oldItem.minW) resultB.minW = panelA.oldItem.minW;
+          if (panelA.oldItem.minH) resultB.minH = panelA.oldItem.minH;
+          if (panelA.oldItem.maxW) resultB.maxW = panelA.oldItem.maxW;
+          if (panelA.oldItem.maxH) resultB.maxH = panelA.oldItem.maxH;
+
+          return {
+            layout: resultLayout,
+            swapped: true,
+            panelA: panelA.id,
+            panelB: panelB.id,
+          };
+        }
+      }
+    }
+  }
+
+  // No swap detected
+  return { layout: newLayout, swapped: false };
+}
+
+/**
+ * Get the total height in grid units (rows) for a layout
+ * Used to determine the fixed grid boundary
+ *
+ * @param layout - Current layout items
+ * @returns Maximum row count (y + h of bottommost panel)
+ */
+export function getLayoutMaxRows(layout: LayoutItem[]): number {
+  if (layout.length === 0) return 1;
+  return layout.reduce((max, item) => Math.max(max, item.y + item.h), 0);
 }
