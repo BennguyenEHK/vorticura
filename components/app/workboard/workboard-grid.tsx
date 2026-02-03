@@ -27,7 +27,7 @@ import {
   compactAndFill,
   resolveOverlapSwap,
   areLayoutsEqual
-} from "@/lib/utils/grid-layout";
+} from "@/lib/utils/generators/grid-layout";
 
 // =============================================
 // Helper: Convert readonly Layout to mutable LayoutItem[]

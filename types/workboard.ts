@@ -124,7 +124,7 @@ export interface GridConfig {
 export const DEFAULT_GRID_CONFIG: GridConfig = {
   cols: 12,
   rowHeight: 100,
-  margin: [16, 16],
+  margin: [8, 8],
   containerPadding: [0, 0],
   isDraggable: true,
   isResizable: true,
