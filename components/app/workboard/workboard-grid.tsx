@@ -34,6 +34,8 @@ import {
 // react-grid-layout v2 uses readonly Layout type, but our functions
 // need mutable arrays. This helper safely converts between them.
 const toMutableLayout = (layout: Layout): LayoutItem[] => {
+  console.log('[toMutableLayout] Converting readonly Layout to mutable LayoutItem[]');
+  console.log('[toMutableLayout] Input layout items:', layout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
   return layout.map(item => ({ ...item }));
 };
 
@@ -142,11 +144,23 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
       _event: Event,
       _element?: HTMLElement
     ) => {
+      console.log('='.repeat(60));
+      console.log('[DRAG_START] 🚀 User started dragging a panel');
+      console.log('[DRAG_START] Panel being dragged:', oldItem?.i);
+      console.log('[DRAG_START] Panel original position:', oldItem ? { x: oldItem.x, y: oldItem.y, w: oldItem.w, h: oldItem.h } : null);
+
       // Store current layout before drag begins (convert to mutable)
       preDragLayoutRef.current = layout.map(item => ({ ...item }));
+      console.log('[DRAG_START] 📸 Snapshot saved to preDragLayoutRef:');
+      console.log('[DRAG_START] preDragLayoutRef.current:', preDragLayoutRef.current.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
+
       // Track which panel is being dragged
       draggedPanelIdRef.current = oldItem?.i ?? null;
+      console.log('[DRAG_START] draggedPanelIdRef set to:', draggedPanelIdRef.current);
+
       setIsDragging(true);
+      console.log('[DRAG_START] isDragging set to: true');
+      console.log('='.repeat(60));
     },
     [layout]
   );
@@ -165,29 +179,51 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
       _event: Event,
       _element?: HTMLElement
     ) => {
+      console.log('='.repeat(60));
+      console.log('[DRAG_STOP] 🛑 User released the panel (drag ended)');
+      console.log('[DRAG_STOP] newLayout from RGL:', newLayout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
+
       // Mark that we just finished drag - prevents handleLayoutChange from firing
       justFinishedDragRef.current = true;
+      console.log('[DRAG_STOP] justFinishedDragRef set to: true (to prevent infinite loop)');
+
       setIsDragging(false);
+      console.log('[DRAG_STOP] isDragging set to: false');
 
       // Convert readonly Layout to mutable LayoutItem[]
+      console.log('[DRAG_STOP] Converting newLayout to mutable...');
       const mutableLayout = toMutableLayout(newLayout);
+      console.log('[DRAG_STOP] mutableLayout created:', mutableLayout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
 
       // Get the dragged panel ID
       const draggedId = draggedPanelIdRef.current;
+      console.log('[DRAG_STOP] draggedId retrieved:', draggedId);
+
       draggedPanelIdRef.current = null; // Reset for next drag
+      console.log('[DRAG_STOP] draggedPanelIdRef reset to: null');
 
       if (draggedId) {
+        console.log('[DRAG_STOP] 🔄 Calling resolveOverlapSwap()...');
+        console.log('[DRAG_STOP] Arguments: draggedId =', draggedId);
+        console.log('[DRAG_STOP] Arguments: preDragLayoutRef (old) =', preDragLayoutRef.current.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
+        console.log('[DRAG_STOP] Arguments: mutableLayout (new) =', mutableLayout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
+
         // Resolve any overlaps by swapping positions
         const resolvedLayout = resolveOverlapSwap(
           draggedId,
           preDragLayoutRef.current,
           mutableLayout
         );
+        console.log('[DRAG_STOP] ✅ resolvedLayout returned:', resolvedLayout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
+        console.log('[DRAG_STOP] Calling updateLayout() with resolved layout...');
         updateLayout(resolvedLayout);
+        console.log('[DRAG_STOP] updateLayout() called successfully');
       } else {
         // Fallback: no dragged panel ID, use layout as-is
+        console.log('[DRAG_STOP] ⚠️ No draggedId found, using layout as-is');
         updateLayout(mutableLayout);
       }
+      console.log('='.repeat(60));
     },
     [updateLayout]
   );
@@ -203,9 +239,15 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
    */
   const handleLayoutChange = useCallback(
     (newLayout: Layout) => {
+      console.log('[LAYOUT_CHANGE] 📐 onLayoutChange fired from RGL');
+      console.log('[LAYOUT_CHANGE] newLayout:', newLayout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
+      console.log('[LAYOUT_CHANGE] Current state: isDragging =', isDragging, ', justFinishedDragRef =', justFinishedDragRef.current);
+
       // Skip if we just finished a drag - handleDragStop already updated layout
       // This prevents infinite loop: handleDragStop -> updateLayout -> onLayoutChange -> updateLayout...
       if (justFinishedDragRef.current) {
+        console.log('[LAYOUT_CHANGE] 🚫 SKIPPING - justFinishedDragRef is true (preventing infinite loop)');
+        console.log('[LAYOUT_CHANGE] Resetting justFinishedDragRef to false');
         justFinishedDragRef.current = false;
         return;
       }
@@ -213,8 +255,12 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
       // Only update during non-drag operations (resize, etc.)
       // Drag operations are handled by handleDragStop for swap detection
       if (!isDragging) {
+        console.log('[LAYOUT_CHANGE] ✅ Processing layout change (not dragging, not just finished drag)');
+        console.log('[LAYOUT_CHANGE] Calling updateLayout() with new layout');
         // Convert readonly Layout to mutable LayoutItem[]
         updateLayout(toMutableLayout(newLayout));
+      } else {
+        console.log('[LAYOUT_CHANGE] 🚫 SKIPPING - currently dragging (isDragging = true)');
       }
     },
     [updateLayout, isDragging]
@@ -262,11 +308,17 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
    * Converts our LayoutItem format to react-grid-layout format
    */
   const gridLayout = useMemo(
-    () =>
-      layout.map((item) => ({
+    () => {
+      console.log('[gridLayout] 🔄 useMemo recalculating gridLayout');
+      console.log('[gridLayout] Input layout:', layout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
+      console.log('[gridLayout] isLocked:', isLocked);
+      const result = layout.map((item) => ({
         ...item,
         static: isLocked, // Lock all panels when layout is locked
-      })),
+      }));
+      console.log('[gridLayout] Output gridLayout (with static applied):', result.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h, static: item.static })));
+      return result;
+    },
     [layout, isLocked]
   );
 

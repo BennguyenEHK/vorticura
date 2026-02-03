@@ -74,15 +74,27 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
       if (savedLayout) {
         try {
           const parsed = JSON.parse(savedLayout);
-          if (parsed.layout && parsed.panels) {
-            setState((prev) => ({
-              ...prev,
-              layout: parsed.layout,
-              panels: parsed.panels,
-            }));
+
+          // Guard: If layout or panels is empty, clear corrupted state and keep defaults
+          if (!parsed.layout?.length || !parsed.panels?.length) {
+            localStorage.removeItem(WORKBOARD_LAYOUT_STORAGE_KEY);
+            return;
           }
+
+          // Restore hiddenPanels Map from array
+          const hiddenPanelsMap = new Map<string, HiddenPanelInfo>(
+            parsed.hiddenPanels || []
+          );
+
+          setState((prev) => ({
+            ...prev,
+            layout: parsed.layout,
+            panels: parsed.panels,
+            hiddenPanels: hiddenPanelsMap,
+          }));
         } catch (e) {
           console.warn("Failed to parse saved workboard layout");
+          localStorage.removeItem(WORKBOARD_LAYOUT_STORAGE_KEY);
         }
       }
     }
@@ -94,10 +106,16 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
 
   /** Update layout positions */
   const updateLayout = useCallback((layout: LayoutItem[]) => {
-    setState((prev) => ({
-      ...prev,
-      layout,
-    }));
+    console.log('[updateLayout] 📝 STATE UPDATE REQUESTED');
+    console.log('[updateLayout] New layout to set:', layout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
+    setState((prev) => {
+      console.log('[updateLayout] Previous layout:', prev.layout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
+      console.log('[updateLayout] ✅ Setting new layout state (this will trigger re-render)');
+      return {
+        ...prev,
+        layout,
+      };
+    });
   }, []);
 
   /** Add a new panel (e.g., AI Chat when docked) */
@@ -219,15 +237,19 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
   /** Save current layout to localStorage */
   const saveLayout = useCallback(() => {
     if (typeof window !== "undefined") {
+      // Convert Map to array for JSON serialization
+      const hiddenPanelsArray = Array.from(state.hiddenPanels.entries());
+
       localStorage.setItem(
         WORKBOARD_LAYOUT_STORAGE_KEY,
         JSON.stringify({
           layout: state.layout,
           panels: state.panels,
+          hiddenPanels: hiddenPanelsArray,
         })
       );
     }
-  }, [state.layout, state.panels]);
+  }, [state.layout, state.panels, state.hiddenPanels]);
 
   /** Toggle panel visibility - hide/show panel while preserving its position */
   const togglePanelVisibility = useCallback((id: string) => {

@@ -402,13 +402,22 @@ export function calculateGridHeight(
  * Used to detect if one panel moved into another's space
  */
 function itemsOverlap(a: LayoutItem, b: LayoutItem): boolean {
+  console.log('[itemsOverlap] 🔍 Checking overlap between panels');
+  console.log('[itemsOverlap] Panel A:', { i: a.i, x: a.x, y: a.y, w: a.w, h: a.h, right: a.x + a.w, bottom: a.y + a.h });
+  console.log('[itemsOverlap] Panel B:', { i: b.i, x: b.x, y: b.y, w: b.w, h: b.h, right: b.x + b.w, bottom: b.y + b.h });
+
   // Check if rectangles overlap
-  return !(
-    a.x + a.w <= b.x ||  // a is left of b
-    b.x + b.w <= a.x ||  // b is left of a
-    a.y + a.h <= b.y ||  // a is above b
-    b.y + b.h <= a.y     // b is above a
-  );
+  const aLeftOfB = a.x + a.w <= b.x;
+  const bLeftOfA = b.x + b.w <= a.x;
+  const aAboveB = a.y + a.h <= b.y;
+  const bAboveA = b.y + b.h <= a.y;
+
+  console.log('[itemsOverlap] Separation checks: aLeftOfB =', aLeftOfB, ', bLeftOfA =', bLeftOfA, ', aAboveB =', aAboveB, ', bAboveA =', bAboveA);
+
+  const isOverlapping = !(aLeftOfB || bLeftOfA || aAboveB || bAboveA);
+  console.log('[itemsOverlap] Result: isOverlapping =', isOverlapping, isOverlapping ? '✅ OVERLAP DETECTED' : '❌ No overlap');
+
+  return isOverlapping;
 }
 
 /**
@@ -435,45 +444,76 @@ export function resolveOverlapSwap(
   oldLayout: LayoutItem[],
   newLayout: LayoutItem[]
 ): LayoutItem[] {
+  console.log('');
+  console.log('╔' + '═'.repeat(58) + '╗');
+  console.log('║ [resolveOverlapSwap] 🔄 STARTING OVERLAP RESOLUTION       ║');
+  console.log('╚' + '═'.repeat(58) + '╝');
+  console.log('[resolveOverlapSwap] draggedPanelId:', draggedPanelId);
+  console.log('[resolveOverlapSwap] oldLayout (BEFORE drag):', oldLayout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
+  console.log('[resolveOverlapSwap] newLayout (AFTER drag):', newLayout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
+
   // Clone layout to avoid mutation
   const resultLayout = newLayout.map(item => ({ ...item }));
+  console.log('[resolveOverlapSwap] Step 1: Cloned newLayout to resultLayout (to avoid mutation)');
 
   // Find dragged panel in both layouts
   const draggedOld = oldLayout.find(item => item.i === draggedPanelId);
   const draggedNewIndex = resultLayout.findIndex(item => item.i === draggedPanelId);
   const draggedNew = draggedNewIndex >= 0 ? resultLayout[draggedNewIndex] : null;
 
+  console.log('[resolveOverlapSwap] Step 2: Finding dragged panel in both layouts');
+  console.log('[resolveOverlapSwap] draggedOld (from oldLayout):', draggedOld ? { i: draggedOld.i, x: draggedOld.x, y: draggedOld.y, w: draggedOld.w, h: draggedOld.h } : 'NOT FOUND');
+  console.log('[resolveOverlapSwap] draggedNewIndex:', draggedNewIndex);
+  console.log('[resolveOverlapSwap] draggedNew (from newLayout):', draggedNew ? { i: draggedNew.i, x: draggedNew.x, y: draggedNew.y, w: draggedNew.w, h: draggedNew.h } : 'NOT FOUND');
+
   // If we can't find the dragged panel, return as-is
   if (!draggedOld || !draggedNew) {
+    console.log('[resolveOverlapSwap] ⚠️ EARLY EXIT: Could not find dragged panel in one of the layouts');
     return resultLayout;
   }
 
   // Check if the dragged panel actually moved
   const hasMoved = draggedOld.x !== draggedNew.x || draggedOld.y !== draggedNew.y;
+  console.log('[resolveOverlapSwap] Step 3: Checking if panel moved');
+  console.log('[resolveOverlapSwap] Position change: old=(%d,%d) → new=(%d,%d)', draggedOld.x, draggedOld.y, draggedNew.x, draggedNew.y);
+  console.log('[resolveOverlapSwap] hasMoved:', hasMoved);
+
   if (!hasMoved) {
+    console.log('[resolveOverlapSwap] ⚠️ EARLY EXIT: Panel did not move, no swap needed');
     return resultLayout;
   }
 
   // Find all panels that overlap with the dragged panel's NEW position
+  console.log('[resolveOverlapSwap] Step 4: Finding all overlapping panels');
   const overlappedPanels: Array<{ index: number; oldItem: LayoutItem; newItem: LayoutItem }> = [];
 
   for (let i = 0; i < resultLayout.length; i++) {
     const panel = resultLayout[i];
 
     // Skip the dragged panel itself
-    if (panel.i === draggedPanelId) continue;
+    if (panel.i === draggedPanelId) {
+      console.log('[resolveOverlapSwap] Skipping panel "%s" (is the dragged panel)', panel.i);
+      continue;
+    }
 
+    console.log('[resolveOverlapSwap] Checking if panel "%s" overlaps with dragged panel...', panel.i);
     // Check if this panel overlaps with dragged panel's new position
     if (itemsOverlap(draggedNew, panel)) {
       const oldItem = oldLayout.find(o => o.i === panel.i);
       if (oldItem) {
         overlappedPanels.push({ index: i, oldItem, newItem: panel });
+        console.log('[resolveOverlapSwap] ✅ Panel "%s" OVERLAPS! Added to overlappedPanels', panel.i);
       }
     }
   }
 
+  console.log('[resolveOverlapSwap] Step 5: Overlap detection complete');
+  console.log('[resolveOverlapSwap] Total overlapped panels found:', overlappedPanels.length);
+  console.log('[resolveOverlapSwap] Overlapped panels:', overlappedPanels.map(p => ({ i: p.newItem.i, index: p.index })));
+
   // If no overlaps, return as-is
   if (overlappedPanels.length === 0) {
+    console.log('[resolveOverlapSwap] ⚠️ EARLY EXIT: No overlaps detected, returning layout as-is');
     return resultLayout;
   }
 
@@ -481,36 +521,71 @@ export function resolveOverlapSwap(
   const draggedOldPos = { x: draggedOld.x, y: draggedOld.y };
   const draggedOldSize = { w: draggedOld.w, h: draggedOld.h };
 
+  console.log('[resolveOverlapSwap] Step 6: Storing dragged panel OLD position/size for swap');
+  console.log('[resolveOverlapSwap] draggedOldPos:', draggedOldPos);
+  console.log('[resolveOverlapSwap] draggedOldSize:', draggedOldSize);
+
   // Calculate total height of overlapped panels (for multi-panel swap)
   const totalOverlappedHeight = overlappedPanels.reduce((sum, p) => sum + p.oldItem.h, 0);
+  console.log('[resolveOverlapSwap] totalOverlappedHeight:', totalOverlappedHeight);
 
   // For single panel swap: exchange sizes completely
   if (overlappedPanels.length === 1) {
+    console.log('[resolveOverlapSwap] Step 7a: SINGLE PANEL SWAP');
     const { index: overlappedIndex, oldItem: overlappedOld } = overlappedPanels[0];
 
+    console.log('[resolveOverlapSwap] Overlapped panel details:');
+    console.log('[resolveOverlapSwap]   - ID:', overlappedOld.i);
+    console.log('[resolveOverlapSwap]   - Index in resultLayout:', overlappedIndex);
+    console.log('[resolveOverlapSwap]   - OLD position/size:', { x: overlappedOld.x, y: overlappedOld.y, w: overlappedOld.w, h: overlappedOld.h });
+
+    console.log('[resolveOverlapSwap] 🔄 SWAPPING POSITIONS AND SIZES:');
+
     // Move overlapped panel to dragged panel's old position with dragged panel's old size
+    console.log('[resolveOverlapSwap] Moving overlapped panel "%s" to dragged panel OLD position:', overlappedOld.i);
+    console.log('[resolveOverlapSwap]   BEFORE: x=%d, y=%d, w=%d, h=%d', resultLayout[overlappedIndex].x, resultLayout[overlappedIndex].y, resultLayout[overlappedIndex].w, resultLayout[overlappedIndex].h);
+
     resultLayout[overlappedIndex].x = draggedOldPos.x;
     resultLayout[overlappedIndex].y = draggedOldPos.y;
     resultLayout[overlappedIndex].w = draggedOldSize.w;
     resultLayout[overlappedIndex].h = draggedOldSize.h;
 
+    console.log('[resolveOverlapSwap]   AFTER:  x=%d, y=%d, w=%d, h=%d', resultLayout[overlappedIndex].x, resultLayout[overlappedIndex].y, resultLayout[overlappedIndex].w, resultLayout[overlappedIndex].h);
+
     // Update dragged panel to take overlapped panel's old size
+    console.log('[resolveOverlapSwap] Updating dragged panel "%s" to take overlapped panel OLD size:', draggedPanelId);
+    console.log('[resolveOverlapSwap]   BEFORE: w=%d, h=%d', resultLayout[draggedNewIndex].w, resultLayout[draggedNewIndex].h);
+
     resultLayout[draggedNewIndex].w = overlappedOld.w;
     resultLayout[draggedNewIndex].h = overlappedOld.h;
+
+    console.log('[resolveOverlapSwap]   AFTER:  w=%d, h=%d', resultLayout[draggedNewIndex].w, resultLayout[draggedNewIndex].h);
   } else {
     // Multi-panel swap: stack overlapped panels at dragged panel's old position
+    console.log('[resolveOverlapSwap] Step 7b: MULTI-PANEL SWAP (stacking %d panels)', overlappedPanels.length);
     let currentY = draggedOldPos.y;
 
     for (const { index } of overlappedPanels) {
+      console.log('[resolveOverlapSwap] Moving panel "%s" to x=%d, y=%d, w=%d (keeping original height)', resultLayout[index].i, draggedOldPos.x, currentY, draggedOldSize.w);
+
       resultLayout[index].x = draggedOldPos.x;
       resultLayout[index].y = currentY;
       resultLayout[index].w = draggedOldSize.w;
       // Keep original heights for multi-panel case
       currentY += resultLayout[index].h;
+
+      console.log('[resolveOverlapSwap] Next panel will start at y=%d', currentY);
     }
 
-    // Dragged panel keeps its new size in multi-panel case
+    console.log('[resolveOverlapSwap] Dragged panel keeps its new size in multi-panel case');
   }
+
+  console.log('[resolveOverlapSwap] Step 8: FINAL RESULT');
+  console.log('[resolveOverlapSwap] resultLayout:', resultLayout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
+  console.log('╔' + '═'.repeat(58) + '╗');
+  console.log('║ [resolveOverlapSwap] ✅ OVERLAP RESOLUTION COMPLETE        ║');
+  console.log('╚' + '═'.repeat(58) + '╝');
+  console.log('');
 
   return resultLayout;
 }
