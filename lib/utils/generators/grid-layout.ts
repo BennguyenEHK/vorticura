@@ -230,6 +230,70 @@ function itemsOverlap(a: LayoutItem, b: LayoutItem): boolean {
 }
 
 /**
+ * Equalize heights of overlapped panels to match target height
+ * Handles both expansion (when target > combined) and shrinking (when target < combined)
+ *
+ * @param resultLayout - The layout array to modify (mutates in place)
+ * @param overlappedPanels - Array of panels to adjust with their indices
+ * @param targetHeight - The height that combined panels should match (dragged panel's old height)
+ * @param totalOverlappedHeight - Current combined height of overlapped panels
+ * @param startY - Y position where the stacked panels start
+ */
+function equalizeHeights(
+  resultLayout: LayoutItem[],
+  overlappedPanels: Array<{ index: number; oldItem: LayoutItem; newItem: LayoutItem }>,
+  targetHeight: number,
+  totalOverlappedHeight: number,
+  startY: number
+): void {
+  // Calculate height difference: positive = expand, negative = shrink
+  const heightDiff = targetHeight - totalOverlappedHeight;
+
+  // No adjustment needed if heights match
+  if (heightDiff === 0) {
+    console.log('[equalizeHeights] Heights match, no adjustment needed');
+    return;
+  }
+
+  const absHeightDiff = Math.abs(heightDiff);  // Absolute difference for calculation
+  const panelCount = overlappedPanels.length;  // Number of panels to adjust
+  const baseAdjust = Math.floor(absHeightDiff / panelCount);  // Base amount per panel
+  const remainder = absHeightDiff % panelCount;  // Extra units to distribute
+
+  if (heightDiff > 0) {
+    // EXPAND: dragged panel was taller than combined overlapped panels
+    console.log('[equalizeHeights] Expanding panels: diff=%d, baseAdjust=%d, remainder=%d', heightDiff, baseAdjust, remainder);
+
+    let adjustedY = startY;
+    for (let i = 0; i < panelCount; i++) {
+      const { index } = overlappedPanels[i];
+      resultLayout[index].y = adjustedY;  // Update Y position
+      // Add extra height: base + 1 extra for last 'remainder' panels
+      const extraHeight = i >= (panelCount - remainder) ? 1 : 0;
+      resultLayout[index].h += baseAdjust + extraHeight;  // Expand height
+      adjustedY += resultLayout[index].h;  // Next panel starts after this one
+      console.log('[equalizeHeights] Panel "%s" expanded: h=%d, nextY=%d', resultLayout[index].i, resultLayout[index].h, adjustedY);
+    }
+  } else {
+    // SHRINK: overlapped panels combined are taller than dragged panel was
+    console.log('[equalizeHeights] Shrinking panels: diff=%d, baseAdjust=%d, remainder=%d', heightDiff, baseAdjust, remainder);
+
+    let adjustedY = startY;
+    for (let i = 0; i < panelCount; i++) {
+      const { index } = overlappedPanels[i];
+      resultLayout[index].y = adjustedY;  // Update Y position
+      // Subtract height: base + 1 extra for last 'remainder' panels
+      const extraShrink = i >= (panelCount - remainder) ? 1 : 0;
+      resultLayout[index].h -= baseAdjust + extraShrink;  // Shrink height
+      // Ensure minimum height of 1 to prevent zero/negative heights
+      if (resultLayout[index].h < 1) resultLayout[index].h = 1;
+      adjustedY += resultLayout[index].h;  // Next panel starts after this one
+      console.log('[equalizeHeights] Panel "%s" shrunk: h=%d, nextY=%d', resultLayout[index].i, resultLayout[index].h, adjustedY);
+    }
+  }
+}
+
+/**
  * Resolve overlaps by swapping panel positions
  *
  * This function is designed for allowOverlap=true mode where:
@@ -409,26 +473,15 @@ export function resolveOverlapSwap(
       resultLayout[draggedNewIndex].x, resultLayout[draggedNewIndex].y,
       resultLayout[draggedNewIndex].w, resultLayout[draggedNewIndex].h);
 
-    // Height equalization: if dragged panel was taller than combined overlapped panels
-    const heightDiff = draggedOldSize.h - totalOverlappedHeight;
-    if (heightDiff > 0) {
-      console.log('[resolveOverlapSwap] Height mismatch detected: diff=%d, distributing evenly', heightDiff);
-      // Calculate how much to add to each panel
-      const baseGap = Math.floor(heightDiff / overlappedPanels.length);  // Base amount per panel
-      const remainder = heightDiff % overlappedPanels.length;            // Extra units to distribute
-
-      // Recalculate positions with expanded heights
-      let adjustedY = draggedOldPos.y;
-      for (let i = 0; i < overlappedPanels.length; i++) {
-        const { index } = overlappedPanels[i];
-        resultLayout[index].y = adjustedY;  // Update Y position
-        // Add extra height: base + 1 extra for last 'remainder' panels
-        const extraHeight = i >= (overlappedPanels.length - remainder) ? 1 : 0;
-        resultLayout[index].h += baseGap + extraHeight;
-        adjustedY += resultLayout[index].h;  // Next panel starts after this one
-        console.log('[resolveOverlapSwap] Panel "%s" expanded: h=%d, nextY=%d', resultLayout[index].i, resultLayout[index].h, adjustedY);
-      }
-    }
+    // Equalize heights: adjust overlapped panels to match dragged panel's old height
+    // Handles both expansion (dragged was taller) and shrinking (overlapped were taller)
+    equalizeHeights(
+      resultLayout,           // Layout to modify
+      overlappedPanels,       // Panels to adjust
+      draggedOldSize.h,       // Target height (dragged panel's old height)
+      totalOverlappedHeight,  // Current combined height
+      draggedOldPos.y         // Y position where stacked panels start
+    );
   }
 
   console.log('[resolveOverlapSwap] Step 8: FINAL RESULT');
