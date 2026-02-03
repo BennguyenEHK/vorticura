@@ -6,11 +6,54 @@
 // - Fills horizontal gaps when panels are resized or removed
 // - Calculates grid height based on panel layout
 // - Overlap-based swap: resolves panel overlaps by swapping positions
+// - Layout equality check to prevent unnecessary updates
 //
 // Key approach: With allowOverlap=true, RGL doesn't push panels.
 // We detect overlaps after drag and resolve by swapping positions.
 
 import type { LayoutItem, SwapResult } from "@/types/workboard";
+
+// =============================================
+// Layout Equality Check
+// =============================================
+
+/**
+ * Check if two layouts are equal by comparing content (not references)
+ * Used to prevent unnecessary state updates that cause infinite loops
+ *
+ * @param layoutA - First layout to compare
+ * @param layoutB - Second layout to compare
+ * @returns true if layouts have identical content
+ */
+export function areLayoutsEqual(
+  layoutA: LayoutItem[],
+  layoutB: LayoutItem[]
+): boolean {
+  // Different lengths = not equal
+  if (layoutA.length !== layoutB.length) {
+    return false;
+  }
+
+  // Compare each item by content
+  for (const itemA of layoutA) {
+    const itemB = layoutB.find(b => b.i === itemA.i);
+    if (!itemB) {
+      return false; // Item not found in layoutB
+    }
+
+    // Compare position and size
+    if (
+      itemA.x !== itemB.x ||
+      itemA.y !== itemB.y ||
+      itemA.w !== itemB.w ||
+      itemA.h !== itemB.h
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 // =============================================
 // Types

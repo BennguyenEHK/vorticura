@@ -25,7 +25,8 @@ import { WorkboardDropZone } from "./workboard-drop-zone";
 import { DEFAULT_GRID_CONFIG, type LayoutItem } from "@/types/workboard";
 import {
   compactAndFill,
-  resolveOverlapSwap
+  resolveOverlapSwap,
+  areLayoutsEqual
 } from "@/lib/utils/grid-layout";
 
 // =============================================
@@ -187,9 +188,6 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
       justFinishedDragRef.current = true;
       console.log('[DRAG_STOP] justFinishedDragRef set to: true (to prevent infinite loop)');
 
-      setIsDragging(false);
-      console.log('[DRAG_STOP] isDragging set to: false');
-
       // Convert readonly Layout to mutable LayoutItem[]
       console.log('[DRAG_STOP] Converting newLayout to mutable...');
       const mutableLayout = toMutableLayout(newLayout);
@@ -223,6 +221,10 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
         console.log('[DRAG_STOP] ⚠️ No draggedId found, using layout as-is');
         updateLayout(mutableLayout);
       }
+
+      // Set isDragging to false AFTER updateLayout to prevent intermediate re-renders
+      setIsDragging(false);
+      console.log('[DRAG_STOP] isDragging set to: false (after updateLayout)');
       console.log('='.repeat(60));
     },
     [updateLayout]
@@ -247,23 +249,34 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
       // This prevents infinite loop: handleDragStop -> updateLayout -> onLayoutChange -> updateLayout...
       if (justFinishedDragRef.current) {
         console.log('[LAYOUT_CHANGE] 🚫 SKIPPING - justFinishedDragRef is true (preventing infinite loop)');
-        console.log('[LAYOUT_CHANGE] Resetting justFinishedDragRef to false');
-        justFinishedDragRef.current = false;
+        // Defer reset to next frame to guard against multiple onLayoutChange calls per render cycle
+        requestAnimationFrame(() => {
+          console.log('[LAYOUT_CHANGE] Resetting justFinishedDragRef to false (next frame)');
+          justFinishedDragRef.current = false;
+        });
         return;
       }
 
       // Only update during non-drag operations (resize, etc.)
       // Drag operations are handled by handleDragStop for swap detection
       if (!isDragging) {
+        // Convert readonly Layout to mutable LayoutItem[]
+        const mutableNewLayout = toMutableLayout(newLayout);
+
+        // Check if layout actually changed to prevent unnecessary updates
+        if (areLayoutsEqual(layout, mutableNewLayout)) {
+          console.log('[LAYOUT_CHANGE] 🚫 SKIPPING - layouts are equal (no change)');
+          return;
+        }
+
         console.log('[LAYOUT_CHANGE] ✅ Processing layout change (not dragging, not just finished drag)');
         console.log('[LAYOUT_CHANGE] Calling updateLayout() with new layout');
-        // Convert readonly Layout to mutable LayoutItem[]
-        updateLayout(toMutableLayout(newLayout));
+        updateLayout(mutableNewLayout);
       } else {
         console.log('[LAYOUT_CHANGE] 🚫 SKIPPING - currently dragging (isDragging = true)');
       }
     },
-    [updateLayout, isDragging]
+    [updateLayout, isDragging, layout]
   );
 
   // =============================================
