@@ -13,6 +13,48 @@
 import type { LayoutItem } from "@/types/workboard";
 
 // =============================================
+// Change Type Detection
+// =============================================
+
+export type ChangeType = 'drag' | 'resize' | 'added' | 'none';
+
+export interface ChangeDetectionResult {
+  changedId: string | null;
+  changeType: ChangeType;
+}
+
+/**
+ * Detect what type of change occurred between two layouts
+ * Position change = DRAG, Size change = RESIZE
+ * Position takes priority if both changed
+ */
+export function detectChangeType(
+  oldLayout: LayoutItem[],
+  newLayout: LayoutItem[]
+): ChangeDetectionResult {
+  for (const newItem of newLayout) {
+    const oldItem = oldLayout.find(item => item.i === newItem.i);
+
+    // Detect panels added to layout (exist in new but not old)
+    if (!oldItem) {
+      return { changedId: newItem.i, changeType: 'added' };
+    }
+
+    const positionChanged = oldItem.x !== newItem.x || oldItem.y !== newItem.y;
+    const sizeChanged = oldItem.w !== newItem.w || oldItem.h !== newItem.h;
+
+    if (positionChanged) {
+      return { changedId: newItem.i, changeType: 'drag' };
+    }
+    if (sizeChanged) {
+      return { changedId: newItem.i, changeType: 'resize' };
+    }
+  }
+
+  return { changedId: null, changeType: 'none' };
+}
+
+// =============================================
 // Layout Equality Check
 // =============================================
 
@@ -164,7 +206,7 @@ export function compactAndFill(
   if (layout.length === 0) return layout;
 
   // Clone layout to avoid mutation
-  let newLayout = layout.map((item) => ({ ...item }));
+  const newLayout = layout.map((item) => ({ ...item }));
 
   // Sort by position: top-to-bottom, then left-to-right
   newLayout.sort((a, b) => {
@@ -210,7 +252,7 @@ export function compactAndFill(
  * Check if two layout items overlap in position
  * Used to detect if one panel moved into another's space
  */
-function itemsOverlap(a: LayoutItem, b: LayoutItem): boolean {
+export function itemsOverlap(a: LayoutItem, b: LayoutItem): boolean {
   console.log('[itemsOverlap] 🔍 Checking overlap between panels');
   console.log('[itemsOverlap] Panel A:', { i: a.i, x: a.x, y: a.y, w: a.w, h: a.h, right: a.x + a.w, bottom: a.y + a.h });
   console.log('[itemsOverlap] Panel B:', { i: b.i, x: b.x, y: b.y, w: b.w, h: b.h, right: b.x + b.w, bottom: b.y + b.h });
@@ -227,6 +269,26 @@ function itemsOverlap(a: LayoutItem, b: LayoutItem): boolean {
   console.log('[itemsOverlap] Result: isOverlapping =', isOverlapping, isOverlapping ? '✅ OVERLAP DETECTED' : '❌ No overlap');
 
   return isOverlapping;
+}
+
+/**
+ * Find all overlapping panel pairs in a layout
+ * Returns array of [panelId1, panelId2] tuples for each overlap
+ *
+ * @param layout - Layout to check for overlaps
+ * @returns Array of overlapping panel ID pairs
+ */
+export function findAllOverlaps(layout: LayoutItem[]): Array<[string, string]> {
+  const overlaps: Array<[string, string]> = [];
+  for (let i = 0; i < layout.length; i++) {
+    for (let j = i + 1; j < layout.length; j++) {
+      if (itemsOverlap(layout[i], layout[j])) {
+        overlaps.push([layout[i].i, layout[j].i]);
+      }
+    }
+  }
+  console.log('[findAllOverlaps] Found %d overlaps:', overlaps.length, overlaps);
+  return overlaps;
 }
 
 /**
@@ -354,6 +416,32 @@ export function resolveOverlapSwap(
   if (!hasMoved) {
     console.log('[resolveOverlapSwap] ⚠️ EARLY EXIT: Panel did not move, no swap needed');
     return resultLayout;
+  }
+
+  // NEW: Check if dragged panel's OLD position equals any overlapped panel's position
+  // This happens when a new panel spawns at same location (e.g., toggle workflow on)
+  // In this case, swap would have no effect, so fallback to push
+  const checkSamePositionOverlap = (): boolean => {
+    for (let i = 0; i < resultLayout.length; i++) {
+      const panel = resultLayout[i];
+      if (panel.i === draggedPanelId) continue;
+
+      // Check if this panel overlaps with dragged panel
+      if (itemsOverlap(draggedNew, panel)) {
+        // Check if dragged panel's OLD position is same as this panel's position
+        if (panel.x === draggedOld.x && panel.y === draggedOld.y) {
+          console.log('[resolveOverlapSwap] ⚠️ Same position detected: dragged OLD pos (%d,%d) == panel "%s" pos',
+            draggedOld.x, draggedOld.y, panel.i);
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  if (checkSamePositionOverlap()) {
+    console.log('[resolveOverlapSwap] ⚠️ Falling back to PUSH resolution (same position swap would have no effect)');
+    return resolveOverlapPush(draggedPanelId, resultLayout);
   }
 
   // Find all panels that overlap with the dragged panel's NEW position
@@ -489,6 +577,290 @@ export function resolveOverlapSwap(
   console.log('╔' + '═'.repeat(58) + '╗');
   console.log('║ [resolveOverlapSwap] ✅ OVERLAP RESOLUTION COMPLETE        ║');
   console.log('╚' + '═'.repeat(58) + '╝');
+  console.log('');
+
+  return resultLayout;
+}
+
+// =============================================
+// Overlap Push Resolution (for Resize operations)
+// =============================================
+
+/**
+ * Resolve overlaps by pushing overlapped panels down
+ * Used for RESIZE operations where swap doesn't make sense
+ *
+ * Algorithm (BFS-based):
+ * 1. Find the resized panel
+ * 2. Use queue to process panels breadth-first
+ * 3. Push overlapped panels DOWN (newY = current.y + current.h)
+ * 4. Track pushed panels to prevent infinite loops
+ *
+ * @param resizedPanelId - ID of the panel that was resized
+ * @param newLayout - Layout after resize (from RGL)
+ * @returns Layout with overlaps resolved by pushing
+ */
+export function resolveOverlapPush(
+  resizedPanelId: string,
+  newLayout: LayoutItem[]
+): LayoutItem[] {
+  console.log('');
+  console.log('╔' + '═'.repeat(58) + '╗');
+  console.log('║ [resolveOverlapPush] 📐 STARTING PUSH RESOLUTION          ║');
+  console.log('╚' + '═'.repeat(58) + '╝');
+  console.log('[resolveOverlapPush] resizedPanelId:', resizedPanelId);
+
+  // Clone to avoid mutation
+  const resultLayout = newLayout.map(item => ({ ...item }));
+
+  // Find the resized panel
+  const resizedPanel = resultLayout.find(item => item.i === resizedPanelId);
+  if (!resizedPanel) {
+    console.log('[resolveOverlapPush] ⚠️ Resized panel not found, returning as-is');
+    return resultLayout;
+  }
+
+  // Track pushed panels to avoid infinite recursion
+  const pushedPanels = new Set<string>([resizedPanelId]);
+
+  // Process queue: panels that may cause overlaps
+  const toProcess = [resizedPanelId];
+
+  while (toProcess.length > 0) {
+    const currentId = toProcess.shift()!;
+    const currentPanel = resultLayout.find(item => item.i === currentId);
+    if (!currentPanel) continue;
+
+    console.log('[resolveOverlapPush] Processing panel:', currentId);
+
+    // Find all panels overlapping with current panel
+    for (let i = 0; i < resultLayout.length; i++) {
+      const otherPanel = resultLayout[i];
+
+      // Skip self and already pushed panels
+      if (otherPanel.i === currentId) continue;
+      if (pushedPanels.has(otherPanel.i)) continue;
+
+      // Check overlap
+      if (!itemsOverlap(currentPanel, otherPanel)) continue;
+
+      console.log('[resolveOverlapPush] ✅ Panel "%s" overlaps, pushing down', otherPanel.i);
+
+      // Calculate new Y position (push down below current panel)
+      const newY = currentPanel.y + currentPanel.h;
+
+      console.log('[resolveOverlapPush] Moving "%s": y=%d → y=%d', otherPanel.i, resultLayout[i].y, newY);
+
+      // Apply push
+      resultLayout[i] = {
+        ...resultLayout[i],
+        y: newY
+      };
+
+      // Mark as pushed and add to process queue for secondary overlaps
+      pushedPanels.add(otherPanel.i);
+      toProcess.push(otherPanel.i);
+    }
+  }
+
+  console.log('[resolveOverlapPush] ✅ PUSH RESOLUTION COMPLETE');
+  console.log('[resolveOverlapPush] Final layout:', resultLayout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
+  console.log('');
+
+  return resultLayout;
+}
+
+// =============================================
+// Pull Up Resolution (for H shrink operations)
+// =============================================
+
+/**
+ * Pull panels up when a panel shrinks in height
+ * Used after H shrink to fill the vertical gap
+ *
+ * Algorithm:
+ * 1. Find the shrunk panel in both old and new layouts
+ * 2. Calculate shrink amount (oldH - newH)
+ * 3. Find panels that are BELOW the shrunk panel (horizontally overlapping)
+ * 4. Pull them UP by the shrink amount (if they were adjacent)
+ *
+ * @param shrunkPanelId - ID of the panel that was shrunk
+ * @param newLayout - Layout after shrink
+ * @param oldLayout - Layout before shrink (to calculate shrink amount)
+ * @returns Layout with panels pulled up to fill the gap
+ */
+export function resolveOverlapPull(
+  shrunkPanelId: string,
+  newLayout: LayoutItem[],
+  oldLayout: LayoutItem[]
+): LayoutItem[] {
+  console.log('');
+  console.log('╔' + '═'.repeat(58) + '╗');
+  console.log('║ [resolveOverlapPull] ⬆️ STARTING PULL-UP RESOLUTION        ║');
+  console.log('╚' + '═'.repeat(58) + '╝');
+  console.log('[resolveOverlapPull] shrunkPanelId:', shrunkPanelId);
+
+  const resultLayout = newLayout.map(item => ({ ...item }));
+
+  const oldPanel = oldLayout.find(item => item.i === shrunkPanelId);
+  const newPanel = resultLayout.find(item => item.i === shrunkPanelId);
+
+  if (!oldPanel || !newPanel) {
+    console.log('[resolveOverlapPull] ⚠️ Panel not found in one of the layouts');
+    return resultLayout;
+  }
+
+  const shrinkAmount = oldPanel.h - newPanel.h;
+  console.log('[resolveOverlapPull] Shrink amount: %d (oldH=%d, newH=%d)', shrinkAmount, oldPanel.h, newPanel.h);
+
+  if (shrinkAmount <= 0) {
+    console.log('[resolveOverlapPull] ⚠️ Panel did not shrink, returning as-is');
+    return resultLayout;
+  }
+
+  const oldBottom = oldPanel.y + oldPanel.h;
+  const newBottom = newPanel.y + newPanel.h;
+
+  console.log('[resolveOverlapPull] oldBottom=%d, newBottom=%d', oldBottom, newBottom);
+
+  // Find panels that were directly below (touching or within the shrunk area)
+  for (let i = 0; i < resultLayout.length; i++) {
+    const panel = resultLayout[i];
+    if (panel.i === shrunkPanelId) continue;
+
+    // Check if panel horizontally overlaps with shrunk panel (same columns)
+    const horizontalOverlap = !(panel.x + panel.w <= newPanel.x || panel.x >= newPanel.x + newPanel.w);
+
+    // Check if panel was below the shrunk panel's old bottom
+    // and is currently below the new bottom
+    const wasBelow = panel.y >= oldBottom - shrinkAmount; // Was in the shrunk zone or below
+    const isBelowNewBottom = panel.y > newBottom;
+
+    console.log('[resolveOverlapPull] Panel "%s": horizontalOverlap=%s, wasBelow=%s, isBelowNewBottom=%s',
+      panel.i, horizontalOverlap, wasBelow, isBelowNewBottom);
+
+    if (horizontalOverlap && wasBelow && isBelowNewBottom) {
+      // Pull up by shrink amount, but don't go above the new bottom
+      const newY = Math.max(newBottom, panel.y - shrinkAmount);
+      console.log('[resolveOverlapPull] ⬆️ Pulling panel "%s" up: y=%d → y=%d', panel.i, panel.y, newY);
+      resultLayout[i] = { ...panel, y: newY };
+    }
+  }
+
+  console.log('[resolveOverlapPull] ✅ PULL-UP RESOLUTION COMPLETE');
+  console.log('[resolveOverlapPull] Final layout:', resultLayout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
+  console.log('');
+
+  return resultLayout;
+}
+
+// =============================================
+// Push Right Resolution (for W extend operations)
+// =============================================
+
+/**
+ * Push panels to the right when a panel extends in width
+ * Similar to resolveOverlapPush but horizontal
+ *
+ * Algorithm (BFS-based):
+ * 1. Find the extended panel
+ * 2. Use queue to process panels breadth-first
+ * 3. Push overlapped panels RIGHT (newX = current.x + current.w)
+ * 4. Track pushed panels to prevent infinite loops
+ *
+ * @param extendedPanelId - ID of the panel that was extended
+ * @param newLayout - Layout after extend
+ * @param cols - Number of grid columns (default: 12)
+ * @returns Layout with overlaps resolved by pushing right
+ */
+export function resolveOverlapPushRight(
+  extendedPanelId: string,
+  newLayout: LayoutItem[],
+  cols: number = 12
+): LayoutItem[] {
+  console.log('');
+  console.log('╔' + '═'.repeat(58) + '╗');
+  console.log('║ [resolveOverlapPushRight] ➡️ STARTING PUSH-RIGHT RESOLUTION ║');
+  console.log('╚' + '═'.repeat(58) + '╝');
+  console.log('[resolveOverlapPushRight] extendedPanelId:', extendedPanelId);
+  console.log('[resolveOverlapPushRight] cols:', cols);
+
+  const resultLayout = newLayout.map(item => ({ ...item }));
+
+  const extendedPanel = resultLayout.find(item => item.i === extendedPanelId);
+  if (!extendedPanel) {
+    console.log('[resolveOverlapPushRight] ⚠️ Extended panel not found');
+    return resultLayout;
+  }
+
+  // Track pushed panels to avoid infinite recursion
+  const pushedPanels = new Set<string>([extendedPanelId]);
+
+  // Process queue: panels that may cause overlaps
+  const toProcess = [extendedPanelId];
+
+  while (toProcess.length > 0) {
+    const currentId = toProcess.shift()!;
+    const currentPanel = resultLayout.find(item => item.i === currentId);
+    if (!currentPanel) continue;
+
+    console.log('[resolveOverlapPushRight] Processing panel:', currentId);
+
+    // Find all panels overlapping with current panel
+    for (let i = 0; i < resultLayout.length; i++) {
+      const otherPanel = resultLayout[i];
+
+      // Skip self and already pushed panels
+      if (otherPanel.i === currentId) continue;
+      if (pushedPanels.has(otherPanel.i)) continue;
+
+      // Check overlap
+      if (!itemsOverlap(currentPanel, otherPanel)) continue;
+
+      // Calculate new X position (push right to current panel's right edge)
+      const newX = currentPanel.x + currentPanel.w;
+
+      // Check if would go off grid
+      if (newX + otherPanel.w > cols) {
+        // Calculate available width after pushing right
+        const availableWidth = cols - newX;
+        const minWidth = otherPanel.minW ?? 1;
+
+        // Can shrink to fit?
+        if (availableWidth >= minWidth) {
+          // Push right AND shrink width to fit within grid
+          resultLayout[i] = {
+            ...resultLayout[i],
+            x: newX,
+            w: availableWidth
+          };
+          pushedPanels.add(otherPanel.i);
+          // Don't add to toProcess - already at grid edge, can't push further
+          console.log('[resolveOverlapPushRight] ➡️ Panel "%s" shrunk to fit: x=%d, w=%d (was %d)',
+            otherPanel.i, newX, availableWidth, otherPanel.w);
+        } else {
+          console.log('[resolveOverlapPushRight] ⚠️ Panel "%s" cannot fit (available=%d, minW=%d), skipping',
+            otherPanel.i, availableWidth, minWidth);
+        }
+        continue;
+      }
+
+      console.log('[resolveOverlapPushRight] ➡️ Pushing panel "%s" right: x=%d → x=%d', otherPanel.i, otherPanel.x, newX);
+
+      // Apply push
+      resultLayout[i] = {
+        ...resultLayout[i],
+        x: newX
+      };
+
+      // Mark as pushed and add to process queue for secondary overlaps
+      pushedPanels.add(otherPanel.i);
+      toProcess.push(otherPanel.i);
+    }
+  }
+
+  console.log('[resolveOverlapPushRight] ✅ PUSH-RIGHT RESOLUTION COMPLETE');
+  console.log('[resolveOverlapPushRight] Final layout:', resultLayout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
   console.log('');
 
   return resultLayout;
