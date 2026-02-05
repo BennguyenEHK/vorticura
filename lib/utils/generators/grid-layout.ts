@@ -180,6 +180,34 @@ function countEmptyColumnsToRight(
   return emptyCount;
 }
 
+/**
+ * Count empty columns to the left of a panel
+ * Checks all rows that the panel occupies
+ */
+function countEmptyColumnsToLeft(
+  grid: OccupancyGrid,
+  item: LayoutItem
+): number {
+  const leftEdge = item.x;
+  if (leftEdge <= 0) return 0;
+
+  let emptyCount = 0;
+  for (let col = leftEdge - 1; col >= 0; col--) {
+    let columnEmpty = true;
+    for (let row = item.y; row < item.y + item.h && row < grid.length; row++) {
+      if (grid[row][col]) {
+        columnEmpty = false;
+        break;
+      }
+    }
+    if (columnEmpty) {
+      emptyCount++;
+    } else {
+      break;
+    }
+  }
+  return emptyCount;
+}
 
 // =============================================
 // Auto-Fill Algorithm
@@ -201,7 +229,8 @@ function countEmptyColumnsToRight(
  */
 export function compactAndFill(
   layout: LayoutItem[],
-  cols: number = 12
+  cols: number = 12,
+  excludeId?: string  // Panel ID to skip during expansion (e.g., the resized panel)
 ): LayoutItem[] {
   if (layout.length === 0) return layout;
 
@@ -218,20 +247,28 @@ export function compactAndFill(
   for (let i = 0; i < newLayout.length; i++) {
     const item = newLayout[i];
 
+    // Skip excluded panel - prevents resized panel from re-expanding
+    if (excludeId && item.i === excludeId) continue;
+
     // Rebuild occupancy grid excluding current item
     const otherItems = newLayout.filter((_, idx) => idx !== i);
     const grid = createOccupancyGrid(otherItems, cols);
 
-    // Check for empty space to the right
+    // Check for empty space to the LEFT (bidirectional expansion)
+    const emptyLeft = countEmptyColumnsToLeft(grid, item);
+
+    // Check for empty space to the RIGHT
     const emptyRight = countEmptyColumnsToRight(grid, item, cols);
 
-    if (emptyRight > 0) {
-      // Calculate new width (respect maxW if set)
-      const maxWidth = item.maxW ?? cols;
-      const newWidth = Math.min(item.w + emptyRight, maxWidth);
+    // Calculate new position and width
+    const maxWidth = item.maxW ?? cols;
+    let newX = item.x - emptyLeft;        // Shift left to fill gap
+    let newW = item.w + emptyLeft + emptyRight;  // Expand both directions
+    newW = Math.min(newW, maxWidth);      // Respect maxW
 
-      // Update item width
-      newLayout[i] = { ...item, w: newWidth };
+    // Update item if changed
+    if (newX !== item.x || newW !== item.w) {
+      newLayout[i] = { ...item, x: newX, w: newW };
     }
   }
 
