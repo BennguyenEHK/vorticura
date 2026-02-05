@@ -54,7 +54,10 @@
       "Bash(if exist temp_workboard_provider_rgl.tsx del /f temp_workboard_provider_rgl.tsx)",
       "Bash(if exist temp_workboard_types_rgl.ts del /f temp_workboard_types_rgl.ts)",
       "Bash(del:*)",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npm run lint:*)"
     ]
   }
 }

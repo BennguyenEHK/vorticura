@@ -26,7 +26,12 @@ import { DEFAULT_GRID_CONFIG, type LayoutItem } from "@/types/workboard";
 import {
   compactAndFill,
   resolveOverlapSwap,
-  areLayoutsEqual
+  resolveOverlapPush,
+  resolveOverlapPull,
+  resolveOverlapPushRight,
+  areLayoutsEqual,
+  findAllOverlaps,
+  detectChangeType
 } from "@/lib/utils/generators/grid-layout";
 
 // =============================================
@@ -74,14 +79,15 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
   // Track previous panel count for detecting additions/removals
   const prevPanelCountRef = useRef<number>(0);
 
-  // Store pre-drag layout snapshot for swap detection
-  const preDragLayoutRef = useRef<LayoutItem[]>([]);
+  // Unified interaction ref for both drag and resize operations
+  const interactionRef = useRef<{
+    type: 'drag' | 'resize' | null;
+    panelId: string | null;
+    preLayout: LayoutItem[];
+  }>({ type: null, panelId: null, preLayout: [] });
 
-  // Track which panel is being dragged (for overlap-based swap detection)
-  const draggedPanelIdRef = useRef<string | null>(null);
-
-  // Track if we just finished a drag (to skip onLayoutChange after handleDragStop)
-  const justFinishedDragRef = useRef(false);
+  // Track if we just finished an interaction (to skip onLayoutChange)
+  const justFinishedInteractionRef = useRef(false);
 
   // Track if user is currently dragging (to capture pre-drag state)
   const [isDragging, setIsDragging] = useState(false);
@@ -148,19 +154,16 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
       console.log('='.repeat(60));
       console.log('[DRAG_START] 🚀 User started dragging a panel');
       console.log('[DRAG_START] Panel being dragged:', oldItem?.i);
-      console.log('[DRAG_START] Panel original position:', oldItem ? { x: oldItem.x, y: oldItem.y, w: oldItem.w, h: oldItem.h } : null);
 
-      // Store current layout before drag begins (convert to mutable)
-      preDragLayoutRef.current = layout.map(item => ({ ...item }));
-      console.log('[DRAG_START] 📸 Snapshot saved to preDragLayoutRef:');
-      console.log('[DRAG_START] preDragLayoutRef.current:', preDragLayoutRef.current.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
-
-      // Track which panel is being dragged
-      draggedPanelIdRef.current = oldItem?.i ?? null;
-      console.log('[DRAG_START] draggedPanelIdRef set to:', draggedPanelIdRef.current);
+      // Store interaction state
+      interactionRef.current = {
+        type: 'drag',
+        panelId: oldItem?.i ?? null,
+        preLayout: layout.map(item => ({ ...item }))
+      };
+      console.log('[DRAG_START] 📸 interactionRef set:', { type: 'drag', panelId: oldItem?.i });
 
       setIsDragging(true);
-      console.log('[DRAG_START] isDragging set to: true');
       console.log('='.repeat(60));
     },
     [layout]
@@ -181,50 +184,134 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
       _element?: HTMLElement
     ) => {
       console.log('='.repeat(60));
-      console.log('[DRAG_STOP] 🛑 User released the panel (drag ended)');
-      console.log('[DRAG_STOP] newLayout from RGL:', newLayout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
+      console.log('[DRAG_STOP] 🛑 Drag ended');
 
-      // Mark that we just finished drag - prevents handleLayoutChange from firing
-      justFinishedDragRef.current = true;
-      console.log('[DRAG_STOP] justFinishedDragRef set to: true (to prevent infinite loop)');
+      // Mark that we just finished - prevents handleLayoutChange from firing
+      justFinishedInteractionRef.current = true;
 
-      // Convert readonly Layout to mutable LayoutItem[]
-      console.log('[DRAG_STOP] Converting newLayout to mutable...');
       const mutableLayout = toMutableLayout(newLayout);
-      console.log('[DRAG_STOP] mutableLayout created:', mutableLayout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
+      const { panelId, preLayout } = interactionRef.current;
 
-      // Get the dragged panel ID
-      const draggedId = draggedPanelIdRef.current;
-      console.log('[DRAG_STOP] draggedId retrieved:', draggedId);
+      // Reset interaction state
+      interactionRef.current = { type: null, panelId: null, preLayout: [] };
 
-      draggedPanelIdRef.current = null; // Reset for next drag
-      console.log('[DRAG_STOP] draggedPanelIdRef reset to: null');
-
-      if (draggedId) {
-        console.log('[DRAG_STOP] 🔄 Calling resolveOverlapSwap()...');
-        console.log('[DRAG_STOP] Arguments: draggedId =', draggedId);
-        console.log('[DRAG_STOP] Arguments: preDragLayoutRef (old) =', preDragLayoutRef.current.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
-        console.log('[DRAG_STOP] Arguments: mutableLayout (new) =', mutableLayout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
-
-        // Resolve any overlaps by swapping positions
-        const resolvedLayout = resolveOverlapSwap(
-          draggedId,
-          preDragLayoutRef.current,
-          mutableLayout
-        );
-        console.log('[DRAG_STOP] ✅ resolvedLayout returned:', resolvedLayout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
-        console.log('[DRAG_STOP] Calling updateLayout() with resolved layout...');
+      if (panelId) {
+        console.log('[DRAG_STOP] 🔄 Calling resolveOverlapSwap() for panel:', panelId);
+        const resolvedLayout = resolveOverlapSwap(panelId, preLayout, mutableLayout);
         updateLayout(resolvedLayout);
-        console.log('[DRAG_STOP] updateLayout() called successfully');
       } else {
-        // Fallback: no dragged panel ID, use layout as-is
-        console.log('[DRAG_STOP] ⚠️ No draggedId found, using layout as-is');
         updateLayout(mutableLayout);
       }
 
-      // Set isDragging to false AFTER updateLayout to prevent intermediate re-renders
       setIsDragging(false);
-      console.log('[DRAG_STOP] isDragging set to: false (after updateLayout)');
+      console.log('='.repeat(60));
+    },
+    [updateLayout]
+  );
+
+  // =============================================
+  // Resize Event Handlers (Push-Down Resolution)
+  // =============================================
+
+  /**
+   * Handle resize start - capture pre-resize layout
+   */
+  const handleResizeStart = useCallback(
+    (
+      _layout: Layout,
+      oldItem: RGLLayoutItem | null,
+      _newItem: RGLLayoutItem | null,
+      _placeholder: RGLLayoutItem | null,
+      _event: Event,
+      _element?: HTMLElement
+    ) => {
+      console.log('='.repeat(60));
+      console.log('[RESIZE_START] 📐 User started resizing panel:', oldItem?.i);
+
+      // Store interaction state
+      interactionRef.current = {
+        type: 'resize',
+        panelId: oldItem?.i ?? null,
+        preLayout: layout.map(item => ({ ...item }))
+      };
+      console.log('[RESIZE_START] 📸 interactionRef set:', { type: 'resize', panelId: oldItem?.i });
+      console.log('='.repeat(60));
+    },
+    [layout]
+  );
+
+  /**
+   * Handle resize stop - resolve overlaps with appropriate strategy based on resize direction
+   * - H extend: Push panels down
+   * - H shrink: Pull panels up to fill gap
+   * - W extend: Push panels right
+   * - W shrink: Fill horizontal gap (compactAndFill)
+   */
+  const handleResizeStop = useCallback(
+    (
+      newLayout: Layout,
+      _oldItem: RGLLayoutItem | null,
+      _newItem: RGLLayoutItem | null,
+      _placeholder: RGLLayoutItem | null,
+      _event: Event,
+      _element?: HTMLElement
+    ) => {
+      console.log('='.repeat(60));
+      console.log('[RESIZE_STOP] 📐 Resize ended');
+
+      // Mark that we just finished - prevents handleLayoutChange from firing
+      justFinishedInteractionRef.current = true;
+
+      const mutableLayout = toMutableLayout(newLayout);
+      const { panelId, preLayout } = interactionRef.current;
+
+      // Reset interaction state
+      interactionRef.current = { type: null, panelId: null, preLayout: [] };
+
+      if (panelId) {
+        const oldPanel = preLayout.find(p => p.i === panelId);
+        const newPanel = mutableLayout.find(p => p.i === panelId);
+
+        if (oldPanel && newPanel) {
+          console.log('[RESIZE_STOP] Panel "%s" resize: w=%d→%d, h=%d→%d',
+            panelId, oldPanel.w, newPanel.w, oldPanel.h, newPanel.h);
+
+          // Determine which resolution strategy to use
+          if (newPanel.w > oldPanel.w) {
+            // W extended - push panels right
+            console.log('[RESIZE_STOP] 📐 W EXTENDED - calling resolveOverlapPushRight()');
+            const resolved = resolveOverlapPushRight(panelId, mutableLayout, DEFAULT_GRID_CONFIG.cols);
+            updateLayout(resolved);
+          } else if (newPanel.w < oldPanel.w) {
+            // W shrunk - fill horizontal gap (exclude resized panel to prevent re-expansion)
+            console.log('[RESIZE_STOP] 📐 W SHRUNK - calling compactAndFill() with excludeId:', panelId);
+            const resolved = compactAndFill(mutableLayout, DEFAULT_GRID_CONFIG.cols, panelId);
+            updateLayout(resolved);
+          } else if (newPanel.h > oldPanel.h) {
+            // H extended - push panels down
+            console.log('[RESIZE_STOP] 📐 H EXTENDED - calling resolveOverlapPush()');
+            const resolved = resolveOverlapPush(panelId, mutableLayout);
+            updateLayout(resolved);
+          } else if (newPanel.h < oldPanel.h) {
+            // H shrunk - pull panels up
+            console.log('[RESIZE_STOP] 📐 H SHRUNK - calling resolveOverlapPull()');
+            const resolved = resolveOverlapPull(panelId, mutableLayout, preLayout);
+            updateLayout(resolved);
+          } else {
+            // No size change (shouldn't happen, but handle gracefully)
+            console.log('[RESIZE_STOP] 📐 No size change detected');
+            updateLayout(mutableLayout);
+          }
+        } else {
+          // Fallback to push if we can't find the panel
+          console.log('[RESIZE_STOP] 📐 Fallback: calling resolveOverlapPush()');
+          const resolvedLayout = resolveOverlapPush(panelId, mutableLayout);
+          updateLayout(resolvedLayout);
+        }
+      } else {
+        updateLayout(mutableLayout);
+      }
+
       console.log('='.repeat(60));
     },
     [updateLayout]
@@ -237,44 +324,67 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
   /**
    * Handle layout change from react-grid-layout
    * Called continuously during drag/resize operations
-   * Swap detection is done in handleDragStop for final positions
+   * Also auto-detects overlaps for non-drag/resize changes (e.g., panel toggled on)
    */
   const handleLayoutChange = useCallback(
     (newLayout: Layout) => {
       console.log('[LAYOUT_CHANGE] 📐 onLayoutChange fired from RGL');
-      console.log('[LAYOUT_CHANGE] newLayout:', newLayout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
-      console.log('[LAYOUT_CHANGE] Current state: isDragging =', isDragging, ', justFinishedDragRef =', justFinishedDragRef.current);
 
-      // Skip if we just finished a drag - handleDragStop already updated layout
-      // This prevents infinite loop: handleDragStop -> updateLayout -> onLayoutChange -> updateLayout...
-      if (justFinishedDragRef.current) {
-        console.log('[LAYOUT_CHANGE] 🚫 SKIPPING - justFinishedDragRef is true (preventing infinite loop)');
-        // Defer reset to next frame to guard against multiple onLayoutChange calls per render cycle
+      // Skip if we just finished an interaction - stop handlers already updated layout
+      if (justFinishedInteractionRef.current) {
+        console.log('[LAYOUT_CHANGE] 🚫 SKIPPING - justFinishedInteractionRef is true');
         requestAnimationFrame(() => {
-          console.log('[LAYOUT_CHANGE] Resetting justFinishedDragRef to false (next frame)');
-          justFinishedDragRef.current = false;
+          justFinishedInteractionRef.current = false;
         });
         return;
       }
 
-      // Only update during non-drag operations (resize, etc.)
-      // Drag operations are handled by handleDragStop for swap detection
-      if (!isDragging) {
-        // Convert readonly Layout to mutable LayoutItem[]
-        const mutableNewLayout = toMutableLayout(newLayout);
+      // Skip during active drag (handled by handleDragStop)
+      if (isDragging) {
+        console.log('[LAYOUT_CHANGE] 🚫 SKIPPING - currently dragging');
+        return;
+      }
 
-        // Check if layout actually changed to prevent unnecessary updates
-        if (areLayoutsEqual(layout, mutableNewLayout)) {
-          console.log('[LAYOUT_CHANGE] 🚫 SKIPPING - layouts are equal (no change)');
+      // Skip during active resize (handled by handleResizeStop)
+      if (interactionRef.current.type === 'resize') {
+        console.log('[LAYOUT_CHANGE] 🚫 SKIPPING - currently resizing');
+        return;
+      }
+
+      const mutableNewLayout = toMutableLayout(newLayout);
+
+      // Check if layout actually changed
+      if (areLayoutsEqual(layout, mutableNewLayout)) {
+        console.log('[LAYOUT_CHANGE] 🚫 SKIPPING - layouts are equal');
+        return;
+      }
+
+      // NEW: Check for any overlaps in the new layout (auto-detect)
+      const overlaps = findAllOverlaps(mutableNewLayout);
+
+      if (overlaps.length > 0) {
+        console.log('[LAYOUT_CHANGE] ⚠️ OVERLAPS DETECTED:', overlaps);
+
+        // Find which panel changed (e.g., newly toggled on)
+        const { changedId } = detectChangeType(layout, mutableNewLayout);
+
+        if (changedId) {
+          console.log('[LAYOUT_CHANGE] 🔄 Resolving overlap by pushing panel:', changedId);
+          const resolved = resolveOverlapPush(changedId, mutableNewLayout);
+          updateLayout(resolved);
           return;
         }
 
-        console.log('[LAYOUT_CHANGE] ✅ Processing layout change (not dragging, not just finished drag)');
-        console.log('[LAYOUT_CHANGE] Calling updateLayout() with new layout');
-        updateLayout(mutableNewLayout);
-      } else {
-        console.log('[LAYOUT_CHANGE] 🚫 SKIPPING - currently dragging (isDragging = true)');
+        // If we can't identify the changed panel, try to resolve using first overlap pair
+        const [panel1] = overlaps[0];
+        console.log('[LAYOUT_CHANGE] 🔄 Resolving overlap by pushing first panel:', panel1);
+        const resolved = resolveOverlapPush(panel1, mutableNewLayout);
+        updateLayout(resolved);
+        return;
       }
+
+      console.log('[LAYOUT_CHANGE] ✅ Processing layout change (no overlaps)');
+      updateLayout(mutableNewLayout);
     },
     [updateLayout, isDragging, layout]
   );
@@ -367,6 +477,8 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
             onLayoutChange={handleLayoutChange}
             onDragStart={handleDragStart}
             onDragStop={handleDragStop}
+            onResizeStart={handleResizeStart}
+            onResizeStop={handleResizeStop}
             useCSSTransforms={true}
           >
             {/* Render each panel */}

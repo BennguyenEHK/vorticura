@@ -29,6 +29,7 @@ import {
   CHAT_PANEL_CONFIG,
   WORKBOARD_LAYOUT_STORAGE_KEY,
 } from "@/types/workboard";
+import { findAllOverlaps, resolveOverlapPush } from "@/lib/utils/generators/grid-layout";
 
 // =============================================
 // Context
@@ -289,9 +290,19 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
         const newHiddenPanels = new Map(prev.hiddenPanels);
         newHiddenPanels.delete(id);
 
+        // Create prospective layout with restored panel
+        let newLayout = [...prev.layout, savedInfo.layout];
+
+        // Check for overlaps and resolve by pushing overlapped panels down
+        const overlaps = findAllOverlaps(newLayout);
+        if (overlaps.length > 0) {
+          // Resolve overlaps by pushing other panels down
+          newLayout = resolveOverlapPush(id, newLayout);
+        }
+
         return {
           ...prev,
-          layout: [...prev.layout, savedInfo.layout],   // Restore to layout
+          layout: newLayout,                            // Use resolved layout (overlap-free)
           panels: [...prev.panels, savedInfo.config],   // Restore to panels
           hiddenPanels: newHiddenPanels,
         };
