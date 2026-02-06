@@ -12,6 +12,7 @@ import {
   useState,
   useCallback,
   useEffect,
+  useRef,
   type ReactNode,
 } from "react";
 import type {
@@ -29,7 +30,7 @@ import {
   CHAT_PANEL_CONFIG,
   WORKBOARD_LAYOUT_STORAGE_KEY,
 } from "@/types/workboard";
-import { findAllOverlaps, resolveOverlapPush } from "@/lib/utils/generators/grid-layout";
+import { findAllOverlaps, resolveOverlapPush, resolveOverlapShrinkWidth } from "@/lib/utils/generators/grid-layout";
 
 // =============================================
 // Context
@@ -67,6 +68,9 @@ interface WorkboardProviderProps {
 export function WorkboardProvider({ children }: WorkboardProviderProps) {
   // Initialize state with defaults
   const [state, setState] = useState<WorkboardState>(initialState);
+
+  // Ref to skip overlap resolution in grid after panel toggle-on
+  const skipOverlapResolutionRef = useRef(false);
 
   // Load saved layout from localStorage on mount
   useEffect(() => {
@@ -286,6 +290,9 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
         // Guard: Only proceed if we have saved info
         if (!savedInfo) return prev;
 
+        // Skip overlap resolution in grid's handleLayoutChange to prevent feedback loop
+        skipOverlapResolutionRef.current = true;
+
         // Create new hidden panels map with this panel removed
         const newHiddenPanels = new Map(prev.hiddenPanels);
         newHiddenPanels.delete(id);
@@ -293,11 +300,11 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
         // Create prospective layout with restored panel
         let newLayout = [...prev.layout, savedInfo.layout];
 
-        // Check for overlaps and resolve by pushing overlapped panels down
+        // Check for overlaps and resolve by shrinking expanded panels' width
         const overlaps = findAllOverlaps(newLayout);
         if (overlaps.length > 0) {
-          // Resolve overlaps by pushing other panels down
-          newLayout = resolveOverlapPush(id, newLayout);
+          // Resolve overlaps by shrinking width (not pushing down)
+          newLayout = resolveOverlapShrinkWidth(id, newLayout);
         }
 
         return {
@@ -345,6 +352,7 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
     saveLayout,
     togglePanelVisibility,  // Toggle panel hide/show
     isPanelVisible,         // Check panel visibility
+    skipOverlapResolutionRef, // Skip overlap resolution after panel toggle
   };
 
   return (

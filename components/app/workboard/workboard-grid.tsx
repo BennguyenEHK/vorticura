@@ -93,7 +93,7 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
   const [isDragging, setIsDragging] = useState(false);
 
   // Get workboard state and actions from context
-  const { layout, panels, isLocked, updateLayout, setActivePanel } =
+  const { layout, panels, isLocked, updateLayout, setActivePanel, skipOverlapResolutionRef } =
     useWorkboard();
 
   // =============================================
@@ -336,6 +336,13 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
         requestAnimationFrame(() => {
           justFinishedInteractionRef.current = false;
         });
+        return;
+      }
+
+      // Skip overlap resolution after panel toggle-on (provider already resolved overlaps)
+      if (skipOverlapResolutionRef.current) {
+        console.log('[LAYOUT_CHANGE] 🚫 SKIPPING - skipOverlapResolutionRef is true (panel toggle)');
+        skipOverlapResolutionRef.current = false;
         return;
       }
 

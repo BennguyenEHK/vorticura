@@ -4,6 +4,7 @@
 // Types for the dynamic, resizable panel grid system
 // Uses react-grid-layout with custom auto-fill for gap filling
 
+import type React from "react";
 import type { Layout as RGLLayout } from "react-grid-layout";
 
 // =============================================
@@ -96,6 +97,7 @@ export interface WorkboardActions {
   saveLayout: () => void;                       // Save layout to localStorage
   togglePanelVisibility: (id: string) => void;  // Toggle panel hide/show (preserves position)
   isPanelVisible: (id: string) => boolean;      // Check if panel is currently visible
+  skipOverlapResolutionRef: React.MutableRefObject<boolean>; // Skip overlap resolution after panel toggle
 }
 
 /** Combined workboard context type */
