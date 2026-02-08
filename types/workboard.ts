@@ -187,35 +187,6 @@ export const PANEL_SPAWN_CONFIGS: Record<PanelType, Omit<LayoutItem, "i">> = {
 };
 
 // =============================================
-// Default Layouts (DEPRECATED - Use PANEL_SPAWN_CONFIGS)
-// =============================================
-// These constants are kept for backward compatibility only
-// New code should use PANEL_SPAWN_CONFIGS + dynamic overlap resolution
-
-/** @deprecated Use PANEL_SPAWN_CONFIGS instead */
-export const DEFAULT_LAYOUT_3_PANELS: LayoutItem[] = [
-  { i: "workflow", x: 6, y: 0, w: 6, h: 2, minW: 3, minH: 1 },
-  { i: "pricing",  x: 6, y: 2, w: 6, h: 5, minW: 3, minH: 1 },
-  { i: "preview",  x: 0, y: 0, w: 6, h: 7, minW: 3, minH: 1 },
-];
-
-/** @deprecated Use PANEL_SPAWN_CONFIGS instead */
-export const DEFAULT_LAYOUT_4_PANELS: LayoutItem[] = [
-  { i: "chat",     x: 6, y: 0, w: 6, h: 2, minW: 3, minH: 1 },
-  { i: "workflow", x: 6, y: 2, w: 6, h: 2, minW: 3, minH: 1 },
-  { i: "pricing",  x: 6, y: 4, w: 6, h: 3, minW: 3, minH: 1 },
-  { i: "preview",  x: 0, y: 0, w: 6, h: 7, minW: 3, minH: 1 },
-];
-
-/** @deprecated Use PANEL_SPAWN_CONFIGS instead */
-export const STACKED_LAYOUT: LayoutItem[] = [
-  { i: "chat",     x: 0, y: 0, w: 2, h: 2, minW: 2, minH: 1 },
-  { i: "workflow", x: 0, y: 2, w: 2, h: 2, minW: 2, minH: 1 },
-  { i: "pricing",  x: 0, y: 4, w: 2, h: 2, minW: 2, minH: 1 },
-  { i: "preview",  x: 0, y: 6, w: 2, h: 2, minW: 2, minH: 1 },
-];
-
-// =============================================
 // Default Panel Configurations
 // =============================================
 

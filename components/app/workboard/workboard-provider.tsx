@@ -24,7 +24,6 @@ import type {
   HiddenPanelInfo,
 } from "@/types/workboard";
 import {
-  DEFAULT_LAYOUT_3_PANELS,
   DEFAULT_PANELS,
   CHAT_PANEL_CONFIG,
   WORKBOARD_LAYOUT_STORAGE_KEY,
@@ -40,11 +39,28 @@ import { findAllOverlaps, resolveOverlapShrinkWidth, compactAndFill } from "@/li
 const WorkboardContext = createContext<WorkboardContextType | null>(null);
 
 // =============================================
+// Initial State Helper
+// =============================================
+
+/**
+ * Build initial default layout from panel spawn configs
+ * Used for first render before localStorage hydration
+ * Returns 3-panel layout: preview (left), workflow + pricing (right)
+ */
+function buildInitialLayout(): LayoutItem[] {
+  return [
+    { i: "preview",  ...PANEL_SPAWN_CONFIGS.preview },  // Left side, largest
+    { i: "workflow", ...PANEL_SPAWN_CONFIGS.workflow }, // Top right
+    { i: "pricing",  ...PANEL_SPAWN_CONFIGS.pricing },  // Bottom right
+  ];
+}
+
+// =============================================
 // Initial State
 // =============================================
 
 const initialState: WorkboardState = {
-  layout: DEFAULT_LAYOUT_3_PANELS,
+  layout: buildInitialLayout(), // Build from spawn configs instead of hardcoded constant
   panels: DEFAULT_PANELS,
   isLocked: false,
   activePanel: null,
