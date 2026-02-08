@@ -30,7 +30,7 @@ import {
   CHAT_PANEL_CONFIG,
   WORKBOARD_LAYOUT_STORAGE_KEY,
 } from "@/types/workboard";
-import { findAllOverlaps, resolveOverlapPush, resolveOverlapShrinkWidth } from "@/lib/utils/generators/grid-layout";
+import { findAllOverlaps, resolveOverlapPush, resolveOverlapShrinkWidth, compactAndFill } from "@/lib/utils/generators/grid-layout";
 
 // =============================================
 // Context
@@ -305,6 +305,9 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
         if (overlaps.length > 0) {
           // Resolve overlaps by shrinking width (not pushing down)
           newLayout = resolveOverlapShrinkWidth(id, newLayout);
+
+          // Re-expand panels to fill gaps created by shrinking (exclude restored panel)
+          newLayout = compactAndFill(newLayout, 12, id);
         }
 
         return {

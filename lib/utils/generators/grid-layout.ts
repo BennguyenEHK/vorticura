@@ -946,104 +946,126 @@ export function resolveOverlapShrinkWidth(
     h: restoredPanel.h
   });
 
-  // Find all panels overlapping with restored panel
-  for (let i = 0; i < resultLayout.length; i++) {
-    const otherPanel = resultLayout[i];
+  // Track processed panels to avoid infinite loops
+  const processedPanels = new Set<string>([restoredPanelId]);
 
-    // Skip self
-    if (otherPanel.i === restoredPanelId) continue;
+  // Process queue: panels that may cause overlaps
+  const toProcess = [restoredPanelId];
 
-    // Check overlap
-    if (!itemsOverlap(restoredPanel, otherPanel)) continue;
+  while (toProcess.length > 0) {
+    const currentId = toProcess.shift()!;
+    const currentPanel = resultLayout.find(item => item.i === currentId);
+    if (!currentPanel) continue;
 
-    console.log('[resolveOverlapShrinkWidth] ✅ Panel "%s" overlaps with restored panel', otherPanel.i);
-    console.log('[resolveOverlapShrinkWidth] Overlapping panel before:', {
-      i: otherPanel.i,
-      x: otherPanel.x,
-      y: otherPanel.y,
-      w: otherPanel.w,
-      h: otherPanel.h
-    });
+    console.log('[resolveOverlapShrinkWidth] Processing panel:', currentId);
 
-    // Determine shrink direction based on relative position
-    const restoredLeft = restoredPanel.x;
-    const restoredRight = restoredPanel.x + restoredPanel.w;
-    const otherLeft = otherPanel.x;
-    const otherRight = otherPanel.x + otherPanel.w;
+    // Find all panels overlapping with current panel
+    for (let i = 0; i < resultLayout.length; i++) {
+      const otherPanel = resultLayout[i];
 
-    // --- X-axis resolution (skip when panels share the exact same column) ---
-    const sameColumn = otherLeft === restoredLeft && otherRight === restoredRight;
-    if (!sameColumn) {
-      if (otherLeft < restoredLeft && otherRight > restoredLeft) {
-        // Overlapping panel extends from left INTO restored panel's space
-        // Shrink its right edge to stop at restored panel's left edge
-        const newWidth = restoredLeft - otherLeft;
-        console.log('[resolveOverlapShrinkWidth] Shrinking right edge: w=%d → w=%d', otherPanel.w, newWidth);
-        resultLayout[i] = {
-          ...resultLayout[i],
-          w: newWidth
-        };
-      } else if (otherLeft >= restoredLeft && otherLeft < restoredRight) {
-        // Overlapping panel starts INSIDE restored panel's space
-        // Shift it right and shrink if needed
-        const newX = restoredRight;
-        const availableWidth = cols - newX;
-        const minW = otherPanel.minW ?? 1;
-        if (availableWidth >= minW) {
-          const newWidth = Math.min(otherPanel.w, availableWidth);
-          console.log('[resolveOverlapShrinkWidth] Shifting right: x=%d → x=%d, w=%d → w=%d',
-            otherPanel.x, newX, otherPanel.w, newWidth);
+      // Skip self and already processed panels
+      if (otherPanel.i === currentId) continue;
+      if (processedPanels.has(otherPanel.i)) continue;
+
+      // Check overlap
+      if (!itemsOverlap(currentPanel, otherPanel)) continue;
+
+      console.log('[resolveOverlapShrinkWidth] ✅ Panel "%s" overlaps with current panel', otherPanel.i);
+      console.log('[resolveOverlapShrinkWidth] Overlapping panel before:', {
+        i: otherPanel.i,
+        x: otherPanel.x,
+        y: otherPanel.y,
+        w: otherPanel.w,
+        h: otherPanel.h
+      });
+
+      // Determine shrink direction based on relative position
+      const currentLeft = currentPanel.x;
+      const currentRight = currentPanel.x + currentPanel.w;
+      const otherLeft = otherPanel.x;
+      const otherRight = otherPanel.x + otherPanel.w;
+
+      // --- X-axis resolution (skip when panels share the exact same column) ---
+      const sameColumn = otherLeft === currentLeft && otherRight === currentRight;
+      if (!sameColumn) {
+        if (otherLeft < currentLeft && otherRight > currentLeft) {
+          // Overlapping panel extends from left INTO current panel's space
+          // Shrink its right edge to stop at current panel's left edge
+          const newWidth = currentLeft - otherLeft;
+          console.log('[resolveOverlapShrinkWidth] Shrinking right edge: w=%d → w=%d', otherPanel.w, newWidth);
           resultLayout[i] = {
             ...resultLayout[i],
-            x: newX,
             w: newWidth
           };
-        } else {
-          console.log('[resolveOverlapShrinkWidth] Skipping X-shift: availableWidth=%d < minW=%d, deferring to Y-axis',
-            availableWidth, minW);
+        } else if (otherLeft >= currentLeft && otherLeft < currentRight) {
+          // Overlapping panel starts INSIDE current panel's space
+          // Shift it right and shrink if needed
+          const newX = currentRight;
+          const availableWidth = cols - newX;
+          const minW = otherPanel.minW ?? 1;
+          if (availableWidth >= minW) {
+            const newWidth = Math.min(otherPanel.w, availableWidth);
+            console.log('[resolveOverlapShrinkWidth] Shifting right: x=%d → x=%d, w=%d → w=%d',
+              otherPanel.x, newX, otherPanel.w, newWidth);
+            resultLayout[i] = {
+              ...resultLayout[i],
+              x: newX,
+              w: newWidth
+            };
+          } else {
+            console.log('[resolveOverlapShrinkWidth] Skipping X-shift: availableWidth=%d < minW=%d, deferring to Y-axis',
+              availableWidth, minW);
+          }
         }
       }
+
+      // Re-check overlap after X-axis resolution — skip Y-axis if already resolved
+      if (!itemsOverlap(currentPanel, resultLayout[i])) {
+        console.log('[resolveOverlapShrinkWidth] X-axis resolved overlap, skipping Y-axis for panel', resultLayout[i].i);
+        // Mark as processed and add to queue for cascading resolution
+        processedPanels.add(otherPanel.i);
+        toProcess.push(otherPanel.i);
+        continue;
+      }
+
+      // --- Y-axis resolution ---
+      const currentTop = currentPanel.y;
+      const currentBottom = currentPanel.y + currentPanel.h;
+      const otherTop = resultLayout[i].y;
+      const otherBottom = resultLayout[i].y + resultLayout[i].h;
+
+      if (otherTop < currentTop && otherBottom > currentTop) {
+        // Other panel is ABOVE current and its bottom extends into current space
+        // Shrink its height to stop at current panel's top edge
+        const newHeight = currentTop - otherTop;
+        console.log('[resolveOverlapShrinkWidth] Shrinking height: h=%d → h=%d', resultLayout[i].h, newHeight);
+        resultLayout[i] = {
+          ...resultLayout[i],
+          h: newHeight
+        };
+      } else if (otherTop >= currentTop && otherTop < currentBottom) {
+        // Other panel starts INSIDE or BELOW current panel's space
+        // Push it down below the current panel
+        const newY = currentBottom;
+        console.log('[resolveOverlapShrinkWidth] Pushing down: y=%d → y=%d', resultLayout[i].y, newY);
+        resultLayout[i] = {
+          ...resultLayout[i],
+          y: newY
+        };
+      }
+
+      console.log('[resolveOverlapShrinkWidth] Overlapping panel after:', {
+        i: resultLayout[i].i,
+        x: resultLayout[i].x,
+        y: resultLayout[i].y,
+        w: resultLayout[i].w,
+        h: resultLayout[i].h
+      });
+
+      // Mark as processed and add to queue for cascading resolution
+      processedPanels.add(otherPanel.i);
+      toProcess.push(otherPanel.i);
     }
-
-    // Re-check overlap after X-axis resolution — skip Y-axis if already resolved
-    if (!itemsOverlap(restoredPanel, resultLayout[i])) {
-      console.log('[resolveOverlapShrinkWidth] X-axis resolved overlap, skipping Y-axis for panel', resultLayout[i].i);
-      continue;
-    }
-
-    // --- Y-axis resolution ---
-    const restoredTop = restoredPanel.y;
-    const restoredBottom = restoredPanel.y + restoredPanel.h;
-    const otherTop = resultLayout[i].y;
-    const otherBottom = resultLayout[i].y + resultLayout[i].h;
-
-    if (otherTop < restoredTop && otherBottom > restoredTop) {
-      // Other panel is ABOVE restored and its bottom extends into restored space
-      // Shrink its height to stop at restored panel's top edge
-      const newHeight = restoredTop - otherTop;
-      console.log('[resolveOverlapShrinkWidth] Shrinking height: h=%d → h=%d', resultLayout[i].h, newHeight);
-      resultLayout[i] = {
-        ...resultLayout[i],
-        h: newHeight
-      };
-    } else if (otherTop >= restoredTop && otherTop < restoredBottom) {
-      // Other panel starts INSIDE or BELOW restored panel's space
-      // Push it down below the restored panel
-      const newY = restoredBottom;
-      console.log('[resolveOverlapShrinkWidth] Pushing down: y=%d → y=%d', resultLayout[i].y, newY);
-      resultLayout[i] = {
-        ...resultLayout[i],
-        y: newY
-      };
-    }
-
-    console.log('[resolveOverlapShrinkWidth] Overlapping panel after:', {
-      i: resultLayout[i].i,
-      x: resultLayout[i].x,
-      y: resultLayout[i].y,
-      w: resultLayout[i].w,
-      h: resultLayout[i].h
-    });
   }
 
   console.log('[resolveOverlapShrinkWidth] ✅ SHRINK RESOLUTION COMPLETE');
