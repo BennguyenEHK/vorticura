@@ -82,24 +82,19 @@ interface WorkboardProviderProps {
  * Manages: layout positions, panel configs, lock state, active panel
  */
 export function WorkboardProvider({ children }: WorkboardProviderProps) {
-  // Initialize state with defaults
-  const [state, setState] = useState<WorkboardState>(initialState);
-
-  // Ref to skip overlap resolution in grid after panel toggle-on
-  const skipOverlapResolutionRef = useRef(false);
-
-  // Load saved layout from localStorage on mount
-  useEffect(() => {
+  // Initialize state with lazy initialization from localStorage (avoids setState in useEffect)
+  const [state, setState] = useState<WorkboardState>(() => {
+    // Try to load saved layout from localStorage during initialization
     if (typeof window !== "undefined") {
       const savedLayout = localStorage.getItem(WORKBOARD_LAYOUT_STORAGE_KEY);
       if (savedLayout) {
         try {
           const parsed = JSON.parse(savedLayout);
 
-          // Guard: If layout or panels is empty, clear corrupted state and keep defaults
+          // Guard: If layout or panels is empty, clear corrupted state and use defaults
           if (!parsed.layout?.length || !parsed.panels?.length) {
             localStorage.removeItem(WORKBOARD_LAYOUT_STORAGE_KEY);
-            return;
+            return initialState;
           }
 
           // Restore hiddenPanels Map from array
@@ -107,20 +102,27 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
             parsed.hiddenPanels || []
           );
 
-          setState((prev) => ({
-            ...prev,
+          // Return hydrated state
+          return {
+            ...initialState,
             layout: parsed.layout,
             panels: parsed.panels,
             hiddenPanels: hiddenPanelsMap,
-          }));
+          };
         } catch {
-          // Failed to parse saved layout - clear corrupted state
+          // Failed to parse saved layout - clear corrupted state and use defaults
           console.warn("Failed to parse saved workboard layout");
           localStorage.removeItem(WORKBOARD_LAYOUT_STORAGE_KEY);
         }
       }
     }
-  }, []);
+
+    // Fallback to default initial state
+    return initialState;
+  });
+
+  // Ref to skip overlap resolution in grid after panel toggle-on
+  const skipOverlapResolutionRef = useRef(false);
 
   // =============================================
   // Actions
