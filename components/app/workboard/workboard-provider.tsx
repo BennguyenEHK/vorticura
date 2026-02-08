@@ -25,12 +25,12 @@ import type {
 } from "@/types/workboard";
 import {
   DEFAULT_LAYOUT_3_PANELS,
-  DEFAULT_LAYOUT_4_PANELS,
   DEFAULT_PANELS,
   CHAT_PANEL_CONFIG,
   WORKBOARD_LAYOUT_STORAGE_KEY,
+  PANEL_SPAWN_CONFIGS, // Approach B: Dynamic spawn configs
 } from "@/types/workboard";
-import { findAllOverlaps, resolveOverlapPush, resolveOverlapShrinkWidth, compactAndFill } from "@/lib/utils/generators/grid-layout";
+import { findAllOverlaps, resolveOverlapShrinkWidth, compactAndFill } from "@/lib/utils/generators/grid-layout";
 
 // =============================================
 // Context
@@ -97,7 +97,7 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
             panels: parsed.panels,
             hiddenPanels: hiddenPanelsMap,
           }));
-        } catch (e) {
+        } catch (_e) {
           console.warn("Failed to parse saved workboard layout");
           localStorage.removeItem(WORKBOARD_LAYOUT_STORAGE_KEY);
         }
@@ -123,7 +123,7 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
     });
   }, []);
 
-  /** Add a new panel (e.g., AI Chat when docked) */
+  /** Add a new panel (e.g., AI Chat when docked) - Approach B: Dynamic spawning */
   const addPanel = useCallback((type: PanelType) => {
     setState((prev) => {
       // Check if panel already exists
@@ -146,9 +146,36 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
         };
       }
 
-      // Use 4-panel layout when adding chat
-      const newLayout =
-        type === "chat" ? DEFAULT_LAYOUT_4_PANELS : prev.layout;
+      // Get spawn configuration for this panel type
+      const spawnConfig = PANEL_SPAWN_CONFIGS[type];
+      if (!spawnConfig) {
+        console.warn(`[addPanel] No spawn config found for panel type: ${type}`);
+        return prev;
+      }
+
+      // Create new layout item with spawn position
+      const newLayoutItem: LayoutItem = {
+        i: type, // Panel ID matches type for default panels
+        ...spawnConfig,
+      };
+
+      // Add new panel to layout
+      let newLayout = [...prev.layout, newLayoutItem];
+
+      // Skip overlap resolution in grid (we'll handle it here)
+      skipOverlapResolutionRef.current = true;
+
+      // Check for overlaps and resolve by shrinking expanded panels' width
+      const overlaps = findAllOverlaps(newLayout);
+      if (overlaps.length > 0) {
+        console.log(`[addPanel] Overlaps detected for new panel "${type}":`, overlaps);
+
+        // Resolve overlaps by shrinking width (not pushing down)
+        newLayout = resolveOverlapShrinkWidth(type, newLayout);
+
+        // Re-expand panels to fill gaps created by shrinking (exclude spawned panel)
+        newLayout = compactAndFill(newLayout, 12, type);
+      }
 
       return {
         ...prev,
@@ -158,19 +185,19 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
     });
   }, []);
 
-  /** Remove a panel */
+  /** Remove a panel - Approach B: Dynamic layout after removal */
   const removePanel = useCallback((id: string) => {
     setState((prev) => {
       const newPanels = prev.panels.filter((p) => p.id !== id);
-      const newLayout = prev.layout.filter((l) => l.i !== id);
+      let newLayout = prev.layout.filter((l) => l.i !== id);
 
-      // If removing chat panel, reset to 3-panel layout
-      if (id === "chat") {
-        return {
-          ...prev,
-          panels: newPanels,
-          layout: DEFAULT_LAYOUT_3_PANELS,
-        };
+      console.log(`[removePanel] Removing panel: ${id}`);
+      console.log(`[removePanel] Remaining panels:`, newPanels.map(p => p.id));
+
+      // Apply compactAndFill to utilize space left by removed panel
+      if (newLayout.length > 0) {
+        newLayout = compactAndFill(newLayout, 12);
+        console.log('[removePanel] ✅ Applied compactAndFill to fill gap');
       }
 
       return {
@@ -229,15 +256,74 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
     }));
   }, []);
 
-  /** Reset to default layout */
+  /** Reset to default layout - Approach B: Dynamic spawn-based reset */
   const resetLayout = useCallback(() => {
-    // Check if chat panel exists
-    const hasChat = state.panels.some((p) => p.type === "chat");
-    setState((prev) => ({
-      ...prev,
-      layout: hasChat ? DEFAULT_LAYOUT_4_PANELS : DEFAULT_LAYOUT_3_PANELS,
-    }));
-  }, [state.panels]);
+    setState((prev) => {
+      console.log('[resetLayout] 🔄 Resetting layout with dynamic spawn configs');
+      console.log('[resetLayout] Current visible panels:', prev.panels.map(p => p.id));
+
+      // Build new layout dynamically based on visible panels
+      const newLayout: LayoutItem[] = [];
+
+      // PRIORITY 1: Always add preview panel first if visible (largest, left side)
+      const previewPanel = prev.panels.find(p => p.type === 'preview');
+      if (previewPanel) {
+        const previewSpawn = PANEL_SPAWN_CONFIGS.preview;
+        newLayout.push({
+          i: previewPanel.id,
+          ...previewSpawn, // Always x:0, y:0, w:6, h:7
+        });
+        console.log('[resetLayout] ✅ Preview panel added at spawn position (prioritized)');
+      }
+
+      // PRIORITY 2: Add other visible panels using their spawn configs
+      prev.panels.forEach(panel => {
+        // Skip preview (already added)
+        if (panel.type === 'preview') return;
+
+        const spawnConfig = PANEL_SPAWN_CONFIGS[panel.type];
+        if (!spawnConfig) {
+          console.warn(`[resetLayout] No spawn config for panel type: ${panel.type}`);
+          return;
+        }
+
+        newLayout.push({
+          i: panel.id,
+          ...spawnConfig,
+        });
+        console.log(`[resetLayout] ✅ Panel "${panel.id}" added at spawn position`);
+      });
+
+      // Apply overlap resolution to clean up any overlaps
+      // (This handles cases where spawn positions overlap)
+      let resolvedLayout = newLayout;
+      const overlaps = findAllOverlaps(resolvedLayout);
+
+      if (overlaps.length > 0) {
+        console.log('[resetLayout] ⚠️ Overlaps detected, resolving...');
+
+        // For each overlapping panel (except preview), resolve by adjusting position
+        for (const [panelA, panelB] of overlaps) {
+          // Never shrink/move preview panel - it's prioritized
+          const targetPanel = panelA === 'preview' ? panelB : panelA;
+
+          console.log(`[resetLayout] Resolving overlap for panel: ${targetPanel}`);
+          resolvedLayout = resolveOverlapShrinkWidth(targetPanel, resolvedLayout);
+        }
+
+        // Fill any gaps created by resolution
+        resolvedLayout = compactAndFill(resolvedLayout, 12);
+      }
+
+      console.log('[resetLayout] ✅ Reset complete, new layout:',
+        resolvedLayout.map(item => ({ i: item.i, x: item.x, y: item.y, w: item.w, h: item.h })));
+
+      return {
+        ...prev,
+        layout: resolvedLayout,
+      };
+    });
+  }, []);
 
   /** Save current layout to localStorage */
   const saveLayout = useCallback(() => {

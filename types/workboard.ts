@@ -158,17 +158,49 @@ export const COLS = {
 } as const;
 
 // =============================================
-// Default Layouts
+// Panel Spawn Configurations (Approach B)
 // =============================================
 
-/** Default 3-panel layout (before AI Chat drop) */
+/**
+ * Individual spawn positions for each panel type
+ * Used for dynamic layout construction with overlap resolution
+ *
+ * Philosophy:
+ * - Preview panel always gets priority (largest, left side)
+ * - Other panels spawn on the right side
+ * - Overlap resolution algorithms adjust positions dynamically
+ */
+export const PANEL_SPAWN_CONFIGS: Record<PanelType, Omit<LayoutItem, "i">> = {
+  // Preview panel - Always prioritized, left side, largest
+  preview: { x: 0, y: 0, w: 6, h: 7, minW: 3, minH: 1 },
+
+  // Workflow panel - Top right
+  workflow: { x: 6, y: 0, w: 6, h: 2, minW: 3, minH: 1 },
+
+  // Pricing panel - Middle right
+  pricing: { x: 6, y: 2, w: 6, h: 5, minW: 3, minH: 1 },
+
+  // AI Chat panel - Bottom right
+  chat: { x: 6, y: 4, w: 6, h: 3, minW: 3, minH: 1 },
+
+  // Files panel - Bottom right (future use)
+  files: { x: 6, y: 4, w: 6, h: 3, minW: 3, minH: 1 },
+};
+
+// =============================================
+// Default Layouts (DEPRECATED - Use PANEL_SPAWN_CONFIGS)
+// =============================================
+// These constants are kept for backward compatibility only
+// New code should use PANEL_SPAWN_CONFIGS + dynamic overlap resolution
+
+/** @deprecated Use PANEL_SPAWN_CONFIGS instead */
 export const DEFAULT_LAYOUT_3_PANELS: LayoutItem[] = [
   { i: "workflow", x: 6, y: 0, w: 6, h: 2, minW: 3, minH: 1 },
   { i: "pricing",  x: 6, y: 2, w: 6, h: 5, minW: 3, minH: 1 },
   { i: "preview",  x: 0, y: 0, w: 6, h: 7, minW: 3, minH: 1 },
 ];
 
-/** Default 4-panel layout (after AI Chat drop) */
+/** @deprecated Use PANEL_SPAWN_CONFIGS instead */
 export const DEFAULT_LAYOUT_4_PANELS: LayoutItem[] = [
   { i: "chat",     x: 6, y: 0, w: 6, h: 2, minW: 3, minH: 1 },
   { i: "workflow", x: 6, y: 2, w: 6, h: 2, minW: 3, minH: 1 },
@@ -176,7 +208,7 @@ export const DEFAULT_LAYOUT_4_PANELS: LayoutItem[] = [
   { i: "preview",  x: 0, y: 0, w: 6, h: 7, minW: 3, minH: 1 },
 ];
 
-/** Stacked layout for mobile (vertical stack) */
+/** @deprecated Use PANEL_SPAWN_CONFIGS instead */
 export const STACKED_LAYOUT: LayoutItem[] = [
   { i: "chat",     x: 0, y: 0, w: 2, h: 2, minW: 2, minH: 1 },
   { i: "workflow", x: 0, y: 2, w: 2, h: 2, minW: 2, minH: 1 },
