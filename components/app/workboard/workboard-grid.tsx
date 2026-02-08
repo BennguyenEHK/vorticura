@@ -25,6 +25,7 @@ import { WorkboardDropZone } from "./workboard-drop-zone";
 import { DEFAULT_GRID_CONFIG, type LayoutItem } from "@/types/workboard";
 import {
   compactAndFill,
+  compactAndFillAll,
   resolveOverlapSwap,
   resolveOverlapPush,
   resolveOverlapPull,
@@ -116,14 +117,14 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
     const panelRemoved = panels.length < prevPanelCountRef.current;
     prevPanelCountRef.current = panels.length;
 
-    // Run auto-fill when a panel is removed
+    // Run auto-fill when a panel is removed (fill both horizontal and vertical gaps)
     if (panelRemoved && layout.length > 0) {
-      const filledLayout = compactAndFill(layout, DEFAULT_GRID_CONFIG.cols);
+      const filledLayout = compactAndFillAll(layout, DEFAULT_GRID_CONFIG.cols);
 
-      // Only update if layout actually changed
+      // Only update if layout actually changed (check both horizontal and vertical changes)
       const hasChanged = filledLayout.some((item) => {
         const orig = layout.find((l) => l.i === item.i);
-        return orig && (orig.w !== item.w || orig.x !== item.x);
+        return orig && (orig.w !== item.w || orig.x !== item.x || orig.h !== item.h || orig.y !== item.y);
       });
 
       if (hasChanged) {

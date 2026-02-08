@@ -29,7 +29,7 @@ import {
   WORKBOARD_LAYOUT_STORAGE_KEY,
   PANEL_SPAWN_CONFIGS, // Approach B: Dynamic spawn configs
 } from "@/types/workboard";
-import { findAllOverlaps, resolveOverlapShrinkWidth, compactAndFill } from "@/lib/utils/generators/grid-layout";
+import { findAllOverlaps, resolveOverlapShrinkWidth, compactAndFill, compactAndFillAll } from "@/lib/utils/generators/grid-layout";
 
 // =============================================
 // Context
@@ -192,8 +192,8 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
         // Resolve overlaps by shrinking width (not pushing down)
         newLayout = resolveOverlapShrinkWidth(type, newLayout);
 
-        // Re-expand panels to fill gaps created by shrinking (exclude spawned panel)
-        newLayout = compactAndFill(newLayout, 12, type);
+        // Re-expand panels to fill gaps created by shrinking (exclude spawned panel) - both horizontal and vertical
+        newLayout = compactAndFillAll(newLayout, 12, type);
       }
 
       return {
@@ -213,10 +213,10 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
       console.log(`[removePanel] Removing panel: ${id}`);
       console.log(`[removePanel] Remaining panels:`, newPanels.map(p => p.id));
 
-      // Apply compactAndFill to utilize space left by removed panel
+      // Apply compactAndFillAll to utilize space left by removed panel (both horizontal and vertical)
       if (newLayout.length > 0) {
-        newLayout = compactAndFill(newLayout, 12);
-        console.log('[removePanel] ✅ Applied compactAndFill to fill gap');
+        newLayout = compactAndFillAll(newLayout, 12);
+        console.log('[removePanel] ✅ Applied compactAndFillAll to fill gaps (horizontal + vertical)');
       }
 
       return {
@@ -330,8 +330,8 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
           resolvedLayout = resolveOverlapShrinkWidth(targetPanel, resolvedLayout);
         }
 
-        // Fill any gaps created by resolution
-        resolvedLayout = compactAndFill(resolvedLayout, 12);
+        // Fill any gaps created by resolution (both horizontal and vertical)
+        resolvedLayout = compactAndFillAll(resolvedLayout, 12);
       }
 
       console.log('[resetLayout] ✅ Reset complete, new layout:',
@@ -411,8 +411,8 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
           // Resolve overlaps by shrinking width (not pushing down)
           newLayout = resolveOverlapShrinkWidth(id, newLayout);
 
-          // Re-expand panels to fill gaps created by shrinking (exclude restored panel)
-          newLayout = compactAndFill(newLayout, 12, id);
+          // Re-expand panels to fill gaps created by shrinking (exclude restored panel) - both horizontal and vertical
+          newLayout = compactAndFillAll(newLayout, 12, id);
         }
 
         return {

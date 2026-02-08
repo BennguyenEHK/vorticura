@@ -209,6 +209,68 @@ function countEmptyColumnsToLeft(
   return emptyCount;
 }
 
+/**
+ * Count empty rows above a panel
+ * Checks all columns that the panel occupies
+ */
+function countEmptyRowsAbove(
+  grid: OccupancyGrid,
+  item: LayoutItem
+): number {
+  const topEdge = item.y; // Row at panel's top edge
+  if (topEdge <= 0) return 0; // Already at grid top
+
+  let emptyCount = 0;
+  // Check rows above the panel, moving upward
+  for (let row = topEdge - 1; row >= 0; row--) {
+    let rowEmpty = true;
+    // Check all columns that this panel spans
+    for (let col = item.x; col < item.x + item.w; col++) {
+      if (grid[row][col]) {
+        rowEmpty = false;
+        break;
+      }
+    }
+    if (rowEmpty) {
+      emptyCount++;
+    } else {
+      break; // Stop at first occupied row
+    }
+  }
+  return emptyCount;
+}
+
+/**
+ * Count empty rows below a panel
+ * Checks all columns that the panel occupies
+ */
+function countEmptyRowsBelow(
+  grid: OccupancyGrid,
+  item: LayoutItem
+): number {
+  const bottomEdge = item.y + item.h; // Row after panel's bottom edge
+  if (bottomEdge >= grid.length) return 0; // Already at grid bottom
+
+  let emptyCount = 0;
+  // Check rows below the panel, moving downward
+  for (let row = bottomEdge; row < grid.length; row++) {
+    let rowEmpty = true;
+    // Check all columns that this panel spans
+    for (let col = item.x; col < item.x + item.w; col++) {
+      if (grid[row][col]) {
+        rowEmpty = false;
+        break;
+      }
+    }
+    if (rowEmpty) {
+      emptyCount++;
+    } else {
+      break; // Stop at first occupied row
+    }
+  }
+  return emptyCount;
+}
+
 // =============================================
 // Auto-Fill Algorithm
 // =============================================
@@ -275,8 +337,96 @@ export function compactAndFill(
   return newLayout;
 }
 
+/**
+ * Compact layout and fill vertical gaps
+ * Expands panels vertically to fill empty space above and below
+ *
+ * Algorithm:
+ * 1. Sort panels by position (left-to-right, then top-to-bottom)
+ * 2. For each panel, check for empty space above and below
+ * 3. Expand height to fill the gap (respecting maxH if set)
+ * 4. Rebuild occupancy grid after each expansion
+ *
+ * @param layout - Current layout items
+ * @param cols - Number of grid columns (for occupancy grid creation)
+ * @param excludeId - Panel ID to skip during expansion (e.g., the resized panel)
+ * @returns New layout with vertical gaps filled
+ */
+export function compactAndFillVertical(
+  layout: LayoutItem[],
+  cols: number = 12,
+  excludeId?: string
+): LayoutItem[] {
+  if (layout.length === 0) return layout;
 
+  // Clone layout to avoid mutation
+  const newLayout = layout.map((item) => ({ ...item }));
 
+  // Sort by position: left-to-right, then top-to-bottom
+  newLayout.sort((a, b) => {
+    if (a.x !== b.x) return a.x - b.x;
+    return a.y - b.y;
+  });
+
+  // Process each panel for vertical gap filling
+  for (let i = 0; i < newLayout.length; i++) {
+    const item = newLayout[i];
+
+    // Skip excluded panel - prevents resized panel from re-expanding
+    if (excludeId && item.i === excludeId) continue;
+
+    // Rebuild occupancy grid excluding current item
+    const otherItems = newLayout.filter((_, idx) => idx !== i);
+    const grid = createOccupancyGrid(otherItems, cols);
+
+    // Check for empty space ABOVE (bidirectional expansion)
+    const emptyAbove = countEmptyRowsAbove(grid, item);
+
+    // Check for empty space BELOW
+    const emptyBelow = countEmptyRowsBelow(grid, item);
+
+    // Calculate new position and height
+    const maxHeight = item.maxH ?? Infinity; // No default max height limit
+    let newY = item.y - emptyAbove;           // Shift up to fill gap
+    let newH = item.h + emptyAbove + emptyBelow; // Expand both directions
+    newH = Math.min(newH, maxHeight);         // Respect maxH if set
+
+    // Update item if changed
+    if (newY !== item.y || newH !== item.h) {
+      newLayout[i] = { ...item, y: newY, h: newH };
+    }
+  }
+
+  return newLayout;
+}
+
+/**
+ * Compact layout and fill all gaps (both horizontal and vertical)
+ * Combines horizontal and vertical gap filling for complete space utilization
+ *
+ * Algorithm:
+ * 1. First fill horizontal gaps (left/right expansion)
+ * 2. Then fill vertical gaps (up/down expansion)
+ * 3. Returns fully compacted layout
+ *
+ * @param layout - Current layout items
+ * @param cols - Number of grid columns (default: 12)
+ * @param excludeId - Panel ID to skip during expansion (optional)
+ * @returns New layout with all gaps filled
+ */
+export function compactAndFillAll(
+  layout: LayoutItem[],
+  cols: number = 12,
+  excludeId?: string
+): LayoutItem[] {
+  // First fill horizontal gaps
+  let result = compactAndFill(layout, cols, excludeId);
+
+  // Then fill vertical gaps
+  result = compactAndFillVertical(result, cols, excludeId);
+
+  return result;
+}
 
 
 // =============================================
