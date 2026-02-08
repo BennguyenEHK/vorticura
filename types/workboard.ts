@@ -5,7 +5,6 @@
 // Uses react-grid-layout with custom auto-fill for gap filling
 
 import type React from "react";
-import type { Layout as RGLLayout } from "react-grid-layout";
 
 // =============================================
 // Panel Types

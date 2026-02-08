@@ -97,7 +97,8 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
             panels: parsed.panels,
             hiddenPanels: hiddenPanelsMap,
           }));
-        } catch (_e) {
+        } catch {
+          // Failed to parse saved layout - clear corrupted state
           console.warn("Failed to parse saved workboard layout");
           localStorage.removeItem(WORKBOARD_LAYOUT_STORAGE_KEY);
         }
