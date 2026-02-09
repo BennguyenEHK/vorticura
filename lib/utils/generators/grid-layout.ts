@@ -277,9 +277,6 @@ function countEmptyRowsBelow(
   return emptyCount;
 }
 
-/** Maximum rows a panel can expand downward when no neighbors exist */
-const MAX_VERTICAL_EXPANSION = 12;
-
 /**
  * Get the contextual bottom edge for a panel based on horizontally overlapping neighbors
  * This ensures vertical filling is bounded by the local layout area, not the global grid
@@ -301,9 +298,12 @@ function getContextualBottomEdge(
     return !noOverlap; // Return true if they DO overlap
   });
 
-  // If no horizontally overlapping panels, use fallback (current bottom + max expansion)
+  // If no horizontally overlapping panels, use the global layout's max height as boundary
   if (overlappingPanels.length === 0) {
-    return item.y + item.h + MAX_VERTICAL_EXPANSION;
+    // Find the maximum (y + h) across the entire layout
+    const globalMaxBottom = layout.reduce((max, p) => Math.max(max, p.y + p.h), 0);
+    // Return the greater of: global max, or current panel's bottom (don't shrink below current)
+    return Math.max(globalMaxBottom, item.y + item.h);
   }
 
   // Find the maximum (y + h) among all overlapping panels = the contextual bottom edge
