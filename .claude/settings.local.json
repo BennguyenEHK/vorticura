@@ -57,7 +57,9 @@
       "Bash(node -e:*)",
       "Bash(npm run build:*)",
       "Bash(npx eslint:*)",
-      "Bash(npm run lint:*)"
+      "Bash(npm run lint:*)",
+      "Bash(npm audit:*)",
+      "Bash(test:*)"
     ]
   }
 }

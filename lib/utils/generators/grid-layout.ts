@@ -243,17 +243,23 @@ function countEmptyRowsAbove(
 /**
  * Count empty rows below a panel
  * Checks all columns that the panel occupies
+ * @param grid - Occupancy grid to check
+ * @param item - Panel to check below
+ * @param maxY - Optional maximum Y boundary (contextual bottom edge)
  */
 function countEmptyRowsBelow(
   grid: OccupancyGrid,
-  item: LayoutItem
+  item: LayoutItem,
+  maxY?: number // Optional bound for contextual vertical filling
 ): number {
   const bottomEdge = item.y + item.h; // Row after panel's bottom edge
-  if (bottomEdge >= grid.length) return 0; // Already at grid bottom
+  // Use maxY if provided, otherwise use grid.length as the boundary
+  const scanLimit = maxY !== undefined ? Math.min(maxY, grid.length) : grid.length;
+  if (bottomEdge >= scanLimit) return 0; // Already at boundary
 
   let emptyCount = 0;
-  // Check rows below the panel, moving downward
-  for (let row = bottomEdge; row < grid.length; row++) {
+  // Check rows below the panel, moving downward up to scanLimit
+  for (let row = bottomEdge; row < scanLimit; row++) {
     let rowEmpty = true;
     // Check all columns that this panel spans
     for (let col = item.x; col < item.x + item.w; col++) {
@@ -269,6 +275,43 @@ function countEmptyRowsBelow(
     }
   }
   return emptyCount;
+}
+
+/** Maximum rows a panel can expand downward when no neighbors exist */
+const MAX_VERTICAL_EXPANSION = 12;
+
+/**
+ * Get the contextual bottom edge for a panel based on horizontally overlapping neighbors
+ * This ensures vertical filling is bounded by the local layout area, not the global grid
+ *
+ * @param layout - Full layout array (excluding current panel)
+ * @param item - The panel to find contextual bottom for
+ * @returns The Y position that serves as the bottom boundary for vertical expansion
+ */
+function getContextualBottomEdge(
+  layout: LayoutItem[],
+  item: LayoutItem
+): number {
+  // Find all panels that horizontally overlap with the current panel
+  const overlappingPanels = layout.filter((panel) => {
+    // Skip if same panel
+    if (panel.i === item.i) return false;
+    // Check horizontal overlap: panels share at least one column
+    const noOverlap = panel.x + panel.w <= item.x || panel.x >= item.x + item.w;
+    return !noOverlap; // Return true if they DO overlap
+  });
+
+  // If no horizontally overlapping panels, use fallback (current bottom + max expansion)
+  if (overlappingPanels.length === 0) {
+    return item.y + item.h + MAX_VERTICAL_EXPANSION;
+  }
+
+  // Find the maximum (y + h) among all overlapping panels = the contextual bottom edge
+  const contextualBottom = overlappingPanels.reduce((maxBottom, panel) => {
+    return Math.max(maxBottom, panel.y + panel.h);
+  }, 0);
+
+  return contextualBottom;
 }
 
 // =============================================
@@ -379,11 +422,15 @@ export function compactAndFillVertical(
     const otherItems = newLayout.filter((_, idx) => idx !== i);
     const grid = createOccupancyGrid(otherItems, cols);
 
+    // Get contextual bottom edge based on horizontally overlapping neighbors
+    // This bounds vertical expansion to the local layout area, not global grid
+    const contextualBottom = getContextualBottomEdge(otherItems, item);
+
     // Check for empty space ABOVE (bidirectional expansion)
     const emptyAbove = countEmptyRowsAbove(grid, item);
 
-    // Check for empty space BELOW
-    const emptyBelow = countEmptyRowsBelow(grid, item);
+    // Check for empty space BELOW, bounded by contextual bottom edge
+    const emptyBelow = countEmptyRowsBelow(grid, item, contextualBottom);
 
     // Calculate new position and height
     const maxHeight = item.maxH ?? Infinity; // No default max height limit
