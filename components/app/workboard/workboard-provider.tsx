@@ -208,16 +208,14 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
   const removePanel = useCallback((id: string) => {
     setState((prev) => {
       const newPanels = prev.panels.filter((p) => p.id !== id);
-      let newLayout = prev.layout.filter((l) => l.i !== id);
+      const newLayout = prev.layout.filter((l) => l.i !== id); // Use const since no reassignment needed
 
       console.log(`[removePanel] Removing panel: ${id}`);
       console.log(`[removePanel] Remaining panels:`, newPanels.map(p => p.id));
 
-      // Apply compactAndFillAll to utilize space left by removed panel (both horizontal and vertical)
-      if (newLayout.length > 0) {
-        newLayout = compactAndFillAll(newLayout, 12);
-        console.log('[removePanel] ✅ Applied compactAndFillAll to fill gaps (horizontal + vertical)');
-      }
+      // NOTE: Gap filling is handled by useEffect in workboard-grid.tsx
+      // When panels.length decreases, the useEffect automatically calls compactAndFillAll
+      // This avoids double processing which causes "Maximum update depth exceeded" error
 
       return {
         ...prev,

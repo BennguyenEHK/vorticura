@@ -177,10 +177,10 @@ export const PANEL_SPAWN_CONFIGS: Record<PanelType, Omit<LayoutItem, "i">> = {
   workflow: { x: 6, y: 0, w: 6, h: 2, minW: 3, minH: 1 },
 
   // Pricing panel - Middle right
-  chat: { x: 6, y: 2, w: 6, h: 5, minW: 3, minH: 1 },
+  chat: { x: 6, y: 2, w: 6, h: 2, minW: 3, minH: 1 },
 
   // AI Chat panel - Bottom right
-  pricing: { x: 6, y: 4, w: 6, h: 3, minW: 3, minH: 1 },
+  pricing: { x: 6, y: 4, w: 6, h: 5, minW: 3, minH: 1 },
 
   // Files panel - Bottom right (future use)
   files: { x: 6, y: 4, w: 6, h: 3, minW: 3, minH: 1 },
