@@ -191,9 +191,6 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
 
         // Resolve overlaps by shrinking width (not pushing down)
         newLayout = resolveOverlapShrinkWidth(type, newLayout);
-
-        // Re-expand panels to fill gaps created by shrinking (exclude spawned panel) - both horizontal and vertical
-        newLayout = compactAndFillAll(newLayout, 12, type);
       }
 
       return {
@@ -204,18 +201,17 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
     });
   }, []);
 
-  /** Remove a panel - Approach B: Dynamic layout after removal */
+  /** Remove a panel - fills gaps after removal */
   const removePanel = useCallback((id: string) => {
     setState((prev) => {
       const newPanels = prev.panels.filter((p) => p.id !== id);
-      const newLayout = prev.layout.filter((l) => l.i !== id); // Use const since no reassignment needed
+      let newLayout = prev.layout.filter((l) => l.i !== id);
 
       console.log(`[removePanel] Removing panel: ${id}`);
       console.log(`[removePanel] Remaining panels:`, newPanels.map(p => p.id));
 
-      // NOTE: Gap filling is handled by useEffect in workboard-grid.tsx
-      // When panels.length decreases, the useEffect automatically calls compactAndFillAll
-      // This avoids double processing which causes "Maximum update depth exceeded" error
+      // Fill gaps left by removed panel (both horizontal and vertical)
+      newLayout = compactAndFillAll(newLayout, 12);
 
       return {
         ...prev,
@@ -327,9 +323,6 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
           console.log(`[resetLayout] Resolving overlap for panel: ${targetPanel}`);
           resolvedLayout = resolveOverlapShrinkWidth(targetPanel, resolvedLayout);
         }
-
-        // Fill any gaps created by resolution (both horizontal and vertical)
-        resolvedLayout = compactAndFillAll(resolvedLayout, 12);
       }
 
       console.log('[resetLayout] ✅ Reset complete, new layout:',
@@ -380,9 +373,13 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
           config: { ...panelConfig },   // Clone to preserve original config
         });
 
+        // Remove panel from layout then fill gaps left by hidden panel
+        let newLayout = prev.layout.filter((l) => l.i !== id);
+        newLayout = compactAndFillAll(newLayout, 12);
+
         return {
           ...prev,
-          layout: prev.layout.filter((l) => l.i !== id),   // Remove from layout
+          layout: newLayout,
           panels: prev.panels.filter((p) => p.id !== id),  // Remove from panels
           hiddenPanels: newHiddenPanels,
         };
@@ -408,9 +405,6 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
         if (overlaps.length > 0) {
           // Resolve overlaps by shrinking width (not pushing down)
           newLayout = resolveOverlapShrinkWidth(id, newLayout);
-
-          // Re-expand panels to fill gaps created by shrinking (exclude restored panel) - both horizontal and vertical
-          newLayout = compactAndFillAll(newLayout, 12, id);
         }
 
         return {

@@ -13,7 +13,7 @@
 // Key approach: Uses allowOverlap=true to prevent RGL from pushing panels.
 // When panels overlap after drag, we detect and resolve by swapping positions.
 
-import { useMemo, useCallback, useRef, useEffect, useState } from "react";
+import { useMemo, useCallback, useRef, useState } from "react";
 // Use legacy API for flat props (cols, rowHeight, margin, etc.)
 // The new v2 API uses config objects (gridConfig, dragConfig) but legacy supports flat props
 import { ReactGridLayout } from "react-grid-layout/legacy";
@@ -25,7 +25,6 @@ import { WorkboardDropZone } from "./workboard-drop-zone";
 import { DEFAULT_GRID_CONFIG, type LayoutItem } from "@/types/workboard";
 import {
   compactAndFill,
-  compactAndFillAll,
   resolveOverlapSwap,
   resolveOverlapPush,
   resolveOverlapPull,
@@ -74,12 +73,6 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
   // Use built-in hook for container width measurement
   const { width, containerRef, mounted } = useContainerWidth();
 
-  // Track if this is the initial render to skip auto-fill
-  const isInitialRenderRef = useRef(true);
-
-  // Track previous panel count for detecting additions/removals
-  const prevPanelCountRef = useRef<number>(0);
-
   // Unified interaction ref for both drag and resize operations
   const interactionRef = useRef<{
     type: 'drag' | 'resize' | null;
@@ -96,42 +89,6 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
   // Get workboard state and actions from context
   const { layout, panels, isLocked, updateLayout, setActivePanel, skipOverlapResolutionRef } =
     useWorkboard();
-
-  // =============================================
-  // Auto-Fill Effect
-  // =============================================
-
-  /**
-   * Apply auto-fill when panels are removed
-   * This fills horizontal gaps left by removed panels
-   */
-  useEffect(() => {
-    // Skip on initial render
-    if (isInitialRenderRef.current) {
-      isInitialRenderRef.current = false;
-      prevPanelCountRef.current = panels.length;
-      return;
-    }
-
-    // Detect if a panel was removed (count decreased)
-    const panelRemoved = panels.length < prevPanelCountRef.current;
-    prevPanelCountRef.current = panels.length;
-
-    // Run auto-fill when a panel is removed (fill both horizontal and vertical gaps)
-    if (panelRemoved && layout.length > 0) {
-      const filledLayout = compactAndFillAll(layout, DEFAULT_GRID_CONFIG.cols);
-
-      // Only update if layout actually changed (check both horizontal and vertical changes)
-      const hasChanged = filledLayout.some((item) => {
-        const orig = layout.find((l) => l.i === item.i);
-        return orig && (orig.w !== item.w || orig.x !== item.x || orig.h !== item.h || orig.y !== item.y);
-      });
-
-      if (hasChanged) {
-        updateLayout(filledLayout);
-      }
-    }
-  }, [panels.length, layout, updateLayout]);
 
   // =============================================
   // Drag Event Handlers (Overlap-Based Swap Implementation)
