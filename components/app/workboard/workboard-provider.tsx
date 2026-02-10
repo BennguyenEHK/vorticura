@@ -29,7 +29,7 @@ import {
   WORKBOARD_LAYOUT_STORAGE_KEY,
   PANEL_SPAWN_CONFIGS, // Approach B: Dynamic spawn configs
 } from "@/types/workboard";
-import { findAllOverlaps, resolveOverlapShrinkWidth, compactAndFill, compactAndFillAll } from "@/lib/utils/generators/grid-layout";
+import { findAllOverlaps, resolveOverlapShrinkWidth, compactAndFillAll } from "@/lib/utils/generators/grid-layout";
 
 // =============================================
 // Context
@@ -82,47 +82,47 @@ interface WorkboardProviderProps {
  * Manages: layout positions, panel configs, lock state, active panel
  */
 export function WorkboardProvider({ children }: WorkboardProviderProps) {
-  // Initialize state with lazy initialization from localStorage (avoids setState in useEffect)
-  const [state, setState] = useState<WorkboardState>(() => {
-    // Try to load saved layout from localStorage during initialization
-    if (typeof window !== "undefined") {
-      const savedLayout = localStorage.getItem(WORKBOARD_LAYOUT_STORAGE_KEY);
-      if (savedLayout) {
-        try {
-          const parsed = JSON.parse(savedLayout);
-
-          // Guard: If layout or panels is empty, clear corrupted state and use defaults
-          if (!parsed.layout?.length || !parsed.panels?.length) {
-            localStorage.removeItem(WORKBOARD_LAYOUT_STORAGE_KEY);
-            return initialState;
-          }
-
-          // Restore hiddenPanels Map from array
-          const hiddenPanelsMap = new Map<string, HiddenPanelInfo>(
-            parsed.hiddenPanels || []
-          );
-
-          // Return hydrated state
-          return {
-            ...initialState,
-            layout: parsed.layout,
-            panels: parsed.panels,
-            hiddenPanels: hiddenPanelsMap,
-          };
-        } catch {
-          // Failed to parse saved layout - clear corrupted state and use defaults
-          console.warn("Failed to parse saved workboard layout");
-          localStorage.removeItem(WORKBOARD_LAYOUT_STORAGE_KEY);
-        }
-      }
-    }
-
-    // Fallback to default initial state
-    return initialState;
-  });
+  // Initialize with default state (same on server and client to prevent hydration mismatch)
+  const [state, setState] = useState<WorkboardState>(initialState);
 
   // Ref to skip overlap resolution in grid after panel toggle-on
   const skipOverlapResolutionRef = useRef(false);
+
+  // Hydrate state from localStorage AFTER mount (client-only, prevents hydration mismatch)
+  // This is the standard Next.js pattern for localStorage-dependent state
+  useEffect(() => {
+    const savedLayout = localStorage.getItem(WORKBOARD_LAYOUT_STORAGE_KEY);
+    if (savedLayout) {
+      try {
+        const parsed = JSON.parse(savedLayout);
+
+        // Guard: If layout or panels is empty, clear corrupted state and keep defaults
+        if (!parsed.layout?.length || !parsed.panels?.length) {
+          localStorage.removeItem(WORKBOARD_LAYOUT_STORAGE_KEY);
+          return;
+        }
+
+        // Restore hiddenPanels Map from array
+        const hiddenPanelsMap = new Map<string, HiddenPanelInfo>(
+          parsed.hiddenPanels || []
+        );
+
+        // Update state with hydrated values from localStorage
+        // This is the standard Next.js pattern for localStorage hydration - must happen after mount
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setState((prev) => ({
+          ...prev,
+          layout: parsed.layout,
+          panels: parsed.panels,
+          hiddenPanels: hiddenPanelsMap,
+        }));
+      } catch {
+        // Failed to parse saved layout - clear corrupted state
+        console.warn("Failed to parse saved workboard layout");
+        localStorage.removeItem(WORKBOARD_LAYOUT_STORAGE_KEY);
+      }
+    }
+  }, []);
 
   // =============================================
   // Actions
