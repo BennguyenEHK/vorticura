@@ -311,7 +311,10 @@ function getContextualBottomEdge(
     return Math.max(maxBottom, panel.y + panel.h);
   }, 0);
 
-  return contextualBottom;
+  // Ensure contextualBottom is at least the panel's own bottom edge
+  // This allows countEmptyRowsBelow to scan for empty space below the current panel
+  // Without this, panels cannot expand DOWN when only overlapping panel is ABOVE
+  return Math.max(contextualBottom, item.y + item.h);
 }
 
 // =============================================
