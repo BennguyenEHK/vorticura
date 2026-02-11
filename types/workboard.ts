@@ -15,8 +15,7 @@ export type PanelType =
   | "chat"                     // AI Chat panel
   | "workflow"                 // Workflow tracker panel
   | "pricing"                  // Pricing editor panel
-  | "preview"                  // Quotation preview panel
-  | "files";                   // Files manager panel (optional)
+  | "preview";                  // Quotation preview panel
 
 /** Panel configuration metadata */
 export interface PanelConfig {
@@ -182,8 +181,7 @@ export const PANEL_SPAWN_CONFIGS: Record<PanelType, Omit<LayoutItem, "i">> = {
   // AI Chat panel - Bottom right
   pricing: { x: 6, y: 4, w: 6, h: 3, minW: 3, minH: 1 },
 
-  // Files panel - Bottom right (future use)
-  files: { x: 6, y: 4, w: 6, h: 3, minW: 3, minH: 1 },
+
 };
 
 // =============================================

@@ -49,6 +49,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        suppressHydrationWarning
       >
         {/* Wrap entire app with global providers (Theme, etc.) */}
         <Providers>{children}</Providers>
