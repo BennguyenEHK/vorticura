@@ -291,29 +291,36 @@ function getContextualBottomEdge(
 ): number {
   // Find all panels that horizontally overlap with the current panel
   const overlappingPanels = layout.filter((panel) => {
-    // Skip if same panel
     if (panel.i === item.i) return false;
-    // Check horizontal overlap: panels share at least one column
     const noOverlap = panel.x + panel.w <= item.x || panel.x >= item.x + item.w;
-    return !noOverlap; // Return true if they DO overlap
+    return !noOverlap;
   });
 
-  // If no horizontally overlapping panels, use the global layout's max height as boundary
+  // Calculate global max bottom (fallback boundary)
+  const globalMaxBottom = layout.reduce((max, p) => Math.max(max, p.y + p.h), 0);
+
+  // If no horizontally overlapping panels, use global max
   if (overlappingPanels.length === 0) {
-    // Find the maximum (y + h) across the entire layout
-    const globalMaxBottom = layout.reduce((max, p) => Math.max(max, p.y + p.h), 0);
-    // Return the greater of: global max, or current panel's bottom (don't shrink below current)
     return Math.max(globalMaxBottom, item.y + item.h);
   }
 
-  // Find the maximum (y + h) among all overlapping panels = the contextual bottom edge
-  const contextualBottom = overlappingPanels.reduce((maxBottom, panel) => {
+  // Filter to only panels that could block DOWNWARD expansion
+  // (panels whose bottom extends BELOW current panel's bottom)
+  const panelsBelowCurrentBottom = overlappingPanels.filter(panel =>
+    panel.y + panel.h > item.y + item.h
+  );
+
+  // If no panels extend below current panel, use global max
+  // (panels ABOVE don't limit downward expansion)
+  if (panelsBelowCurrentBottom.length === 0) {
+    return Math.max(globalMaxBottom, item.y + item.h);
+  }
+
+  // Use max bottom of panels that extend below current panel
+  const contextualBottom = panelsBelowCurrentBottom.reduce((maxBottom, panel) => {
     return Math.max(maxBottom, panel.y + panel.h);
   }, 0);
 
-  // Ensure contextualBottom is at least the panel's own bottom edge
-  // This allows countEmptyRowsBelow to scan for empty space below the current panel
-  // Without this, panels cannot expand DOWN when only overlapping panel is ABOVE
   return Math.max(contextualBottom, item.y + item.h);
 }
 
