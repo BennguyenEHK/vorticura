@@ -12,8 +12,8 @@
 
 import {
   GripVertical,
-  Minus,
-  Square,
+  Maximize2,
+  Minimize2,
   X,
   Bot,
   GitBranch,
@@ -45,7 +45,6 @@ interface PanelHeaderProps {
   id: string;                    // Panel identifier
   title: string;                 // Panel title
   icon?: string;                 // Lucide icon name
-  isMinimized?: boolean;         // Collapsed state
   isClosable?: boolean;          // Legacy prop - no longer used (all panels have close button)
 }
 
@@ -61,11 +60,10 @@ export function PanelHeader({
   id,
   title,
   icon,
-  isMinimized = false,
   // isClosable is now ignored - all panels have close button
 }: PanelHeaderProps) {
-  // Get workboard actions (including togglePanelVisibility for hide/show)
-  const { toggleMinimize, removePanel, togglePanelVisibility } = useWorkboard();
+  // Get workboard actions and state for maximize/restore functionality
+  const { toggleMaximize, removePanel, togglePanelVisibility, maximizedPanelId } = useWorkboard();
 
   // Get AI Chat actions for undocking
   const { setDocked } = useAIChat();
@@ -75,6 +73,9 @@ export function PanelHeader({
 
   // Determine if this is the chat panel (different close behavior)
   const isChatPanel = id === "chat";
+
+  // Check if this panel is currently maximized
+  const isMaximized = maximizedPanelId === id;
 
   /**
    * Handle close/hide panel
@@ -121,22 +122,23 @@ export function PanelHeader({
 
       {/* Right side: action buttons */}
       <div className="flex items-center gap-1">
-        {/* Minimize button - collapse panel to header only */}
+        {/* Maximize/Restore button - expands panel to fill space or restores to original */}
         <Button
           variant="ghost"
           size="icon"
           className="h-6 w-6"
           onClick={(e) => {
             e.stopPropagation(); // Prevent drag start
-            toggleMinimize(id);
+            toggleMaximize(id);
           }}
-          aria-label={isMinimized ? "Expand panel" : "Minimize panel"}
-          title={isMinimized ? "Expand" : "Minimize"}
+          aria-label={isMaximized ? "Restore panel" : "Maximize panel"}
+          title={isMaximized ? "Restore" : "Maximize"}
         >
-          {isMinimized ? (
-            <Square className="w-3 h-3" />
+          {/* Show Minimize2 when maximized (click to restore), Maximize2 when normal (click to maximize) */}
+          {isMaximized ? (
+            <Minimize2 className="w-3 h-3" />
           ) : (
-            <Minus className="w-3 h-3" />
+            <Maximize2 className="w-3 h-3" />
           )}
         </Button>
 

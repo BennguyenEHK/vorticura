@@ -1,7 +1,7 @@
 # QuoteFlow AI - Project Structure
 
-> **Last Updated:** January 31, 2026
-> **Version:** 5.7 (Grid Height Constraint & Panel Swap Size Exchange)
+> **Last Updated:** February 12, 2026
+> **Version:** 5.8 (Panel Maximize/Restore Feature)
 
 ## Overview
 
@@ -118,7 +118,7 @@ quoteflow_ai/
 │   │   │   ├── workboard-grid.tsx ✓       # react-grid-layout with custom auto-fill
 │   │   │   ├── workboard-panel.tsx ✓      # Generic draggable/resizable panel
 │   │   │   ├── workboard-drop-zone.tsx ✓  # Drop target for AI Chat FAB
-│   │   │   ├── panel-header.tsx ✓         # Drag handle + controls (minimize, close/hide v5.6)
+│   │   │   ├── panel-header.tsx ✓         # Drag handle + controls (maximize/restore, close/hide v5.8)
 │   │   │   ├── use-workboard-layout.ts ✓  # Hook: load/save layout to localStorage
 │   │   │   │
 │   │   │   └── panels/                    # Panel content components
@@ -326,7 +326,7 @@ The sidebar has been redesigned with the following sections:
 | **Documents** | Storage, Upload | File management |
 | **System** | Settings, Pipeline View | Configuration & visualization |
 
-### Workboard Panel System (v5.7)
+### Workboard Panel System (v5.8)
 
 The workspace now uses a dynamic panel system powered by `react-grid-layout` with custom auto-fill:
 
@@ -340,8 +340,9 @@ The workspace now uses a dynamic panel system powered by `react-grid-layout` wit
 | **React-Native** | Native React component - no sync issues |
 | **Drop Zone** | AI Chat FAB can be dropped to create docked panel |
 | **Panel Toggle** | Circular buttons to hide/show individual panels (v5.4) |
-| **Grid Height Constraint** | Fixed grid height prevents unlimited vertical expansion (NEW v5.7) |
-| **Swap Size Exchange** | When panels swap positions, their sizes are also exchanged (NEW v5.7) |
+| **Grid Height Constraint** | Fixed grid height prevents unlimited vertical expansion (v5.7) |
+| **Swap Size Exchange** | When panels swap positions, their sizes are also exchanged (v5.7) |
+| **Maximize/Restore** | Single button toggles between maximized (full space) and normal state (NEW v5.8) |
 
 #### Grid Height Constraint (v5.7)
 
@@ -406,6 +407,38 @@ All panels now have a close button (X) in their header. The behavior differs bas
 1. Click close (X) on Workflow/Pricing/Preview → Panel hides → Toggle icon turns gray
 2. Click gray toggle icon in workspace header → Panel restores at saved position
 3. Click close (X) on Chat → Panel removed → Returns to floating FAB mode
+
+#### Panel Maximize/Restore Feature (v5.8)
+
+Each panel header now has a maximize/restore button that toggles between normal and maximized states:
+
+| State | Icon | Action | Effect |
+|-------|------|--------|--------|
+| **Normal** | `Maximize2` | Click to maximize | Hides all other panels, current panel expands to fill space |
+| **Maximized** | `Minimize2` | Click to restore | Shows all hidden panels, current panel shrinks back |
+
+**Maximize Flow:**
+1. User clicks Maximize2 icon on Panel A
+2. All other panels (B, C) are saved to `hiddenPanels` Map with their positions
+3. Panel A removed from `panels` and `layout` arrays (only Panel A remains)
+4. `compactAndFillAll()` expands Panel A to fill entire grid space
+5. `maximizedPanelId` set to Panel A's ID
+6. Icon switches to `Minimize2`
+
+**Restore Flow:**
+1. User clicks Minimize2 icon on maximized Panel A
+2. All panels from `hiddenPanels` Map are restored at their original positions
+3. `resolveOverlapShrinkWidth()` shrinks Panel A to avoid overlaps
+4. `maximizedPanelId` set to `null`
+5. Icon switches back to `Maximize2`
+
+**State Persistence:**
+- `maximizedPanelId` is saved to localStorage with the layout
+- On page reload, maximized state is restored automatically
+
+**Button Styling:**
+- Same as other header buttons: `ghost` variant, `h-6 w-6`
+- Icon size: `w-3 h-3`
 
 #### Preview Panel Approval Workflow (v5.5)
 

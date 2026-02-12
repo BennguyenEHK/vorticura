@@ -79,6 +79,7 @@ export interface WorkboardState {
   breakpoint: string;          // Current responsive breakpoint
   isDraggingOver: boolean;     // AI Chat FAB is being dragged over
   hiddenPanels: Map<string, HiddenPanelInfo>; // Panels hidden via toggle (preserves position)
+  maximizedPanelId: string | null; // Track which panel is currently maximized (null = none)
 }
 
 /** Workboard context actions */
@@ -86,8 +87,7 @@ export interface WorkboardActions {
   updateLayout: (layout: LayoutItem[]) => void; // Update layout positions
   addPanel: (type: PanelType) => void;          // Add new panel (e.g., AI Chat)
   removePanel: (id: string) => void;            // Remove panel
-  toggleMinimize: (id: string) => void;         // Toggle panel minimize
-  toggleMaximize: (id: string) => void;         // Toggle panel maximize
+  toggleMaximize: (id: string) => void;         // Toggle panel maximize/restore (hides/shows other panels)
   setActivePanel: (id: string | null) => void;  // Set focused panel
   setLocked: (locked: boolean) => void;         // Lock/unlock layout
   setDraggingOver: (dragging: boolean) => void; // Set drag over state
