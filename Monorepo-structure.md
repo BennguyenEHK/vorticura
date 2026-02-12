@@ -1,7 +1,7 @@
 # QuoteFlow AI - Project Structure
 
 > **Last Updated:** February 12, 2026
-> **Version:** 5.8 (Panel Maximize/Restore Feature)
+> **Version:** 5.9 (Pricing Panel Refactoring Plan)
 
 ## Overview
 
@@ -74,6 +74,11 @@ quoteflow_ai/
 │   │   │   ├── save/route.ts              # POST /api/quotations/save
 │   │   │   └── pricing-variables/route.ts # POST /api/quotations/pricing-variables
 │   │   │
+│   │   ├── pricing/                       # NEW: Pricing API (v5.9)
+│   │   │   ├── route.ts ✓                 # GET/POST /api/pricing
+│   │   │   └── variables/
+│   │   │       └── route.ts ✓             # GET/PUT /api/pricing/variables
+│   │   │
 │   │   ├── database/
 │   │   │   ├── insert/route.ts ✓          # POST /api/database/insert
 │   │   │   ├── select/route.ts ✓          # POST /api/database/select
@@ -124,8 +129,19 @@ quoteflow_ai/
 │   │   │   └── panels/                    # Panel content components
 │   │   │       ├── index.ts ✓             # Barrel exports
 │   │   │       ├── workflow-panel-content.tsx ✓  # Workflow tracker content
-│   │   │       ├── pricing-panel-content.tsx ✓   # Pricing editor content
-│   │   │       └── preview-panel-content.tsx ✓   # Quotation preview + approval workflow (v5.5)
+│   │   │       ├── pricing-panel-content.tsx ✓   # Pricing editor orchestrator (v5.9 refactor)
+│   │   │       ├── preview-panel-content.tsx ✓   # Quotation preview + approval workflow (v5.5)
+│   │   │       │
+│   │   │       └── pricing/               # NEW: Pricing panel components (v5.9)
+│   │   │           ├── index.ts ✓         # Barrel exports
+│   │   │           ├── pricing-panel-provider.tsx ✓  # Context: state, actions
+│   │   │           ├── currency-selector.tsx ✓       # Global currency dropdown
+│   │   │           ├── item-search.tsx ✓             # Search/filter items
+│   │   │           ├── pricing-item-list.tsx ✓       # Scrollable item list
+│   │   │           ├── pricing-item-card.tsx ✓       # Per-item variable inputs
+│   │   │           ├── profit-summary-table.tsx ✓    # Profit calculation display
+│   │   │           ├── bulk-update-popover.tsx ✓     # Right-click bulk update
+│   │   │           └── pricing-actions.tsx ✓         # Apply/Reset buttons
 │   │   │
 │   │   ├── rfq-queue/                     # RFQ Queue components
 │   │   │   ├── index.ts ✓                 # Barrel exports
@@ -197,8 +213,12 @@ quoteflow_ai/
 │   │   │   ├── session-loader.ts          # Session reconstruction
 │   │   │   └── database-handler.ts        # Database CRUD
 │   │   │
-│   │   ├── pricing/
-│   │   │   └── calculations.ts            # Pricing formulas
+│   │   ├── pricing/                       # NEW: Pricing services (v5.9)
+│   │   │   ├── index.ts ✓                 # Barrel exports
+│   │   │   ├── pricing-calculator.ts ✓    # Core calculation engine
+│   │   │   ├── pricing-manager.ts ✓       # CRUD operations
+│   │   │   ├── currency-service.ts ✓      # Exchange rates & conversion
+│   │   │   └── validation.ts ✓            # Input validation
 │   │   │
 │   │   ├── session/
 │   │   │   ├── session-manager.ts         # Session lifecycle
@@ -239,6 +259,9 @@ quoteflow_ai/
 │   │   └── api/
 │   │       └── get-workspace.ts ✓
 │   │
+│   ├── hooks/                             # NEW: Custom React Hooks (v5.9)
+│   │   └── use-pricing.ts                 # Pricing state hook
+│   │
 │   ├── db/                                # Database Layer
 │   │   ├── client.ts ✓                    # Drizzle client
 │   │   ├── schema.ts ✓                    # Schema definitions
@@ -253,6 +276,7 @@ quoteflow_ai/
 ├── types/                                 # TypeScript Types
 │   ├── ai-chat.ts ✓                       # AI Chat types (NEW v5.0)
 │   ├── workboard.ts ✓                     # Workboard types (NEW v5.0)
+│   ├── pricing.ts ✓                       # Pricing types (NEW v5.9)
 │   ├── rfq-queue.ts ✓                     # RFQ Queue types
 │   ├── comms.ts ✓                         # Communications types
 │   ├── quotation.ts
@@ -302,6 +326,7 @@ quoteflow_ai/
 ├── Dashboard_factor.md ✓                  # Dashboard design specification
 ├── Chatbox_design.md ✓                    # AI Chat FAB design specification
 ├── Workboard_factoring.md ✓               # Workboard panel system specification
+├── PricingPanel.md ✓                      # Pricing panel refactoring specification (NEW v5.9)
 └── README.md
 ```
 
@@ -467,6 +492,46 @@ The Preview panel now includes a complete approval workflow for AI-generated con
 
 > **Note:** Migrated back from Gridstack.js due to race conditions with React's rendering model (see Grid.md for analysis).
 
+#### Pricing Panel System (v5.9)
+
+The Pricing Panel has been refactored with a modular architecture for per-item pricing calculations:
+
+| Component | Purpose |
+|-----------|---------|
+| **PricingPanelProvider** | Context for state management (items, variables, calculated pricing) |
+| **CurrencySelector** | Global target currency selection (VND, USD, EUR, JPY) |
+| **ItemSearch** | Search/filter items by keyword |
+| **PricingItemCard** | Per-item variable inputs (shipping, tax, exchange, profit, discount) |
+| **ProfitSummaryTable** | Displays potential profit per item |
+| **BulkUpdatePopover** | Right-click context menu for bulk variable updates |
+| **PricingActions** | Apply (calculate) and Reset buttons |
+
+**Pricing Formula:**
+```
+actual_unit_price = ((unit_price + shipping_cost) × tax_rate) × exchange_rate
+profit_unit_price = actual_unit_price × profit_rate
+sales_unit_price = profit_unit_price - (profit_unit_price × discount_rate)
+potential_profit = (profit_unit_price - actual_unit_price) × qty
+```
+
+**Service Layer:**
+| Service | Purpose |
+|---------|---------|
+| `pricing-calculator.ts` | Core calculation engine with formula implementation |
+| `pricing-manager.ts` | CRUD operations for pricing variables & results |
+| `currency-service.ts` | Exchange rate management & currency conversion |
+| `validation.ts` | Input validation for pricing variables |
+
+**API Endpoints:**
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/pricing` | GET | Load pricing data for quotation |
+| `/api/pricing` | POST | Calculate and save pricing |
+| `/api/pricing/variables` | GET | Get saved pricing variables |
+| `/api/pricing/variables` | PUT | Update pricing variables |
+
+> **Note:** See `PricingPanel.md` for complete refactoring specification.
+
 ### AI Chat FAB System (v5.0)
 
 Floating AI Chat button with drag & drop integration:
@@ -546,6 +611,10 @@ app/layout.tsx (Root)
 | `/api/rfq-queue` | POST | Update RFQ status/stage |
 | `/api/comms` | GET | List channels, status, messages |
 | `/api/comms` | POST | Update channel or mark message read |
+| `/api/pricing` | GET | Load pricing data for quotation (v5.9) |
+| `/api/pricing` | POST | Calculate and save pricing (v5.9) |
+| `/api/pricing/variables` | GET | Get saved pricing variables (v5.9) |
+| `/api/pricing/variables` | PUT | Update pricing variables (v5.9) |
 
 ## Design Token System (v5.7 Standardized)
 

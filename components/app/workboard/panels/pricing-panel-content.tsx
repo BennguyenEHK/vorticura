@@ -1,165 +1,154 @@
 "use client";
 
 // =============================================
-// Pricing Panel Content
+// PRICING PANEL CONTENT - Main orchestrator component
 // =============================================
-// Content component for the pricing editor panel
-// Shows pricing variables and calculations
+// Refactored v5.9 - Uses modular components from ./pricing/
+// Features:
+// - Global currency selection (VND, USD, EUR, JPY)
+// - Per-item pricing variables (shipping, tax, exchange, profit, discount)
+// - Search/filter items by keyword
+// - Bulk update via right-click context menu
+// - Profit summary table with calculations
+// - Apply/Reset actions with API integration
 
-import { useState } from "react";
-import { DollarSign, Percent, Truck, Calculator } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { useEffect } from "react";
+import { Loader2, AlertCircle } from "lucide-react";
+import {
+  PricingPanelProvider,
+  usePricingPanel,
+  CurrencySelector,
+  ItemSearch,
+  PricingItemList,
+  ProfitSummaryTable,
+  PricingActions,
+} from "./pricing";
 
-// =============================================
-// Mock Data
-// =============================================
-
-// Initial pricing values (placeholder)
-const initialPricing = {
-  baseCost: 12500,
-  markupPercent: 15,
-  shippingCost: 250,
-  taxPercent: 7,
-};
-
-// =============================================
-// Content Component
-// =============================================
+// ---------------------------------------------
+// Props Interface
+// ---------------------------------------------
 
 interface PricingPanelContentProps {
   className?: string;
+  quotationId?: number; // Optional: load specific quotation on mount
 }
 
+// ---------------------------------------------
+// Inner Content Component (uses context)
+// ---------------------------------------------
+
 /**
- * PricingPanelContent - Pricing editor content
- * Shows: base cost, markup, shipping, tax, total calculation
+ * PricingPanelInner - Inner content that consumes the pricing context
+ * Separated to allow useContext to work properly
  */
-export function PricingPanelContent({
-  className = "",
-}: PricingPanelContentProps) {
-  // Local state for pricing values
-  const [pricing, setPricing] = useState(initialPricing);
+function PricingPanelInner({ className = "" }: { className?: string }) {
+  // Get state from context
+  const { isLoading, error, items } = usePricingPanel();
 
-  // Calculate derived values
-  const markupAmount = pricing.baseCost * (pricing.markupPercent / 100);
-  const subtotal = pricing.baseCost + markupAmount + pricing.shippingCost;
-  const taxAmount = subtotal * (pricing.taxPercent / 100);
-  const total = subtotal + taxAmount;
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className={`p-4 h-full flex items-center justify-center ${className}`}>
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 text-brand animate-spin mx-auto" />
+          <p className="text-sm text-muted-foreground mt-2">
+            Loading pricing data...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
-  // Handle input changes
-  const handleChange = (field: keyof typeof pricing, value: string) => {
-    const numValue = parseFloat(value) || 0;
-    setPricing((prev) => ({ ...prev, [field]: numValue }));
-  };
+  // Error state
+  if (error) {
+    return (
+      <div className={`p-4 h-full flex items-center justify-center ${className}`}>
+        <div className="text-center">
+          <AlertCircle className="w-8 h-8 text-error mx-auto" />
+          <p className="text-sm text-error mt-2">{error}</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Please try reloading the page
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className={`p-4 h-full flex flex-col ${className}`}>
-      {/* Header */}
-      <div className="mb-4">
-        <h3 className="text-sm font-medium text-foreground">Pricing Editor</h3>
-        <p className="text-xs text-muted-foreground mt-1">
-          Configure pricing variables
+    <div className={`p-3 h-full flex flex-col ${className}`}>
+      {/* Header section */}
+      <div className="mb-3">
+        <h3 className="text-sm font-medium text-foreground">Pricing Variables</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Configure per-item pricing with formula calculation
         </p>
       </div>
 
-      {/* Pricing inputs */}
-      <div className="flex-1 space-y-4 overflow-y-auto">
-        {/* Supplier Pricing Section */}
-        <div className="space-y-2">
-          <label className="text-xs font-medium text-label uppercase tracking-wide">
-            Supplier Pricing
-          </label>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
-              <DollarSign className="w-4 h-4 text-muted-foreground" />
-            </div>
-            <div className="flex-1">
-              <label className="text-xs text-muted-foreground">Base Cost</label>
-              <Input
-                type="number"
-                value={pricing.baseCost}
-                onChange={(e) => handleChange("baseCost", e.target.value)}
-                className="h-8 text-sm"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Your Pricing Section */}
-        <div className="space-y-3">
-          <label className="text-xs font-medium text-label uppercase tracking-wide">
-            Your Pricing
-          </label>
-
-          {/* Markup */}
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
-              <Percent className="w-4 h-4 text-muted-foreground" />
-            </div>
-            <div className="flex-1">
-              <label className="text-xs text-muted-foreground">Markup %</label>
-              <Input
-                type="number"
-                value={pricing.markupPercent}
-                onChange={(e) => handleChange("markupPercent", e.target.value)}
-                className="h-8 text-sm"
-              />
-            </div>
-            <div className="text-sm text-muted-foreground w-24 text-right">
-              +${markupAmount.toLocaleString('en-US')}
-            </div>
-          </div>
-
-          {/* Shipping */}
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
-              <Truck className="w-4 h-4 text-muted-foreground" />
-            </div>
-            <div className="flex-1">
-              <label className="text-xs text-muted-foreground">Shipping</label>
-              <Input
-                type="number"
-                value={pricing.shippingCost}
-                onChange={(e) => handleChange("shippingCost", e.target.value)}
-                className="h-8 text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Tax */}
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
-              <Calculator className="w-4 h-4 text-muted-foreground" />
-            </div>
-            <div className="flex-1">
-              <label className="text-xs text-muted-foreground">Tax %</label>
-              <Input
-                type="number"
-                value={pricing.taxPercent}
-                onChange={(e) => handleChange("taxPercent", e.target.value)}
-                className="h-8 text-sm"
-              />
-            </div>
-            <div className="text-sm text-muted-foreground w-24 text-right">
-              +${taxAmount.toLocaleString('en-US')}
-            </div>
-          </div>
-        </div>
+      {/* Formula display */}
+      <div className="mb-3 p-2 bg-muted rounded-lg">
+        <p className="text-[10px] text-muted-foreground font-mono leading-relaxed">
+          sales_price = ((unit_price + shipping) × tax × exchange × profit) − discount
+        </p>
       </div>
 
-      {/* Total section */}
-      <div className="mt-4 pt-3 border-t border-border">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-foreground">TOTAL</span>
-          <span className="text-xl font-bold text-foreground">
-            ${total.toLocaleString('en-US')}
-          </span>
-        </div>
-        <Button className="w-full mt-3" size="sm">
-          Apply Pricing
-        </Button>
+      {/* Main scrollable content area */}
+      <div className="flex-1 overflow-y-auto space-y-3 min-h-0">
+        {/* Currency selector */}
+        <CurrencySelector />
+
+        {/* Search bar - only show if items exist */}
+        {items.length > 0 && <ItemSearch />}
+
+        {/* Item list with pricing variables */}
+        <PricingItemList />
+
+        {/* Profit summary table */}
+        <ProfitSummaryTable />
+      </div>
+
+      {/* Footer with actions - fixed at bottom */}
+      <div className="mt-3 pt-3 border-t border-border">
+        <PricingActions />
       </div>
     </div>
   );
+}
+
+// ---------------------------------------------
+// Main Export Component
+// ---------------------------------------------
+
+/**
+ * PricingPanelContent - Main pricing panel with provider wrapper
+ * Wraps inner content with PricingPanelProvider for state management
+ */
+export function PricingPanelContent({
+  className = "",
+  quotationId,
+}: PricingPanelContentProps) {
+  return (
+    <PricingPanelProvider quotationId={quotationId}>
+      <PricingPanelInner className={className} />
+    </PricingPanelProvider>
+  );
+}
+
+// ---------------------------------------------
+// Auto-load hook for demo/testing
+// ---------------------------------------------
+
+/**
+ * Hook to auto-load demo data when no quotationId is provided
+ * Used for development and testing purposes
+ */
+export function usePricingAutoLoad(quotationId?: number) {
+  const { loadQuotationData } = usePricingPanel();
+
+  useEffect(() => {
+    // Load demo quotation if no ID provided
+    if (!quotationId) {
+      // Use demo quotation ID 1 for testing
+      loadQuotationData(1);
+    }
+  }, [quotationId, loadQuotationData]);
 }
