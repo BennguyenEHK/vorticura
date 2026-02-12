@@ -68,6 +68,8 @@ const initialState: WorkboardState = {
   isDraggingOver: false,
   hiddenPanels: new Map<string, HiddenPanelInfo>(), // Track hidden panels with their saved positions
   maximizedPanelId: null, // No panel is maximized by default
+  savedGridHeight: null, // No stored grid height initially
+  maximizedPanelOriginalLayout: null, // No stored original layout initially
 };
 
 // =============================================
@@ -117,6 +119,8 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
           panels: parsed.panels,
           hiddenPanels: hiddenPanelsMap,
           maximizedPanelId: parsed.maximizedPanelId || null, // Restore maximized state
+          savedGridHeight: parsed.savedGridHeight || null, // Restore stored grid height
+          maximizedPanelOriginalLayout: parsed.maximizedPanelOriginalLayout || null, // Restore original layout
         }));
       } catch {
         // Failed to parse saved layout - clear corrupted state
@@ -226,7 +230,7 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
   /**
    * Toggle panel maximize/restore state
    * - MAXIMIZE: Hides all other panels, current panel expands to fill space
-   * - RESTORE: Shows all hidden panels, current panel shrinks back
+   * - RESTORE: Shows all hidden panels, current panel returns to original position
    */
   const toggleMaximize = useCallback((id: string) => {
     setState((prev) => {
@@ -237,23 +241,29 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
         // === UN-MAXIMIZE (RESTORE): Show all hidden panels ===
         console.log(`[toggleMaximize] Restoring panel "${id}" - showing all hidden panels`);
 
-        let newLayout = [...prev.layout];
-        let newPanels = [...prev.panels];
-        const newHiddenPanels = new Map(prev.hiddenPanels);
-
         // Skip overlap resolution in grid (we handle it here)
         skipOverlapResolutionRef.current = true;
 
-        // Restore each hidden panel from the Map
+        // Step 1: Reset maximized panel to its original position/size FIRST
+        let newLayout = prev.layout.map((l) => {
+          if (l.i === id && prev.maximizedPanelOriginalLayout) {
+            // Restore to saved original position/size
+            return { ...prev.maximizedPanelOriginalLayout };
+          }
+          return l;
+        });
+
+        // Step 2: Restore each hidden panel from the Map at their saved positions
+        let newPanels = [...prev.panels];
+        const newHiddenPanels = new Map(prev.hiddenPanels);
+
         for (const [panelId, savedInfo] of prev.hiddenPanels) {
-          // Add panel back to layout at its saved position
+          // Add panel back to layout at its saved position (no overlap since maximized panel is reset)
           newLayout = [...newLayout, savedInfo.layout];
           // Add panel config back to panels array
           newPanels = [...newPanels, savedInfo.config];
           // Remove from hidden panels Map
           newHiddenPanels.delete(panelId);
-          // Resolve overlaps by shrinking expanded panels
-          newLayout = resolveOverlapShrinkWidth(panelId, newLayout);
         }
 
         return {
@@ -264,18 +274,25 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
           ),
           hiddenPanels: newHiddenPanels,
           maximizedPanelId: null, // Clear maximized state
+          savedGridHeight: null, // Clear stored grid height
+          maximizedPanelOriginalLayout: null, // Clear stored original layout
         };
       } else {
         // === MAXIMIZE: Hide all other panels ===
         console.log(`[toggleMaximize] Maximizing panel "${id}" - hiding all other panels`);
 
-        const newHiddenPanels = new Map(prev.hiddenPanels);
+        // Step 1: Calculate grid height BEFORE hiding (for vertical fill)
+        const gridHeight = prev.layout.reduce((max, l) => Math.max(max, l.y + l.h), 0);
 
-        // Save all other visible panels to hiddenPanels Map
+        // Step 2: Store the maximized panel's CURRENT position/size for later restoration
+        const currentPanelLayout = prev.layout.find((l) => l.i === id);
+        const originalLayout = currentPanelLayout ? { ...currentPanelLayout } : null;
+
+        // Step 3: Save all other visible panels to hiddenPanels Map
+        const newHiddenPanels = new Map(prev.hiddenPanels);
         for (const p of prev.panels) {
           if (p.id === id) continue; // Skip the panel being maximized
 
-          // Find layout position for this panel
           const layoutItem = prev.layout.find((l) => l.i === p.id);
           if (layoutItem) {
             // Save position and config for later restoration
@@ -286,12 +303,18 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
           }
         }
 
-        // Keep only the maximized panel in layout and panels
-        let newLayout = prev.layout.filter((l) => l.i === id);
-        const newPanels = prev.panels.filter((p) => p.id === id);
+        // Step 4: Keep only the maximized panel and expand it to fill entire space
+        const newLayout: LayoutItem[] = currentPanelLayout
+          ? [{
+              ...currentPanelLayout,
+              x: 0,              // Start from left edge
+              y: 0,              // Start from top edge
+              w: 12,             // Full width (12 columns)
+              h: gridHeight,     // Full height (stored grid height)
+            }]
+          : [];
 
-        // Fill entire space with the maximized panel
-        newLayout = compactAndFillAll(newLayout, 12);
+        const newPanels = prev.panels.filter((p) => p.id === id);
 
         return {
           ...prev,
@@ -299,6 +322,8 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
           panels: newPanels.map((p) => ({ ...p, isMaximized: true })),
           hiddenPanels: newHiddenPanels,
           maximizedPanelId: id, // Track which panel is maximized
+          savedGridHeight: gridHeight, // Store grid height for reference
+          maximizedPanelOriginalLayout: originalLayout, // Store original layout for restore
         };
       }
     });
@@ -407,10 +432,12 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
           panels: state.panels,
           hiddenPanels: hiddenPanelsArray,
           maximizedPanelId: state.maximizedPanelId, // Persist maximized state
+          savedGridHeight: state.savedGridHeight, // Persist grid height for maximize
+          maximizedPanelOriginalLayout: state.maximizedPanelOriginalLayout, // Persist original layout
         })
       );
     }
-  }, [state.layout, state.panels, state.hiddenPanels, state.maximizedPanelId]);
+  }, [state.layout, state.panels, state.hiddenPanels, state.maximizedPanelId, state.savedGridHeight, state.maximizedPanelOriginalLayout]);
 
   /** Toggle panel visibility - hide/show panel while preserving its position */
   const togglePanelVisibility = useCallback((id: string) => {

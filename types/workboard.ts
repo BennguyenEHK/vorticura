@@ -80,6 +80,8 @@ export interface WorkboardState {
   isDraggingOver: boolean;     // AI Chat FAB is being dragged over
   hiddenPanels: Map<string, HiddenPanelInfo>; // Panels hidden via toggle (preserves position)
   maximizedPanelId: string | null; // Track which panel is currently maximized (null = none)
+  savedGridHeight: number | null; // Store grid height before maximize for vertical fill
+  maximizedPanelOriginalLayout: LayoutItem | null; // Store original position/size before maximize
 }
 
 /** Workboard context actions */
