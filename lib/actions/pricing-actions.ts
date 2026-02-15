@@ -167,7 +167,66 @@ function generateMockItems(): WorkflowQuotationItem[] {
       unitPrice: 75000,
       currency: 'VND',
     },
+    {
+      itemId: 3,
+      description: 'Steel Pipe DN100 - 6m length',
+      quantity: 50,
+      unitPrice: 125,
+      currency: 'USD',
+    },
+    {
+      itemId: 4,
+      description: 'Gate Valve DN100 PN16',
+      quantity: 20,
+      unitPrice: 450,
+      currency: 'USD',
+    },
+    {
+      itemId: 5,
+      description: 'Flange DN100 PN16 (pair)',
+      quantity: 100,
+      unitPrice: 35,
+      currency: 'USD',
+    },
   ];
+}
+
+// ---------------------------------------------
+// Set Quotation Items (for store integration)
+// ---------------------------------------------
+
+/**
+ * Set quotation items in memory store
+ * Called from client to populate items before calculation
+ * @param quotationId - Quotation identifier
+ * @param items - Array of quotation items
+ */
+export async function setQuotationItems(
+  quotationId: string,
+  items: WorkflowQuotationItem[]
+): Promise<ActionResult<{ set: boolean }>> {
+  const timestamp = new Date().toISOString();
+
+  try {
+    quotationItemsStore.set(quotationId, items);
+
+    return {
+      success: true,
+      data: { set: true },
+      timestamp,
+      stepId: 'pricing',
+      rfqId: `rfq-${quotationId}`,
+    };
+
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to set items',
+      timestamp,
+      stepId: 'pricing',
+      rfqId: `rfq-${quotationId}`,
+    };
+  }
 }
 
 // ---------------------------------------------

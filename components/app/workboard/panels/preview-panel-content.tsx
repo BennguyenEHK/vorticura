@@ -4,10 +4,10 @@
 // Preview Panel Content
 // =============================================
 // Content component for the quotation preview panel
-// Shows a live preview with approval workflow:
-// - Header: Edit, Revert, Download buttons
-// - Content: Selectable text with inline "Add Note" tooltip
-// - Footer: General feedback, Notes counter, Regenerate, Approve
+// Shows different content based on workflow step:
+// - Quotation preview with approval workflow
+// - Pricing results from workboard store
+// Uses Zustand store for state sync
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import {
@@ -21,8 +21,13 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  Calculator,
+  DollarSign,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { usePreviewState, usePricingState } from "@/lib/stores/workboard-store";
+import type { PricingOutput } from "@/types/workflow";
+import { formatCurrency } from "@/lib/services/pricing/validation";
 
 // =============================================
 // Types
@@ -43,7 +48,7 @@ interface SelectionPosition {
 }
 
 // =============================================
-// Mock Data
+// Mock Data (fallback)
 // =============================================
 
 // Placeholder quotation data
@@ -68,151 +73,216 @@ const quotationData = {
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
 // =============================================
-// Content Component
+// Pricing Preview Component
 // =============================================
 
-interface PreviewPanelContentProps {
+interface PricingPreviewProps {
+  pricingData: PricingOutput;
+}
+
+/**
+ * PricingPreview - Shows calculated pricing results
+ * Displays breakdown of sales prices and profit margins
+ */
+function PricingPreview({ pricingData }: PricingPreviewProps) {
+  return (
+    <div className="p-4 h-full flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Calculator className="w-5 h-5 text-brand" />
+          <div>
+            <h3 className="text-sm font-medium text-foreground">
+              Pricing Calculation
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Quotation: {pricingData.quotationId}
+            </p>
+          </div>
+        </div>
+        <span className="px-2 py-0.5 text-xs font-medium bg-brand-muted text-brand-dark rounded-md">
+          {pricingData.currency}
+        </span>
+      </div>
+
+      {/* Items table */}
+      <div className="flex-1 overflow-auto bg-background border border-border rounded-lg">
+        <table className="w-full text-xs">
+          <thead className="bg-muted sticky top-0">
+            <tr className="border-b border-border">
+              <th className="text-left py-2 px-3 text-muted-foreground font-medium">
+                Item
+              </th>
+              <th className="text-right py-2 px-3 text-muted-foreground font-medium">
+                Sales Price
+              </th>
+              <th className="text-right py-2 px-3 text-muted-foreground font-medium">
+                Extended
+              </th>
+              <th className="text-right py-2 px-3 text-muted-foreground font-medium">
+                Profit
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {pricingData.calculatedItems.map((item) => {
+              const isPositive = item.potentialProfit >= 0;
+              return (
+                <tr key={item.itemId} className="border-b border-border/50 hover:bg-muted/30">
+                  <td className="py-2 px-3 text-foreground">
+                    Item #{item.itemId}
+                  </td>
+                  <td className="py-2 px-3 text-right text-foreground">
+                    {formatCurrency(item.salesUnitPrice)}
+                  </td>
+                  <td className="py-2 px-3 text-right text-foreground">
+                    {formatCurrency(item.extendedPrice)}
+                  </td>
+                  <td className={`py-2 px-3 text-right font-medium ${
+                    isPositive ? "text-success" : "text-error"
+                  }`}>
+                    {isPositive ? "+" : ""}
+                    {formatCurrency(item.potentialProfit)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Totals section */}
+      <div className="mt-4 p-3 bg-muted rounded-lg space-y-2">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground flex items-center gap-1.5">
+            <DollarSign className="w-3.5 h-3.5" />
+            Total Amount
+          </span>
+          <span className="font-bold text-foreground">
+            {formatCurrency(pricingData.totalAmount)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">Total Profit</span>
+          <span className={`font-bold ${
+            pricingData.totalProfit >= 0 ? "text-success" : "text-error"
+          }`}>
+            {pricingData.totalProfit >= 0 ? "+" : ""}
+            {formatCurrency(pricingData.totalProfit)}
+          </span>
+        </div>
+        <div className="pt-2 border-t border-border">
+          <p className="text-xs text-muted-foreground">
+            Calculated at: {new Date(pricingData.calculatedAt).toLocaleString()}
+          </p>
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div className="mt-4 flex items-center gap-2">
+        <Button variant="outline" size="sm" className="flex-1 gap-1.5">
+          <Download className="w-3.5 h-3.5" />
+          Export
+        </Button>
+        <Button
+          size="sm"
+          className="flex-1 gap-1.5 bg-success text-success-foreground hover:bg-success-hover"
+        >
+          <Check className="w-3.5 h-3.5" />
+          Approve
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// =============================================
+// Quotation Preview Component (extracted)
+// =============================================
+
+interface QuotationPreviewProps {
   className?: string;
 }
 
 /**
- * PreviewPanelContent - Quotation preview with approval workflow
- * Features:
- * - Inline text selection for contextual feedback
- * - General feedback input for overall comments
- * - Regenerate button (acts as implicit reject)
- * - Approve button for finalizing content
- * - Revert to previous version
+ * QuotationPreview - Default quotation document preview
+ * Separated to avoid hook rules violations
  */
-export function PreviewPanelContent({
-  className = "",
-}: PreviewPanelContentProps) {
-  // =============================================
-  // State
-  // =============================================
-
-  // Inline notes from text selection
+function QuotationPreview({ className = "" }: QuotationPreviewProps) {
+  // All hooks must be at the top
   const [inlineNotes, setInlineNotes] = useState<InlineNote[]>([]);
-
-  // General feedback textarea content
   const [generalFeedback, setGeneralFeedback] = useState("");
-
-  // Feedback section expanded state
   const [isFeedbackExpanded, setIsFeedbackExpanded] = useState(false);
-
-  // Text selection state for floating tooltip
   const [selection, setSelection] = useState<{
     text: string;
     position: SelectionPosition;
   } | null>(null);
-
-  // Note input for selected text
   const [noteInput, setNoteInput] = useState("");
-
-  // Show note input popover
   const [showNotePopover, setShowNotePopover] = useState(false);
-
-  // Refs
   const contentRef = useRef<HTMLDivElement>(null);
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
 
-  // =============================================
-  // Computed Values
-  // =============================================
-
-  // Check if there's any feedback to send
+  // Computed values
   const hasFeedback = inlineNotes.length > 0 || generalFeedback.trim().length > 0;
-
-  // Total notes count for badge
   const totalNotesCount = inlineNotes.length + (generalFeedback.trim() ? 1 : 0);
 
-  // =============================================
-  // Text Selection Handler
-  // =============================================
-
+  // Text selection handler
   const handleTextSelection = useCallback(() => {
     const windowSelection = window.getSelection();
     const selectedText = windowSelection?.toString().trim();
 
-        // Early return if no text selected or content ref not available
     if (!selectedText || selectedText.length === 0 || !contentRef.current) {
       if (!showNotePopover) setSelection(null);
-
-      console.warn("[SelectionGuard] No text selected or contentRef unavailable", {
-        selectedText,
-        hasContentRef: !!contentRef.current,
-      });
-
       return;
     }
 
     const anchorNode = windowSelection?.anchorNode;
     if (!anchorNode || !contentRef.current.contains(anchorNode)) {
       if (!showNotePopover) setSelection(null);
-
-      console.warn("[SelectionGuard] Selection outside content area", {
-        anchorNode,
-      });
-
       return;
     }
 
     const range = windowSelection?.getRangeAt(0);
-    if (!range) {
-      console.error("[SelectionGuard] Failed to get selection range");
-      return;
-    }
-
+    if (!range) return;
 
     const rect = range.getBoundingClientRect();
     const contentRect = contentRef.current.getBoundingClientRect();
 
-    // Tooltip dimensions for positioning calculations
     const TOOLTIP_HEIGHT = 40;
     const TOOLTIP_WIDTH = 110;
     const PADDING = 8;
 
-    // Calculate vertical position: BELOW if not enough space above, otherwise ABOVE
     const spaceAbove = rect.top - contentRect.top;
     const top = spaceAbove > TOOLTIP_HEIGHT + PADDING
-      ? rect.top - contentRect.top - TOOLTIP_HEIGHT - PADDING  // Position above selection
-      : rect.bottom - contentRect.top + PADDING;               // Position below selection
+      ? rect.top - contentRect.top - TOOLTIP_HEIGHT - PADDING
+      : rect.bottom - contentRect.top + PADDING;
 
-    // Calculate horizontal position: center on selection, clamped within bounds
     const left = Math.max(
-      PADDING,  // Minimum padding from left edge
+      PADDING,
       Math.min(
         rect.left - contentRect.left + (rect.width / 2) - (TOOLTIP_WIDTH / 2),
-        contentRect.width - TOOLTIP_WIDTH - PADDING  // Maximum from right edge
+        contentRect.width - TOOLTIP_WIDTH - PADDING
       )
     );
 
     setSelection({ text: selectedText, position: { top, left } });
   }, [showNotePopover]);
 
-  // Listen for text selection changes on document level
+  // Event listeners
   useEffect(() => {
     document.addEventListener("mouseup", handleTextSelection);
     return () => document.removeEventListener("mouseup", handleTextSelection);
   }, [handleTextSelection]);
 
-  // Focus note input when popover opens
   useEffect(() => {
     if (showNotePopover && noteInputRef.current) {
       noteInputRef.current.focus();
     }
   }, [showNotePopover]);
 
-  // =============================================
-  // Action Handlers
-  // =============================================
+  // Action handlers
+  const handleAddNote = () => setShowNotePopover(true);
 
-  /** Open note popover for selected text */
-  const handleAddNote = () => {
-    setShowNotePopover(true);
-  };
-
-  /** Save inline note */
   const handleSaveNote = () => {
     if (selection && noteInput.trim()) {
       const newNote: InlineNote = {
@@ -222,8 +292,6 @@ export function PreviewPanelContent({
         timestamp: new Date(),
       };
       setInlineNotes((prev) => [...prev, newNote]);
-
-      // Reset states
       setNoteInput("");
       setShowNotePopover(false);
       setSelection(null);
@@ -231,7 +299,6 @@ export function PreviewPanelContent({
     }
   };
 
-  /** Cancel note input */
   const handleCancelNote = () => {
     setNoteInput("");
     setShowNotePopover(false);
@@ -239,48 +306,24 @@ export function PreviewPanelContent({
     window.getSelection()?.removeAllRanges();
   };
 
-  /** Remove an inline note */
   const handleRemoveNote = (id: string) => {
     setInlineNotes((prev) => prev.filter((note) => note.id !== id));
   };
 
-  /** Handle Regenerate (send feedback to AI) */
   const handleRegenerate = () => {
-    // TODO: Integrate with AI service
-    console.log("Regenerating with feedback:", {
-      inlineNotes,
-      generalFeedback,
-    });
-
-    // Clear feedback after submission
+    console.log("Regenerating with feedback:", { inlineNotes, generalFeedback });
     setInlineNotes([]);
     setGeneralFeedback("");
     setIsFeedbackExpanded(false);
   };
 
-  /** Handle Approve */
-  const handleApprove = () => {
-    // TODO: Integrate with approval workflow
-    console.log("Approved quotation:", quotationData.id);
-  };
-
-  /** Handle Revert */
-  const handleRevert = () => {
-    // TODO: Integrate with version history
-    console.log("Reverting to previous version");
-  };
-
-  // =============================================
-  // Render
-  // =============================================
+  const handleApprove = () => console.log("Approved quotation:", quotationData.id);
+  const handleRevert = () => console.log("Reverting to previous version");
 
   return (
     <div className={`p-4 h-full flex flex-col ${className}`}>
-      {/* =============================================
-       * HEADER: Title + Version + Actions (Edit, Revert, Download)
-       * ============================================= */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        {/* Title and version badge */}
         <div className="flex items-center gap-2">
           <div>
             <h3 className="text-sm font-medium text-foreground">
@@ -290,20 +333,15 @@ export function PreviewPanelContent({
               Select text to add feedback
             </p>
           </div>
-          {/* Version badge */}
           <span className="px-2 py-0.5 text-xs font-medium bg-brand-muted text-brand-dark rounded-md">
             v{quotationData.version}
           </span>
         </div>
 
-        {/* Header action buttons */}
         <div className="flex items-center gap-1">
-          {/* Edit button - RETAINED as requested */}
           <Button variant="ghost" size="icon" className="h-7 w-7">
             <Edit className="w-3.5 h-3.5" />
           </Button>
-
-          {/* Revert button */}
           <Button
             variant="ghost"
             size="icon"
@@ -313,22 +351,18 @@ export function PreviewPanelContent({
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </Button>
-
-          {/* Download button */}
           <Button variant="ghost" size="icon" className="h-7 w-7">
             <Download className="w-3.5 h-3.5" />
           </Button>
         </div>
       </div>
 
-      {/* =============================================
-       * CONTENT: Selectable document preview
-       * ============================================= */}
+      {/* Content */}
       <div
         ref={contentRef}
         className="flex-1 overflow-auto bg-background border border-border rounded-lg p-4 shadow-inner relative select-text"
       >
-        {/* Floating "Add Note" tooltip on text selection */}
+        {/* Add Note tooltip */}
         {selection && !showNotePopover && (
           <div
             className="absolute z-10 animate-in fade-in-0 zoom-in-95 duration-150"
@@ -341,8 +375,8 @@ export function PreviewPanelContent({
               size="sm"
               className="h-8 gap-1.5 bg-primary text-primary-foreground shadow-lg"
               onClick={handleAddNote}
-              onMouseDown={(e) => e.preventDefault()} // Prevent browser from clearing text selection on button click
-              onMouseUp={(e) => e.stopPropagation()} // Prevent mouseup from bubbling to contentRef and clearing selection
+              onMouseDown={(e) => e.preventDefault()}
+              onMouseUp={(e) => e.stopPropagation()}
             >
               <MessageSquarePlus className="w-3.5 h-3.5" />
               Add Note
@@ -350,7 +384,7 @@ export function PreviewPanelContent({
           </div>
         )}
 
-        {/* Note input popover - stopPropagation prevents mouseup from interfering */}
+        {/* Note input popover */}
         {showNotePopover && selection && (
           <div
             className="absolute z-20 w-64 bg-popover border border-border rounded-lg shadow-xl p-3 animate-in fade-in-0 zoom-in-95 duration-150"
@@ -358,17 +392,14 @@ export function PreviewPanelContent({
               top: Math.max(0, selection.position.top),
               left: Math.max(0, Math.min(selection.position.left, 200)),
             }}
-            onMouseUp={(e) => e.stopPropagation()} // Prevent clicks inside popover from triggering handleTextSelection
+            onMouseUp={(e) => e.stopPropagation()}
           >
-            {/* Selected text preview */}
             <div className="mb-2">
               <p className="text-xs text-muted-foreground mb-1">Selected:</p>
               <p className="text-xs text-foreground bg-brand-muted/50 px-2 py-1 rounded border-l-2 border-brand truncate">
-                "{selection.text.substring(0, 50)}{selection.text.length > 50 ? '...' : ''}"
+                &quot;{selection.text.substring(0, 50)}{selection.text.length > 50 ? '...' : ''}&quot;
               </p>
             </div>
-
-            {/* Note textarea */}
             <textarea
               ref={noteInputRef}
               value={noteInput}
@@ -376,23 +407,11 @@ export function PreviewPanelContent({
               placeholder="Your feedback..."
               className="w-full h-16 px-2 py-1.5 text-xs bg-card border border-border rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-placeholder"
             />
-
-            {/* Actions - stopPropagation prevents mouseup from clearing selection */}
             <div className="flex justify-end gap-1.5 mt-2" onMouseUp={(e) => e.stopPropagation()}>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={handleCancelNote}
-              >
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleCancelNote}>
                 Cancel
               </Button>
-              <Button
-                size="sm"
-                className="h-7 text-xs"
-                onClick={handleSaveNote}
-                disabled={!noteInput.trim()}
-              >
+              <Button size="sm" className="h-7 text-xs" onClick={handleSaveNote} disabled={!noteInput.trim()}>
                 Save
               </Button>
             </div>
@@ -411,9 +430,7 @@ export function PreviewPanelContent({
         {/* Customer info */}
         <div className="mb-4">
           <p className="text-xs text-muted-foreground">Bill To:</p>
-          <p className="text-sm font-medium text-foreground">
-            {quotationData.customer}
-          </p>
+          <p className="text-sm font-medium text-foreground">{quotationData.customer}</p>
         </div>
 
         {/* Items table */}
@@ -421,30 +438,18 @@ export function PreviewPanelContent({
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-left py-1 text-muted-foreground font-medium">
-                  Item
-                </th>
-                <th className="text-center py-1 text-muted-foreground font-medium">
-                  Qty
-                </th>
-                <th className="text-right py-1 text-muted-foreground font-medium">
-                  Price
-                </th>
-                <th className="text-right py-1 text-muted-foreground font-medium">
-                  Total
-                </th>
+                <th className="text-left py-1 text-muted-foreground font-medium">Item</th>
+                <th className="text-center py-1 text-muted-foreground font-medium">Qty</th>
+                <th className="text-right py-1 text-muted-foreground font-medium">Price</th>
+                <th className="text-right py-1 text-muted-foreground font-medium">Total</th>
               </tr>
             </thead>
             <tbody>
               {quotationData.items.map((item, index) => (
                 <tr key={index} className="border-b border-border/50">
                   <td className="py-2 text-foreground">{item.name}</td>
-                  <td className="py-2 text-center text-foreground">
-                    {item.qty}
-                  </td>
-                  <td className="py-2 text-right text-foreground">
-                    ${item.price.toFixed(2)}
-                  </td>
+                  <td className="py-2 text-center text-foreground">{item.qty}</td>
+                  <td className="py-2 text-right text-foreground">${item.price.toFixed(2)}</td>
                   <td className="py-2 text-right text-foreground">
                     ${(item.qty * item.price).toLocaleString('en-US')}
                   </td>
@@ -458,32 +463,23 @@ export function PreviewPanelContent({
         <div className="space-y-1 text-xs">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Subtotal:</span>
-            <span className="text-foreground">
-              ${quotationData.subtotal.toLocaleString('en-US')}
-            </span>
+            <span className="text-foreground">${quotationData.subtotal.toLocaleString('en-US')}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Tax (7%):</span>
-            <span className="text-foreground">
-              ${quotationData.tax.toLocaleString('en-US')}
-            </span>
+            <span className="text-foreground">${quotationData.tax.toLocaleString('en-US')}</span>
           </div>
           <div className="flex justify-between pt-2 border-t border-border font-bold">
             <span className="text-foreground">TOTAL:</span>
-            <span className="text-foreground text-base">
-              ${quotationData.total.toLocaleString('en-US')}
-            </span>
+            <span className="text-foreground text-base">${quotationData.total.toLocaleString('en-US')}</span>
           </div>
         </div>
       </div>
 
-      {/* =============================================
-       * FOOTER: Feedback section + Actions
-       * ============================================= */}
+      {/* Footer */}
       <div className="mt-3 space-y-3">
-        {/* Collapsible feedback section */}
+        {/* Feedback section */}
         <div className="border border-border rounded-lg overflow-hidden">
-          {/* Toggle header */}
           <button
             className="w-full flex items-center justify-between px-3 py-2 bg-muted/50 hover:bg-muted transition-colors"
             onClick={() => setIsFeedbackExpanded(!isFeedbackExpanded)}
@@ -504,10 +500,8 @@ export function PreviewPanelContent({
             )}
           </button>
 
-          {/* Expanded content */}
           {isFeedbackExpanded && (
             <div className="p-3 border-t border-border bg-card space-y-3">
-              {/* Inline notes list */}
               {inlineNotes.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground">
@@ -520,11 +514,9 @@ export function PreviewPanelContent({
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-xs text-muted-foreground truncate">
-                          "{note.selectedText.substring(0, 30)}..."
+                          &quot;{note.selectedText.substring(0, 30)}...&quot;
                         </p>
-                        <p className="text-xs text-foreground mt-0.5">
-                          {note.note}
-                        </p>
+                        <p className="text-xs text-foreground mt-0.5">{note.note}</p>
                       </div>
                       <Button
                         variant="ghost"
@@ -538,12 +530,8 @@ export function PreviewPanelContent({
                   ))}
                 </div>
               )}
-
-              {/* General feedback textarea */}
               <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1.5">
-                  Overall Comments
-                </p>
+                <p className="text-xs font-medium text-muted-foreground mb-1.5">Overall Comments</p>
                 <textarea
                   value={generalFeedback}
                   onChange={(e) => setGeneralFeedback(e.target.value)}
@@ -557,18 +545,13 @@ export function PreviewPanelContent({
 
         {/* Action buttons */}
         <div className="flex items-center gap-2">
-          {/* Notes counter badge (only shows when collapsed and has notes) */}
           {!isFeedbackExpanded && totalNotesCount > 0 && (
             <span className="text-xs text-muted-foreground flex items-center gap-1">
               <MessageSquarePlus className="w-3.5 h-3.5" />
               {totalNotesCount} note{totalNotesCount > 1 ? 's' : ''}
             </span>
           )}
-
-          {/* Spacer */}
           <div className="flex-1" />
-
-          {/* Regenerate button - only enabled when there's feedback */}
           <Button
             variant="outline"
             size="sm"
@@ -579,8 +562,6 @@ export function PreviewPanelContent({
             <RefreshCw className="w-3.5 h-3.5" />
             Regenerate
           </Button>
-
-          {/* Approve button - uses success token */}
           <Button
             size="sm"
             onClick={handleApprove}
@@ -593,4 +574,40 @@ export function PreviewPanelContent({
       </div>
     </div>
   );
+}
+
+// =============================================
+// Main Content Component
+// =============================================
+
+interface PreviewPanelContentProps {
+  className?: string;
+}
+
+/**
+ * PreviewPanelContent - Main preview panel router
+ * Routes to appropriate preview based on workboard state:
+ * - 'pricing': Shows pricing calculation results
+ * - default: Shows quotation document preview
+ */
+export function PreviewPanelContent({
+  className = "",
+}: PreviewPanelContentProps) {
+  // Get preview state from workboard store - always call hooks first
+  const previewState = usePreviewState();
+  const pricingState = usePricingState();
+
+  // Determine which view to show
+  const showPricingPreview =
+    (previewState.type === 'pricing' && previewState.content) ||
+    pricingState.result;
+
+  // Render appropriate preview
+  if (showPricingPreview) {
+    const pricingData = previewState.content as PricingOutput || pricingState.result;
+    return <PricingPreview pricingData={pricingData!} />;
+  }
+
+  // Default to quotation preview
+  return <QuotationPreview className={className} />;
 }
