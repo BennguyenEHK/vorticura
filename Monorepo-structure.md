@@ -192,48 +192,35 @@ quoteflow_ai/
 │       └── table.tsx ✓                    # Table component
 │
 ├── lib/                                   # Business Logic & Utilities
-│   ├── services/                          # Business Logic Layer
-│   │   ├── rfq-queue/                     # RFQ Queue services
-│   │   │   ├── index.ts ✓                 # Barrel exports
-│   │   │   └── queue-manager.ts ✓         # Queue CRUD, filtering, mock data
-│   │   │
-│   │   ├── comms/                         # Communications services
-│   │   │   ├── index.ts ✓                 # Barrel exports
-│   │   │   └── comms-manager.ts ✓         # Channel & message management
-│   │   │
-│   │   ├── quotation/
-│   │   │   ├── data-processing-api.ts     # Unified data processing
-│   │   │   ├── quotation-processor.ts     # Quotation CRUD
-│   │   │   ├── email-processor.ts         # Email generation
-│   │   │   ├── rfq-processor.ts           # RFQ analysis
-│   │   │   ├── suppliers-processor.ts     # Supplier search
-│   │   │   ├── merge.ts                   # Data merging
-│   │   │   ├── pricing-processor.ts       # Pricing extraction
-│   │   │   ├── document-generator.ts      # HTML/PDF generation
-│   │   │   ├── session-loader.ts          # Session reconstruction
-│   │   │   └── database-handler.ts        # Database CRUD
-│   │   │
-│   │   ├── pricing/                       # NEW: Pricing services (v5.9)
-│   │   │   ├── index.ts ✓                 # Barrel exports
-│   │   │   ├── pricing-calculator.ts ✓    # Core calculation engine
-│   │   │   ├── pricing-manager.ts ✓       # CRUD operations
-│   │   │   ├── currency-service.ts ✓      # Exchange rates & conversion
-│   │   │   └── validation.ts ✓            # Input validation
-│   │   │
-│   │   ├── session/
-│   │   │   ├── session-manager.ts         # Session lifecycle
-│   │   │   └── session-handler.ts         # Session storage
-│   │   │
-│   │   ├── sse/
-│   │   │   ├── sse-broadcaster.ts         # SSE broadcasting
-│   │   │   ├── sse-connection-manager.ts  # Connection management
-│   │   │   └── sse-database-service.ts    # Connection persistence
-│   │   │
-│   │   └── auth/
-│   │       ├── jwt-service.ts             # JWT handling
-│   │       └── workspace-service.ts ✓     # Workspace isolation
+│   │
+│   ├── actions/                           # Server Actions ('use server') - v6.0
+│   │   ├── analysis-actions.ts ✓          # RFQ analysis: email → AI API → analysis JSON
+│   │   ├── email-actions.ts ✓             # Email drafting & sending to suppliers
+│   │   ├── supplier-search-actions.ts ✓   # Supplier search via AI API
+│   │   ├── quotation-actions.ts ✓         # Quotation generate/update operations
+│   │   └── pricing-actions.ts ✓           # Price calculation & database storage
+│   │
+│   ├── stores/                            # Zustand State Management - v6.0
+│   │   └── workboard-store.ts ✓           # Single store with slices:
+│   │                                      # - analysisSlice: RFQ analysis state
+│   │                                      # - emailSlice: Email draft state
+│   │                                      # - supplierSlice: Supplier search state
+│   │                                      # - quotationSlice: Quotation data state
+│   │                                      # - pricingSlice: Pricing calculation state
+│   │                                      # - workflowSlice: Current workflow step
+│   │
+│   ├── types/                             # Shared TypeScript Types - v6.0
+│   │   └── workflow.ts ✓                  # Workflow types + Zod schemas:
+│   │                                      # - ActionResult, WorkflowStep
+│   │                                      # - RFQContext, StepStatus
+│   │                                      # - Zod validation schemas
 │   │
 │   ├── utils/                             # Helper Functions
+│   │   ├── rfq-queue.ts ✓                 # Per-RFQ sequential processor (v6.0):
+│   │   │                                  # - Sequential execution per RFQ_id
+│   │   │                                  # - Retry logic (max 3, exponential backoff)
+│   │   │                                  # - Stage advancement via queue-manager
+│   │   │
 │   │   ├── grid-layout.ts ✓               # Grid utilities: auto-fill, height calc, swap detection (v5.7)
 │   │   │
 │   │   ├── formatting/
@@ -259,7 +246,23 @@ quoteflow_ai/
 │   │   └── api/
 │   │       └── get-workspace.ts ✓
 │   │
-│   ├── hooks/                             # NEW: Custom React Hooks (v5.9)
+│   ├── services/                          # Business Logic Layer
+│   │   ├── rfq-queue/                     # RFQ Queue services
+│   │   │   ├── index.ts ✓                 # Barrel exports
+│   │   │   └── queue-manager.ts ✓         # Queue CRUD, filtering, stage updates
+│   │   │
+│   │   ├── comms/                         # Communications services
+│   │   │   ├── index.ts ✓                 # Barrel exports
+│   │   │   └── comms-manager.ts ✓         # Channel & message management
+│   │   │
+│   │   └── pricing/                       # Pricing services (v5.9)
+│   │       ├── index.ts ✓                 # Barrel exports
+│   │       ├── pricing-calculator.ts ✓    # Core calculation engine
+│   │       ├── pricing-manager.ts ✓       # CRUD operations
+│   │       ├── currency-service.ts ✓      # Exchange rates & conversion
+│   │       └── validation.ts ✓            # Input validation
+│   │
+│   ├── hooks/                             # Custom React Hooks
 │   │   └── use-pricing.ts                 # Pricing state hook
 │   │
 │   ├── db/                                # Database Layer
