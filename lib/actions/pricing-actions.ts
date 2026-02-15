@@ -4,18 +4,17 @@
 // Server actions for pricing operations:
 // - Receive user input pricing variables
 // - Calculate prices using pricing-calculator service
-// - Store results in database
 // - Return data for PreviewPanel display
 
 'use server';
 
-import { createClient } from '@supabase/supabase-js';
 import type {
   ActionResult,
   PricingInput,
   PricingOutput,
   CalculatedItem,
 } from '@/types/workflow';
+import type { QuotationItem as WorkflowQuotationItem } from '@/types/workflow';
 import { PricingInputSchema } from '@/types/workflow';
 import { pricingCalculator } from '@/lib/services/pricing/pricing-calculator';
 import type {
@@ -23,17 +22,15 @@ import type {
   PricingVariable,
   CalculatedPricing,
 } from '@/types/pricing';
-import type { QuotationItem as WorkflowQuotationItem } from '@/types/workflow';
 
 // ---------------------------------------------
-// Configuration
+// In-Memory Storage (Development)
 // ---------------------------------------------
+// TODO: Replace with database when DB layer is implemented
 
-/** Supabase client for database operations */
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const pricingVariablesStore = new Map<string, PricingInput['variables']>();
+const pricingResultsStore = new Map<string, PricingOutput>();
+const quotationItemsStore = new Map<string, WorkflowQuotationItem[]>();
 
 // ---------------------------------------------
 // Main Action: Calculate Pricing
@@ -62,19 +59,17 @@ export async function calculatePricing(
       };
     }
 
-    // Get quotation items from database
-    const { data: quotation, error: fetchError } = await supabase
-      .from('quotations')
-      .select('items, currency')
-      .eq('id', input.quotationId)
-      .single();
+    // Get quotation items from memory store (TODO: replace with DB)
+    const workflowItems = quotationItemsStore.get(input.quotationId);
 
-    if (fetchError || !quotation) {
-      throw new Error('Quotation not found');
+    if (!workflowItems || workflowItems.length === 0) {
+      // Use mock data for development
+      console.warn('[Pricing] No items found, using mock data');
+      const mockItems = generateMockItems();
+      quotationItemsStore.set(input.quotationId, mockItems);
     }
 
-    // Items from database are in workflow format
-    const workflowItems = quotation.items as WorkflowQuotationItem[];
+    const items = quotationItemsStore.get(input.quotationId)!;
 
     // Transform input variables to pricing calculator format
     const pricingVariables: PricingVariable[] = input.variables.map((v) => ({
@@ -87,7 +82,7 @@ export async function calculatePricing(
     }));
 
     // Transform workflow items to pricing calculator format
-    const quotationItems: PricingQuotationItem[] = workflowItems.map((item) => ({
+    const quotationItems: PricingQuotationItem[] = items.map((item) => ({
       item_id: item.itemId,
       bidder_description: item.description,
       qty: item.quantity,
@@ -125,8 +120,9 @@ export async function calculatePricing(
       calculatedAt: timestamp,
     };
 
-    // Store pricing result in database
-    await storePricingResult(input, output, timestamp);
+    // Store in memory (TODO: replace with DB)
+    pricingVariablesStore.set(input.quotationId, input.variables);
+    pricingResultsStore.set(input.quotationId, output);
 
     return {
       success: true,
@@ -149,47 +145,29 @@ export async function calculatePricing(
 }
 
 // ---------------------------------------------
-// Database Storage
+// Mock Data (Development)
 // ---------------------------------------------
 
 /**
- * Store pricing result in database
+ * Generate mock quotation items for development
  */
-async function storePricingResult(
-  input: PricingInput,
-  output: PricingOutput,
-  timestamp: string
-): Promise<void> {
-  // Store variables
-  const { error: varError } = await supabase
-    .from('pricing_variables')
-    .upsert({
-      quotation_id: input.quotationId,
-      rfq_id: input.rfqId,
-      variables: input.variables,
-      updated_at: timestamp,
-    });
-
-  if (varError) {
-    console.error('[Pricing] Failed to store variables:', varError);
-  }
-
-  // Store calculated result
-  const { error: resultError } = await supabase
-    .from('pricing_results')
-    .upsert({
-      quotation_id: input.quotationId,
-      rfq_id: input.rfqId,
-      calculated_items: output.calculatedItems,
-      total_amount: output.totalAmount,
-      total_profit: output.totalProfit,
-      currency: output.currency,
-      calculated_at: timestamp,
-    });
-
-  if (resultError) {
-    console.error('[Pricing] Failed to store result:', resultError);
-  }
+function generateMockItems(): WorkflowQuotationItem[] {
+  return [
+    {
+      itemId: 1,
+      description: 'Industrial Bearing XYZ-100',
+      quantity: 100,
+      unitPrice: 50000,
+      currency: 'VND',
+    },
+    {
+      itemId: 2,
+      description: 'Hydraulic Seal Kit HS-200',
+      quantity: 50,
+      unitPrice: 75000,
+      currency: 'VND',
+    },
+  ];
 }
 
 // ---------------------------------------------
@@ -199,6 +177,7 @@ async function storePricingResult(
 /**
  * Get pricing result for a quotation
  * @param quotationId - Quotation identifier
+ * @param rfqId - RFQ identifier
  */
 export async function getPricingResult(
   quotationId: string,
@@ -207,38 +186,11 @@ export async function getPricingResult(
   const timestamp = new Date().toISOString();
 
   try {
-    const { data, error } = await supabase
-      .from('pricing_results')
-      .select('*')
-      .eq('quotation_id', quotationId)
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return {
-          success: true,
-          data: null,
-          timestamp,
-          stepId: 'pricing',
-          rfqId,
-        };
-      }
-      throw error;
-    }
-
-    const output: PricingOutput = {
-      rfqId: data.rfq_id,
-      quotationId: data.quotation_id,
-      calculatedItems: data.calculated_items as CalculatedItem[],
-      totalAmount: data.total_amount,
-      totalProfit: data.total_profit,
-      currency: data.currency,
-      calculatedAt: data.calculated_at,
-    };
+    const result = pricingResultsStore.get(quotationId);
 
     return {
       success: true,
-      data: output,
+      data: result || null,
       timestamp,
       stepId: 'pricing',
       rfqId,
@@ -258,6 +210,7 @@ export async function getPricingResult(
 /**
  * Get saved pricing variables for a quotation
  * @param quotationId - Quotation identifier
+ * @param rfqId - RFQ identifier
  */
 export async function getPricingVariables(
   quotationId: string,
@@ -266,28 +219,11 @@ export async function getPricingVariables(
   const timestamp = new Date().toISOString();
 
   try {
-    const { data, error } = await supabase
-      .from('pricing_variables')
-      .select('variables')
-      .eq('quotation_id', quotationId)
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return {
-          success: true,
-          data: null,
-          timestamp,
-          stepId: 'pricing',
-          rfqId,
-        };
-      }
-      throw error;
-    }
+    const variables = pricingVariablesStore.get(quotationId);
 
     return {
       success: true,
-      data: data.variables as PricingInput['variables'],
+      data: variables || null,
       timestamp,
       stepId: 'pricing',
       rfqId,
@@ -314,17 +250,7 @@ export async function savePricingVariables(
   const timestamp = new Date().toISOString();
 
   try {
-    const { error } = await supabase
-      .from('pricing_variables')
-      .upsert({
-        quotation_id: input.quotationId,
-        rfq_id: input.rfqId,
-        variables: input.variables,
-        target_currency: input.targetCurrency,
-        updated_at: timestamp,
-      });
-
-    if (error) throw error;
+    pricingVariablesStore.set(input.quotationId, input.variables);
 
     return {
       success: true,
@@ -346,69 +272,9 @@ export async function savePricingVariables(
 }
 
 /**
- * Apply bulk update to pricing variables
- * @param quotationId - Quotation identifier
- * @param itemIds - Items to update
- * @param field - Field to update
- * @param value - New value
- */
-export async function bulkUpdatePricingVariable(
-  quotationId: string,
-  rfqId: string,
-  itemIds: number[],
-  field: keyof PricingInput['variables'][0],
-  value: number
-): Promise<ActionResult<{ updatedCount: number }>> {
-  const timestamp = new Date().toISOString();
-
-  try {
-    // Get existing variables
-    const { data, error: fetchError } = await supabase
-      .from('pricing_variables')
-      .select('variables')
-      .eq('quotation_id', quotationId)
-      .single();
-
-    if (fetchError) throw fetchError;
-
-    // Update specified items
-    const variables = (data.variables as PricingInput['variables']).map((v) => {
-      if (itemIds.includes(v.itemId)) {
-        return { ...v, [field]: value };
-      }
-      return v;
-    });
-
-    // Save back
-    const { error: updateError } = await supabase
-      .from('pricing_variables')
-      .update({ variables, updated_at: timestamp })
-      .eq('quotation_id', quotationId);
-
-    if (updateError) throw updateError;
-
-    return {
-      success: true,
-      data: { updatedCount: itemIds.length },
-      timestamp,
-      stepId: 'pricing',
-      rfqId,
-    };
-
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Bulk update failed',
-      timestamp,
-      stepId: 'pricing',
-      rfqId,
-    };
-  }
-}
-
-/**
  * Reset pricing variables to defaults
  * @param quotationId - Quotation identifier
+ * @param rfqId - RFQ identifier
  */
 export async function resetPricingVariables(
   quotationId: string,
@@ -417,13 +283,8 @@ export async function resetPricingVariables(
   const timestamp = new Date().toISOString();
 
   try {
-    // Delete existing variables (will use defaults on next calculation)
-    const { error } = await supabase
-      .from('pricing_variables')
-      .delete()
-      .eq('quotation_id', quotationId);
-
-    if (error) throw error;
+    pricingVariablesStore.delete(quotationId);
+    pricingResultsStore.delete(quotationId);
 
     return {
       success: true,

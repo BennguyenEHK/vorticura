@@ -3,13 +3,12 @@
 // =============================================
 // Server actions for analyzing incoming RFQ emails:
 // - Receive RFQ from email watcher
-// - Call AI API via Supabase SDK (ky) for analysis
+// - Call AI API via ky for analysis
 // - Return structured analysis JSON
 // - Update Zustand store for PreviewPanel display
 
 'use server';
 
-import { createClient } from '@supabase/supabase-js';
 import ky from 'ky';
 import type {
   ActionResult,
@@ -24,13 +23,7 @@ import { AnalysisInputSchema } from '@/types/workflow';
 // Configuration
 // ---------------------------------------------
 
-/** Supabase client for AI API calls */
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-/** AI API endpoint (via Supabase Edge Function or external) */
+/** AI API endpoint for RFQ analysis */
 const AI_API_URL = process.env.AI_API_URL || 'https://api.example.com/analyze';
 
 // ---------------------------------------------
@@ -60,23 +53,11 @@ export async function analyzeRFQ(
       };
     }
 
-    // Call AI API for analysis via ky (HTTP client)
+    // Call AI API for analysis
     const aiResponse = await callAIAnalysis(input);
 
-    // Store analysis result in Supabase
-    const { error: dbError } = await supabase
-      .from('rfq_analyses')
-      .upsert({
-        rfq_id: input.rfqId,
-        analysis_data: aiResponse,
-        created_at: timestamp,
-        updated_at: timestamp,
-      });
-
-    if (dbError) {
-      console.error('[Analysis] Database error:', dbError);
-      // Continue even if DB fails - analysis is still valid
-    }
+    // TODO: Store analysis result in database when DB layer is implemented
+    // For now, return directly to Zustand store via the caller
 
     return {
       success: true,
@@ -101,6 +82,26 @@ export async function analyzeRFQ(
 // ---------------------------------------------
 // AI API Call
 // ---------------------------------------------
+
+/** AI API response shape */
+interface AIAnalysisResponse {
+  summary: string;
+  extracted_items: Array<{
+    description: string;
+    quantity?: number;
+    unit?: string;
+    specs?: string;
+  }>;
+  customer: {
+    name: string;
+    email: string;
+    company?: string;
+    phone?: string;
+  };
+  deadlines?: string[];
+  special_requirements?: string[];
+  confidence_score: number;
+}
 
 /**
  * Call AI API for RFQ analysis
@@ -145,26 +146,6 @@ async function callAIAnalysis(input: AnalysisInput): Promise<AnalysisOutput> {
 // ---------------------------------------------
 // Response Transformation
 // ---------------------------------------------
-
-/** AI API response shape */
-interface AIAnalysisResponse {
-  summary: string;
-  extracted_items: Array<{
-    description: string;
-    quantity?: number;
-    unit?: string;
-    specs?: string;
-  }>;
-  customer: {
-    name: string;
-    email: string;
-    company?: string;
-    phone?: string;
-  };
-  deadlines?: string[];
-  special_requirements?: string[];
-  confidence_score: number;
-}
 
 /**
  * Transform AI API response to our schema
@@ -234,92 +215,4 @@ function generateMockAnalysis(input: AnalysisInput): AnalysisOutput {
     specialRequirements: ['Urgent delivery required', 'Quality certification needed'],
     confidence: 0.85,
   };
-}
-
-// ---------------------------------------------
-// Helper Actions
-// ---------------------------------------------
-
-/**
- * Get existing analysis for an RFQ
- * @param rfqId - RFQ identifier
- */
-export async function getAnalysis(
-  rfqId: string
-): Promise<ActionResult<AnalysisOutput | null>> {
-  const timestamp = new Date().toISOString();
-
-  try {
-    const { data, error } = await supabase
-      .from('rfq_analyses')
-      .select('analysis_data')
-      .eq('rfq_id', rfqId)
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        // No rows found
-        return {
-          success: true,
-          data: null,
-          timestamp,
-          stepId: 'analysis',
-          rfqId,
-        };
-      }
-      throw error;
-    }
-
-    return {
-      success: true,
-      data: data.analysis_data as AnalysisOutput,
-      timestamp,
-      stepId: 'analysis',
-      rfqId,
-    };
-
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to get analysis',
-      timestamp,
-      stepId: 'analysis',
-      rfqId,
-    };
-  }
-}
-
-/**
- * Delete analysis for an RFQ (for re-analysis)
- * @param rfqId - RFQ identifier
- */
-export async function deleteAnalysis(
-  rfqId: string
-): Promise<ActionResult<void>> {
-  const timestamp = new Date().toISOString();
-
-  try {
-    const { error } = await supabase
-      .from('rfq_analyses')
-      .delete()
-      .eq('rfq_id', rfqId);
-
-    if (error) throw error;
-
-    return {
-      success: true,
-      timestamp,
-      stepId: 'analysis',
-      rfqId,
-    };
-
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to delete analysis',
-      timestamp,
-      stepId: 'analysis',
-      rfqId,
-    };
-  }
 }

@@ -5,11 +5,9 @@
 // - Search suppliers via AI API
 // - Filter by preferences (region, rating, lead time)
 // - Return ranked supplier list
-// - Store results in database
 
 'use server';
 
-import { createClient } from '@supabase/supabase-js';
 import ky from 'ky';
 import type {
   ActionResult,
@@ -22,12 +20,6 @@ import { SupplierSearchInputSchema } from '@/types/workflow';
 // ---------------------------------------------
 // Configuration
 // ---------------------------------------------
-
-/** Supabase client for database operations */
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 /** AI Supplier Search API endpoint */
 const SUPPLIER_API_URL = process.env.SUPPLIER_API_URL || 'https://api.example.com/suppliers/search';
@@ -62,25 +54,14 @@ export async function searchSuppliers(
     // Call AI API for supplier search
     const suppliers = await callSupplierSearchAPI(input);
 
-    // Store results in Supabase
+    // Build output
     const output: SupplierSearchOutput = {
       rfqId: input.rfqId,
       suppliers,
       searchTimestamp: timestamp,
     };
 
-    const { error: dbError } = await supabase
-      .from('supplier_searches')
-      .upsert({
-        rfq_id: input.rfqId,
-        search_results: output,
-        created_at: timestamp,
-        updated_at: timestamp,
-      });
-
-    if (dbError) {
-      console.error('[Supplier Search] Database error:', dbError);
-    }
+    // TODO: Store results in database when DB layer is implemented
 
     return {
       success: true,
@@ -235,161 +216,4 @@ function generateMockSuppliers(input: SupplierSearchInput): SupplierResult[] {
 
   // Sort by match score
   return filtered.sort((a, b) => b.matchScore - a.matchScore);
-}
-
-// ---------------------------------------------
-// Helper Actions
-// ---------------------------------------------
-
-/**
- * Get existing supplier search results for an RFQ
- * @param rfqId - RFQ identifier
- */
-export async function getSupplierSearchResults(
-  rfqId: string
-): Promise<ActionResult<SupplierSearchOutput | null>> {
-  const timestamp = new Date().toISOString();
-
-  try {
-    const { data, error } = await supabase
-      .from('supplier_searches')
-      .select('search_results')
-      .eq('rfq_id', rfqId)
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return {
-          success: true,
-          data: null,
-          timestamp,
-          stepId: 'supplier_search',
-          rfqId,
-        };
-      }
-      throw error;
-    }
-
-    return {
-      success: true,
-      data: data.search_results as SupplierSearchOutput,
-      timestamp,
-      stepId: 'supplier_search',
-      rfqId,
-    };
-
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to get results',
-      timestamp,
-      stepId: 'supplier_search',
-      rfqId,
-    };
-  }
-}
-
-/**
- * Select specific suppliers from search results
- * @param rfqId - RFQ identifier
- * @param supplierIds - IDs of selected suppliers
- */
-export async function selectSuppliers(
-  rfqId: string,
-  supplierIds: string[]
-): Promise<ActionResult<{ selectedCount: number }>> {
-  const timestamp = new Date().toISOString();
-
-  try {
-    // Store selected suppliers
-    const { error } = await supabase
-      .from('selected_suppliers')
-      .upsert({
-        rfq_id: rfqId,
-        supplier_ids: supplierIds,
-        selected_at: timestamp,
-      });
-
-    if (error) throw error;
-
-    return {
-      success: true,
-      data: { selectedCount: supplierIds.length },
-      timestamp,
-      stepId: 'supplier_search',
-      rfqId,
-    };
-
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to select suppliers',
-      timestamp,
-      stepId: 'supplier_search',
-      rfqId,
-    };
-  }
-}
-
-/**
- * Re-search with different preferences
- * @param rfqId - RFQ identifier
- * @param newPreferences - Updated search preferences
- */
-export async function refineSupplierSearch(
-  rfqId: string,
-  newPreferences: SupplierSearchInput['preferences']
-): Promise<ActionResult<SupplierSearchOutput>> {
-  const timestamp = new Date().toISOString();
-
-  try {
-    // Get original search input
-    const { data: originalSearch } = await supabase
-      .from('supplier_searches')
-      .select('search_results')
-      .eq('rfq_id', rfqId)
-      .single();
-
-    if (!originalSearch) {
-      throw new Error('No previous search found');
-    }
-
-    const original = originalSearch.search_results as SupplierSearchOutput;
-
-    // Re-run search with new preferences
-    // Note: We need the original items, which should be stored separately
-    // For now, return filtered results from existing search
-    const filtered = original.suppliers.filter((supplier) => {
-      if (newPreferences?.minRating && (supplier.rating ?? 0) < newPreferences.minRating) {
-        return false;
-      }
-      if (newPreferences?.maxLeadTime && (supplier.estimatedLeadTime ?? Infinity) > newPreferences.maxLeadTime) {
-        return false;
-      }
-      return true;
-    });
-
-    const output: SupplierSearchOutput = {
-      rfqId,
-      suppliers: filtered,
-      searchTimestamp: timestamp,
-    };
-
-    return {
-      success: true,
-      data: output,
-      timestamp,
-      stepId: 'supplier_search',
-      rfqId,
-    };
-
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to refine search',
-      timestamp,
-      stepId: 'supplier_search',
-      rfqId,
-    };
-  }
 }

@@ -9,7 +9,6 @@
 
 'use server';
 
-import { createClient } from '@supabase/supabase-js';
 import ky from 'ky';
 import type {
   ActionResult,
@@ -22,12 +21,6 @@ import { EmailInputSchema } from '@/types/workflow';
 // ---------------------------------------------
 // Configuration
 // ---------------------------------------------
-
-/** Supabase client for database operations */
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 /** Email API endpoint */
 const EMAIL_API_URL = process.env.EMAIL_API_URL || 'https://api.example.com/email';
@@ -62,21 +55,7 @@ export async function generateEmailDrafts(
     // Generate drafts based on template type
     const drafts = await generateDrafts(input);
 
-    // Store drafts in Supabase
-    const { error: dbError } = await supabase
-      .from('email_drafts')
-      .upsert({
-        rfq_id: input.rfqId,
-        template_type: input.templateType,
-        drafts: drafts,
-        created_at: timestamp,
-        updated_at: timestamp,
-      });
-
-    if (dbError) {
-      console.error('[Email] Database error:', dbError);
-      // Continue even if DB fails
-    }
+    // TODO: Store drafts in database when DB layer is implemented
 
     const output: EmailOutput = {
       rfqId: input.rfqId,
@@ -260,14 +239,7 @@ export async function sendEmail(
       },
     }).json<{ message_id: string }>();
 
-    // Log sent email in database
-    await supabase.from('sent_emails').insert({
-      rfq_id: rfqId,
-      to_address: draft.to,
-      subject: draft.subject,
-      message_id: response.message_id,
-      sent_at: timestamp,
-    });
+    // TODO: Log sent email in database when DB layer is implemented
 
     return {
       success: true,
@@ -282,119 +254,6 @@ export async function sendEmail(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to send email',
-      timestamp,
-      stepId: 'email',
-      rfqId,
-    };
-  }
-}
-
-// ---------------------------------------------
-// Helper Actions
-// ---------------------------------------------
-
-/**
- * Get existing email drafts for an RFQ
- * @param rfqId - RFQ identifier
- */
-export async function getEmailDrafts(
-  rfqId: string
-): Promise<ActionResult<EmailOutput | null>> {
-  const timestamp = new Date().toISOString();
-
-  try {
-    const { data, error } = await supabase
-      .from('email_drafts')
-      .select('drafts')
-      .eq('rfq_id', rfqId)
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return {
-          success: true,
-          data: null,
-          timestamp,
-          stepId: 'email',
-          rfqId,
-        };
-      }
-      throw error;
-    }
-
-    return {
-      success: true,
-      data: {
-        rfqId,
-        drafts: data.drafts as EmailDraft[],
-      },
-      timestamp,
-      stepId: 'email',
-      rfqId,
-    };
-
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to get drafts',
-      timestamp,
-      stepId: 'email',
-      rfqId,
-    };
-  }
-}
-
-/**
- * Update a specific draft
- * @param rfqId - RFQ identifier
- * @param draftIndex - Index of draft to update
- * @param updates - Partial draft updates
- */
-export async function updateDraft(
-  rfqId: string,
-  draftIndex: number,
-  updates: Partial<EmailDraft>
-): Promise<ActionResult<EmailDraft>> {
-  const timestamp = new Date().toISOString();
-
-  try {
-    // Get current drafts
-    const { data, error } = await supabase
-      .from('email_drafts')
-      .select('drafts')
-      .eq('rfq_id', rfqId)
-      .single();
-
-    if (error) throw error;
-
-    const drafts = data.drafts as EmailDraft[];
-    if (draftIndex < 0 || draftIndex >= drafts.length) {
-      throw new Error('Invalid draft index');
-    }
-
-    // Update the specific draft
-    drafts[draftIndex] = { ...drafts[draftIndex], ...updates };
-
-    // Save back to database
-    const { error: updateError } = await supabase
-      .from('email_drafts')
-      .update({ drafts, updated_at: timestamp })
-      .eq('rfq_id', rfqId);
-
-    if (updateError) throw updateError;
-
-    return {
-      success: true,
-      data: drafts[draftIndex],
-      timestamp,
-      stepId: 'email',
-      rfqId,
-    };
-
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to update draft',
       timestamp,
       stepId: 'email',
       rfqId,
