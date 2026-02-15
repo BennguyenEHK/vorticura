@@ -16,8 +16,8 @@ import type {
   QuotationOutput,
   QuotationItem,
   QuotationActionType,
-} from '@/lib/types/workflow';
-import { QuotationInputSchema } from '@/lib/types/workflow';
+} from '@/types/workflow';
+import { QuotationInputSchema } from '@/types/workflow';
 
 // ---------------------------------------------
 // Configuration

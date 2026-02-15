@@ -5,12 +5,15 @@
 // =============================================
 // Scrollable list of RFQs in sidebar
 // Shows top 4 by default, scrollable for more
+// Uses direct service calls instead of API routes
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { ChevronDown, ChevronUp, Inbox } from "lucide-react";
 import { RFQQueueItem } from "./rfq-queue-item";
 import { Button } from "@/components/ui/button";
-import type { QueuedRFQ, QueueResponse } from "@/types/rfq-queue";
+import type { QueuedRFQ } from "@/types/rfq-queue";
+// Import queue manager service directly
+import { getQueuedRFQs } from "@/lib/services/rfq-queue/queue-manager";
 
 // Props interface
 interface RFQQueueListProps {
@@ -22,7 +25,7 @@ interface RFQQueueListProps {
 
 /**
  * RFQQueueList - Scrollable list of queued RFQs
- * Fetches from API and displays with scroll-to-load-more
+ * Calls queue-manager service directly instead of API
  */
 export function RFQQueueList({
   isCollapsed = false,
@@ -37,33 +40,31 @@ export function RFQQueueList({
   const [total, setTotal] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // Fetch RFQs from API
-  useEffect(() => {
-    async function fetchQueue() {
-      setIsLoading(true);
-      try {
-        // Build query params
-        const params = new URLSearchParams();
-        if (workspaceId) params.append("workspaceId", workspaceId);
-        params.append("limit", isExpanded ? "20" : String(initialLimit));
+  // Fetch RFQs using queue-manager service directly
+  const fetchQueue = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      // Call getQueuedRFQs service directly (no API route needed)
+      const result = await getQueuedRFQs({
+        workspaceId,
+        limit: isExpanded ? 20 : initialLimit,
+      });
 
-        const response = await fetch(`/api/rfq-queue?${params}`);
-        const result = await response.json();
-
-        if (result.success) {
-          setRfqs(result.data.items);
-          setHasMore(result.data.hasMore);
-          setTotal(result.data.total);
-        }
-      } catch (error) {
-        console.error("Failed to fetch RFQ queue:", error);
-      } finally {
-        setIsLoading(false);
-      }
+      // Update state with results
+      setRfqs(result.items);
+      setHasMore(result.hasMore);
+      setTotal(result.total);
+    } catch (error) {
+      console.error("Failed to fetch RFQ queue:", error);
+    } finally {
+      setIsLoading(false);
     }
-
-    fetchQueue();
   }, [workspaceId, initialLimit, isExpanded]);
+
+  // Fetch on mount and when dependencies change
+  useEffect(() => {
+    fetchQueue();
+  }, [fetchQueue]);
 
   // Toggle expanded state
   const toggleExpanded = () => setIsExpanded(!isExpanded);

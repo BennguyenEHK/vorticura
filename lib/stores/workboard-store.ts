@@ -25,8 +25,8 @@ import type {
   PricingOutput,
   PreviewContentType,
   RFQContext,
-} from '@/lib/types/workflow';
-import { DEFAULT_WORKFLOW_STEPS } from '@/lib/types/workflow';
+} from '@/types/workflow';
+import { DEFAULT_WORKFLOW_STEPS } from '@/types/workflow';
 
 // ---------------------------------------------
 // Slice State Types
@@ -137,7 +137,7 @@ export interface WorkboardStore extends
  * Uses subscribeWithSelector for cross-slice sync
  */
 export const useWorkboardStore = create<WorkboardStore>()(
-  subscribeWithSelector((set: (partial: Partial<WorkboardStore>) => void, get: () => WorkboardStore) => ({
+  subscribeWithSelector((set, get) => ({
     // =========================================
     // ANALYSIS SLICE
     // =========================================

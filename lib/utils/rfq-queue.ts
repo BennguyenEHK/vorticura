@@ -13,8 +13,8 @@ import type {
   ActionResult,
   RFQContext,
   WorkflowStep,
-} from '@/lib/types/workflow';
-import { DEFAULT_WORKFLOW_STEPS, STEP_TO_STAGE_MAP } from '@/lib/types/workflow';
+} from '@/types/workflow';
+import { DEFAULT_WORKFLOW_STEPS, STEP_TO_STAGE_MAP } from '@/types/workflow';
 import { updateRFQStage } from '@/lib/services/rfq-queue/queue-manager';
 
 // ---------------------------------------------

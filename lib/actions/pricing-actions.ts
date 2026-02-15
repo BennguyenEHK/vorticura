@@ -15,15 +15,15 @@ import type {
   PricingInput,
   PricingOutput,
   CalculatedItem,
-} from '@/lib/types/workflow';
-import { PricingInputSchema } from '@/lib/types/workflow';
+} from '@/types/workflow';
+import { PricingInputSchema } from '@/types/workflow';
 import { pricingCalculator } from '@/lib/services/pricing/pricing-calculator';
 import type {
   QuotationItem as PricingQuotationItem,
   PricingVariable,
   CalculatedPricing,
 } from '@/types/pricing';
-import type { QuotationItem as WorkflowQuotationItem } from '@/lib/types/workflow';
+import type { QuotationItem as WorkflowQuotationItem } from '@/types/workflow';
 
 // ---------------------------------------------
 // Configuration

@@ -84,7 +84,7 @@ function PricingPanelInner({ className = "" }: { className?: string }) {
         </p>
       </div>
 
-      {/* Formula display */}
+      {/* Formula display */}  {/* we can remove this  not essentially to show */} // instead this area will be free for search bar later !
       <div className="mb-3 p-2 bg-muted rounded-lg">
         <p className="text-[10px] text-muted-foreground font-mono leading-relaxed">
           sales_price = ((unit_price + shipping) × tax × exchange × profit) − discount

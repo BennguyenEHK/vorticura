@@ -192,7 +192,7 @@ export const EmailInputSchema = z.object({
   rfqId: z.string().min(1),
   templateType: z.enum(['supplier_inquiry', 'customer_response', 'follow_up']),
   recipients: z.array(z.string().email()).min(1),
-  context: z.record(z.unknown()),
+  context: z.record(z.string(), z.unknown()),
 });
 
 // ---------------------------------------------

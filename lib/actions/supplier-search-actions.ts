@@ -16,8 +16,8 @@ import type {
   SupplierSearchInput,
   SupplierSearchOutput,
   SupplierResult,
-} from '@/lib/types/workflow';
-import { SupplierSearchInputSchema } from '@/lib/types/workflow';
+} from '@/types/workflow';
+import { SupplierSearchInputSchema } from '@/types/workflow';
 
 // ---------------------------------------------
 // Configuration

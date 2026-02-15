@@ -17,8 +17,8 @@ import type {
   AnalysisOutput,
   AnalysisItem,
   CustomerInfo,
-} from '@/lib/types/workflow';
-import { AnalysisInputSchema } from '@/lib/types/workflow';
+} from '@/types/workflow';
+import { AnalysisInputSchema } from '@/types/workflow';
 
 // ---------------------------------------------
 // Configuration

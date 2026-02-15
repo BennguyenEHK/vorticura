@@ -16,8 +16,8 @@ import type {
   EmailInput,
   EmailOutput,
   EmailDraft,
-} from '@/lib/types/workflow';
-import { EmailInputSchema } from '@/lib/types/workflow';
+} from '@/types/workflow';
+import { EmailInputSchema } from '@/types/workflow';
 
 // ---------------------------------------------
 // Configuration
