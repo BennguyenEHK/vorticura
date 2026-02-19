@@ -29,7 +29,8 @@ import {
   WORKBOARD_LAYOUT_STORAGE_KEY,
   PANEL_SPAWN_CONFIGS, // Approach B: Dynamic spawn configs
 } from "@/types/workboard";
-import { findAllOverlaps, resolveOverlapShrinkWidth, compactAndFillAll } from "@/lib/utils/generators/grid-layout";
+// Grid layout utilities (relocated from lib/utils/generators)
+import { findAllOverlaps, resolveOverlapShrinkWidth, compactAndFillAll } from "./utils/grid-layout";
 
 // =============================================
 // Context

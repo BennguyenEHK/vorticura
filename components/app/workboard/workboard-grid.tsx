@@ -23,6 +23,7 @@ import { useWorkboard } from "./workboard-provider";
 import { WorkboardPanel } from "./workboard-panel";
 import { WorkboardDropZone } from "./workboard-drop-zone";
 import { DEFAULT_GRID_CONFIG, type LayoutItem } from "@/types/workboard";
+// Grid layout utilities (relocated from lib/utils/generators)
 import {
   compactAndFill,
   resolveOverlapSwap,
@@ -32,7 +33,7 @@ import {
   areLayoutsEqual,
   findAllOverlaps,
   detectChangeType
-} from "@/lib/utils/generators/grid-layout";
+} from "./utils/grid-layout";
 
 // =============================================
 // Helper: Convert readonly Layout to mutable LayoutItem[]

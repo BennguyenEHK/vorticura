@@ -4,10 +4,7 @@
 // Preview Panel Content
 // =============================================
 // Content component for the quotation preview panel
-// Shows different content based on workflow step:
-// - Quotation preview with approval workflow
-// - Pricing results from workboard store
-// Uses Zustand store for state sync
+// Shows quotation preview with approval workflow and inline feedback
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import {
@@ -21,13 +18,8 @@ import {
   X,
   ChevronDown,
   ChevronUp,
-  Calculator,
-  DollarSign,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { usePreviewState, usePricingState } from "@/lib/stores/workboard-store";
-import type { PricingOutput } from "@/types/workflow";
-import { formatCurrency } from "@/lib/services/pricing/validation";
 
 // =============================================
 // Types
@@ -71,130 +63,6 @@ const quotationData = {
 // Helper: Generate unique ID
 // =============================================
 const generateId = () => Math.random().toString(36).substring(2, 9);
-
-// =============================================
-// Pricing Preview Component
-// =============================================
-
-interface PricingPreviewProps {
-  pricingData: PricingOutput;
-}
-
-/**
- * PricingPreview - Shows calculated pricing results
- * Displays breakdown of sales prices and profit margins
- */
-function PricingPreview({ pricingData }: PricingPreviewProps) {
-  return (
-    <div className="p-4 h-full flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Calculator className="w-5 h-5 text-brand" />
-          <div>
-            <h3 className="text-sm font-medium text-foreground">
-              Pricing Calculation
-            </h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Quotation: {pricingData.quotationId}
-            </p>
-          </div>
-        </div>
-        <span className="px-2 py-0.5 text-xs font-medium bg-brand-muted text-brand-dark rounded-md">
-          {pricingData.currency}
-        </span>
-      </div>
-
-      {/* Items table */}
-      <div className="flex-1 overflow-auto bg-background border border-border rounded-lg">
-        <table className="w-full text-xs">
-          <thead className="bg-muted sticky top-0">
-            <tr className="border-b border-border">
-              <th className="text-left py-2 px-3 text-muted-foreground font-medium">
-                Item
-              </th>
-              <th className="text-right py-2 px-3 text-muted-foreground font-medium">
-                Sales Price
-              </th>
-              <th className="text-right py-2 px-3 text-muted-foreground font-medium">
-                Extended
-              </th>
-              <th className="text-right py-2 px-3 text-muted-foreground font-medium">
-                Profit
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {pricingData.calculatedItems.map((item) => {
-              const isPositive = item.potentialProfit >= 0;
-              return (
-                <tr key={item.itemId} className="border-b border-border/50 hover:bg-muted/30">
-                  <td className="py-2 px-3 text-foreground">
-                    Item #{item.itemId}
-                  </td>
-                  <td className="py-2 px-3 text-right text-foreground">
-                    {formatCurrency(item.salesUnitPrice)}
-                  </td>
-                  <td className="py-2 px-3 text-right text-foreground">
-                    {formatCurrency(item.extendedPrice)}
-                  </td>
-                  <td className={`py-2 px-3 text-right font-medium ${
-                    isPositive ? "text-success" : "text-error"
-                  }`}>
-                    {isPositive ? "+" : ""}
-                    {formatCurrency(item.potentialProfit)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Totals section */}
-      <div className="mt-4 p-3 bg-muted rounded-lg space-y-2">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground flex items-center gap-1.5">
-            <DollarSign className="w-3.5 h-3.5" />
-            Total Amount
-          </span>
-          <span className="font-bold text-foreground">
-            {formatCurrency(pricingData.totalAmount)}
-          </span>
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Total Profit</span>
-          <span className={`font-bold ${
-            pricingData.totalProfit >= 0 ? "text-success" : "text-error"
-          }`}>
-            {pricingData.totalProfit >= 0 ? "+" : ""}
-            {formatCurrency(pricingData.totalProfit)}
-          </span>
-        </div>
-        <div className="pt-2 border-t border-border">
-          <p className="text-xs text-muted-foreground">
-            Calculated at: {new Date(pricingData.calculatedAt).toLocaleString()}
-          </p>
-        </div>
-      </div>
-
-      {/* Action buttons */}
-      <div className="mt-4 flex items-center gap-2">
-        <Button variant="outline" size="sm" className="flex-1 gap-1.5">
-          <Download className="w-3.5 h-3.5" />
-          Export
-        </Button>
-        <Button
-          size="sm"
-          className="flex-1 gap-1.5 bg-success text-success-foreground hover:bg-success-hover"
-        >
-          <Check className="w-3.5 h-3.5" />
-          Approve
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 // =============================================
 // Quotation Preview Component (extracted)
@@ -585,29 +453,12 @@ interface PreviewPanelContentProps {
 }
 
 /**
- * PreviewPanelContent - Main preview panel router
- * Routes to appropriate preview based on workboard state:
- * - 'pricing': Shows pricing calculation results
- * - default: Shows quotation document preview
+ * PreviewPanelContent - Main preview panel
+ * Shows quotation document preview with inline feedback
  */
 export function PreviewPanelContent({
   className = "",
 }: PreviewPanelContentProps) {
-  // Get preview state from workboard store - always call hooks first
-  const previewState = usePreviewState();
-  const pricingState = usePricingState();
-
-  // Determine which view to show
-  const showPricingPreview =
-    (previewState.type === 'pricing' && previewState.content) ||
-    pricingState.result;
-
-  // Render appropriate preview
-  if (showPricingPreview) {
-    const pricingData = previewState.content as PricingOutput || pricingState.result;
-    return <PricingPreview pricingData={pricingData!} />;
-  }
-
-  // Default to quotation preview
+  // Render quotation preview (pricing routing removed with store cleanup)
   return <QuotationPreview className={className} />;
 }

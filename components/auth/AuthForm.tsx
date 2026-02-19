@@ -21,8 +21,8 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 
-// Validation schemas
-import { loginSchema, signupSchema, type LoginFormData, type SignupFormData } from "@/lib/utils/validation/schemas"
+// Validation schemas (relocated from lib/utils/validation)
+import { loginSchema, signupSchema, type LoginFormData, type SignupFormData } from "@/lib/validation/schemas"
 
 // =============================================
 // AuthForm Props Interface

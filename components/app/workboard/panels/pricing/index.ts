@@ -3,17 +3,10 @@
 // =============================================
 // Central export point for all pricing panel components
 
-// Provider and hooks (backward compatible context + new Zustand store)
+// Provider and hook (context-based state management)
 export {
   PricingPanelProvider,
   usePricingPanel,
-  usePricingPanelStore,
-  usePricingItems,
-  usePricingVariablesMap,
-  usePricingLoadingStates,
-  usePricingError,
-  useCalculatedPricing,
-  useTargetCurrency,
 } from "./pricing-panel-provider";
 
 // UI Components

@@ -11,7 +11,8 @@ import { clientInfo, clientCompany } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { generateJWT } from '@/lib/middleware/auth-helpers';
 import { workspaceConfig } from '@/config/workspace.config';
-import { isEmail } from '@/lib/utils/validation/schemas';
+// Validation helper (relocated from lib/utils/validation)
+import { isEmail } from '@/lib/validation/schemas';
 
 /**
  * POST /api/auth/login
