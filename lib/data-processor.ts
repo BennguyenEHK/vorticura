@@ -18,7 +18,7 @@ import {
   type ProcessorInput,
   type DataType,
   type ActionType,
-} from './quotation/validator';
+} from './utils/validator';
 
 // ========== PROCESSOR MODULES ==========
 // Import all specialized processors (action files)
