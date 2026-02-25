@@ -1,23 +1,14 @@
 // =============================================
-// ANALYSIS ACTIONS - RFQ Analysis Server Actions
+// ANALYSIS ACTIONS - RFQ Analysis Processor
 // =============================================
-// Server actions for analyzing incoming RFQ emails:
-// - Receive RFQ from email watcher
-// - Call AI API via ky for analysis
-// - Return structured analysis JSON
-// - Update Zustand store for PreviewPanel display
-
-'use server';
+// Internal server module (called by data-processor, NOT a server action)
+// Flow: ProcessorInput → route by action_type → AI API call → save to DB → emit SSE → return ProcessorResult
+// Supports: analyze | reanalyze
 
 import ky from 'ky';
-import type {
-  ActionResult,
-  AnalysisInput,
-  AnalysisOutput,
-  AnalysisItem,
-  CustomerInfo,
-} from '@/types/workflow';
-import { AnalysisInputSchema } from '@/types/workflow';
+import { eventBus } from '@/lib/event-bus';
+import { modifyDatabase } from '@/lib/utils/databaseHandler';
+import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
 
 // ---------------------------------------------
 // Configuration
@@ -27,55 +18,76 @@ import { AnalysisInputSchema } from '@/types/workflow';
 const AI_API_URL = process.env.AI_API_URL || 'https://api.example.com/analyze';
 
 // ---------------------------------------------
-// Main Action: Analyze RFQ
+// Main Processor: Process Analysis
 // ---------------------------------------------
 
 /**
- * Analyze an incoming RFQ email using AI
- * @param input - RFQ analysis input data
- * @returns ActionResult with analysis output
+ * Process RFQ analysis based on action_type
+ * @param input - Validated ProcessorInput (data_type: 'rfq_analysis')
+ * @returns ProcessorResult with analysis data
  */
-export async function analyzeRFQ(
-  input: AnalysisInput
-): Promise<ActionResult<AnalysisOutput>> {
+export async function processAnalysis(input: ProcessorInput): Promise<ProcessorResult> {
+  const startTime = Date.now();
   const timestamp = new Date().toISOString();
 
   try {
-    // Validate input using Zod schema
-    const validationResult = AnalysisInputSchema.safeParse(input);
-    if (!validationResult.success) {
-      return {
-        success: false,
-        error: `Validation failed: ${validationResult.error.message}`,
-        timestamp,
-        stepId: 'analysis',
-        rfqId: input.rfqId,
-      };
-    }
+    const { action_type, quotation_id, rfq_reference, analysis } = input;
 
-    // Call AI API for analysis
-    const aiResponse = await callAIAnalysis(input);
+    // Route by action_type: analyze | reanalyze → both call AI API
+    const aiResponse = await callAIAnalysis({
+      subject: analysis?.subject || '',
+      analysisContent: analysis?.analysis_content || '',
+      actionType: action_type,
+    });
 
-    // TODO: Store analysis result in database when DB layer is implemented
-    // For now, return directly to Zustand store via the caller
-
-    return {
+    // Build result
+    const result: ProcessorResult = {
       success: true,
+      data_type: 'rfq_analysis',
+      action_type,
+      status: 'completed',
+      session_id: '',
+      processing_time_ms: Date.now() - startTime,
       data: aiResponse,
       timestamp,
-      stepId: 'analysis',
-      rfqId: input.rfqId,
     };
 
+    // Save to database (non-blocking, errors don't fail the response)
+    try {
+      await modifyDatabase({
+        data_type: 'rfq_analysis',
+        quotation_id,
+        rfq_reference,
+        rfq_analysis: {
+          subject: analysis?.subject || '',
+          analysis_content: aiResponse.summary || analysis?.analysis_content || '',
+          analysis_status: 'completed',
+        },
+      });
+    } catch (dbError) {
+      console.error('[Analysis] DB save failed (non-blocking):', dbError);
+    }
+
+    // Emit SSE for real-time preview update
+    eventBus.emit('preview-update', result);
+
+    return result;
   } catch (error) {
     console.error('[Analysis] Error:', error);
-    return {
+
+    const errorResult: ProcessorResult = {
       success: false,
+      data_type: 'rfq_analysis',
+      action_type: input.action_type,
+      status: 'error',
+      session_id: '',
+      processing_time_ms: Date.now() - startTime,
       error: error instanceof Error ? error.message : 'Analysis failed',
       timestamp,
-      stepId: 'analysis',
-      rfqId: input.rfqId,
     };
+
+    eventBus.emit('preview-update', errorResult);
+    return errorResult;
   }
 }
 
@@ -103,22 +115,26 @@ interface AIAnalysisResponse {
   confidence_score: number;
 }
 
+/** Internal input for AI call */
+interface AICallInput {
+  subject: string;
+  analysisContent: string;
+  actionType: string;
+}
+
 /**
  * Call AI API for RFQ analysis
  * Uses ky for HTTP requests with automatic retries
  */
-async function callAIAnalysis(input: AnalysisInput): Promise<AnalysisOutput> {
+async function callAIAnalysis(input: AICallInput): Promise<AnalysisData> {
   try {
-    // Make API call with ky (includes retry logic)
     const response = await ky.post(AI_API_URL, {
       json: {
-        email_content: input.emailContent,
-        attachments: input.attachments,
-        sender_email: input.senderEmail,
-        sender_name: input.senderName,
         subject: input.subject,
+        analysis_content: input.analysisContent,
+        action_type: input.actionType,
       },
-      timeout: 30000, // 30 second timeout
+      timeout: 30000,
       retry: {
         limit: 2,
         methods: ['post'],
@@ -130,9 +146,8 @@ async function callAIAnalysis(input: AnalysisInput): Promise<AnalysisOutput> {
       },
     }).json<AIAnalysisResponse>();
 
-    // Transform AI response to our schema
-    return transformAIResponse(input.rfqId, response);
-
+    // Transform AI response to our format
+    return transformAIResponse(response);
   } catch (error) {
     // If AI API fails, return mock analysis for development
     if (process.env.NODE_ENV === 'development') {
@@ -147,34 +162,44 @@ async function callAIAnalysis(input: AnalysisInput): Promise<AnalysisOutput> {
 // Response Transformation
 // ---------------------------------------------
 
+/** Analysis data shape returned to caller */
+interface AnalysisData {
+  summary: string;
+  items: Array<{
+    description: string;
+    quantity?: number;
+    unit?: string;
+    specifications?: string;
+  }>;
+  customerInfo: {
+    name: string;
+    email: string;
+    company?: string;
+    phone?: string;
+  };
+  deadlines?: string[];
+  specialRequirements?: string[];
+  confidence: number;
+}
+
 /**
  * Transform AI API response to our schema
  */
-function transformAIResponse(
-  rfqId: string,
-  response: AIAnalysisResponse
-): AnalysisOutput {
-  // Map extracted items to our format
-  const items: AnalysisItem[] = response.extracted_items.map((item) => ({
-    description: item.description,
-    quantity: item.quantity,
-    unit: item.unit,
-    specifications: item.specs,
-  }));
-
-  // Map customer info
-  const customerInfo: CustomerInfo = {
-    name: response.customer.name,
-    email: response.customer.email,
-    company: response.customer.company,
-    phone: response.customer.phone,
-  };
-
+function transformAIResponse(response: AIAnalysisResponse): AnalysisData {
   return {
-    rfqId,
     summary: response.summary,
-    items,
-    customerInfo,
+    items: response.extracted_items.map((item) => ({
+      description: item.description,
+      quantity: item.quantity,
+      unit: item.unit,
+      specifications: item.specs,
+    })),
+    customerInfo: {
+      name: response.customer.name,
+      email: response.customer.email,
+      company: response.customer.company,
+      phone: response.customer.phone,
+    },
     deadlines: response.deadlines,
     specialRequirements: response.special_requirements,
     confidence: response.confidence_score,
@@ -188,10 +213,9 @@ function transformAIResponse(
 /**
  * Generate mock analysis for development/testing
  */
-function generateMockAnalysis(input: AnalysisInput): AnalysisOutput {
+function generateMockAnalysis(input: AICallInput): AnalysisData {
   return {
-    rfqId: input.rfqId,
-    summary: `Analysis of RFQ from ${input.senderEmail}: ${input.subject}`,
+    summary: `Analysis of RFQ: ${input.subject}`,
     items: [
       {
         description: 'Industrial Bearing Model XYZ-100',
@@ -207,8 +231,8 @@ function generateMockAnalysis(input: AnalysisInput): AnalysisOutput {
       },
     ],
     customerInfo: {
-      name: input.senderName || 'Unknown',
-      email: input.senderEmail,
+      name: 'Unknown',
+      email: '',
       company: 'Extracted Company Name',
     },
     deadlines: ['2026-03-15'],

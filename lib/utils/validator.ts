@@ -21,6 +21,19 @@ export type RfqAnalysisActionType = 'analyze' | 'reanalyze';
 export type SupplierSearchActionType = 'search' | 'research';
 export type ActionType = QuotationActionType | EmailActionType | RfqAnalysisActionType | SupplierSearchActionType;
 
+/** Standardized processor output - returned by all action files */
+export interface ProcessorResult {
+  success: boolean;
+  data_type: DataType;
+  action_type: ActionType;
+  status: 'completed' | 'error';
+  session_id: string;
+  processing_time_ms: number;
+  data?: unknown;           // Processor-specific result data
+  error?: string;           // Error message if failed
+  timestamp: string;
+}
+
 /** Generic processor input shape (JSON from HTTP request) */
 export interface ProcessorInput {
   data_type: DataType;

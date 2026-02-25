@@ -1,22 +1,14 @@
 // =============================================
-// EMAIL ACTIONS - Email Drafting Server Actions
+// EMAIL ACTIONS - Email Processor
 // =============================================
-// Server actions for email operations:
-// - Draft supplier inquiry emails
-// - Draft customer response emails
-// - Draft follow-up emails
-// - Send emails via SMTP/API
-
-'use server';
+// Internal server module (called by data-processor, NOT a server action)
+// Flow: ProcessorInput → route by action_type → generate/send → save to DB → emit SSE → return ProcessorResult
+// Supports: generate | re_generate | send
 
 import ky from 'ky';
-import type {
-  ActionResult,
-  EmailInput,
-  EmailOutput,
-  EmailDraft,
-} from '@/types/workflow';
-import { EmailInputSchema } from '@/types/workflow';
+import { eventBus } from '@/lib/event-bus';
+import { modifyDatabase } from '@/lib/utils/databaseHandler';
+import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
 
 // ---------------------------------------------
 // Configuration
@@ -26,59 +18,97 @@ import { EmailInputSchema } from '@/types/workflow';
 const EMAIL_API_URL = process.env.EMAIL_API_URL || 'https://api.example.com/email';
 
 // ---------------------------------------------
-// Main Action: Generate Email Drafts
+// Main Processor: Process Email
 // ---------------------------------------------
 
 /**
- * Generate email drafts for an RFQ
- * @param input - Email generation input
- * @returns ActionResult with email drafts
+ * Process email based on action_type
+ * @param input - Validated ProcessorInput (data_type: 'email')
+ * @returns ProcessorResult with email data
  */
-export async function generateEmailDrafts(
-  input: EmailInput
-): Promise<ActionResult<EmailOutput>> {
+export async function processEmail(input: ProcessorInput): Promise<ProcessorResult> {
+  const startTime = Date.now();
   const timestamp = new Date().toISOString();
 
   try {
-    // Validate input using Zod schema
-    const validationResult = EmailInputSchema.safeParse(input);
-    if (!validationResult.success) {
-      return {
-        success: false,
-        error: `Validation failed: ${validationResult.error.message}`,
-        timestamp,
-        stepId: 'email',
-        rfqId: input.rfqId,
-      };
+    const { action_type, quotation_id, rfq_reference, email } = input;
+    let resultData: unknown;
+    let emailStatus: string;
+
+    // Route by action_type
+    switch (action_type) {
+      case 'generate':
+      case 're_generate': {
+        // Generate email draft from template
+        const draft = generateDraftFromTemplate(input);
+        resultData = draft;
+        emailStatus = 'draft';
+        break;
+      }
+      case 'send': {
+        // Send email via API
+        const sendResult = await sendEmailViaAPI({
+          to: email?.recipient_email || '',
+          subject: email?.subject || '',
+          body: email?.email_content || '',
+        });
+        resultData = sendResult;
+        emailStatus = 'sent';
+        break;
+      }
+      default:
+        throw new Error(`Unsupported email action_type: ${action_type}`);
     }
 
-    // Generate drafts based on template type
-    const drafts = await generateDrafts(input);
-
-    // TODO: Store drafts in database when DB layer is implemented
-
-    const output: EmailOutput = {
-      rfqId: input.rfqId,
-      drafts,
-    };
-
-    return {
+    // Build result
+    const result: ProcessorResult = {
       success: true,
-      data: output,
+      data_type: 'email',
+      action_type,
+      status: 'completed',
+      session_id: '',
+      processing_time_ms: Date.now() - startTime,
+      data: resultData,
       timestamp,
-      stepId: 'email',
-      rfqId: input.rfqId,
     };
 
+    // Save to database (non-blocking)
+    try {
+      await modifyDatabase({
+        data_type: 'email',
+        quotation_id,
+        rfq_reference,
+        email: {
+          subject: email?.subject || '',
+          email_content: email?.email_content || '',
+          recipient_email: email?.recipient_email || '',
+          email_status: emailStatus,
+        },
+      });
+    } catch (dbError) {
+      console.error('[Email] DB save failed (non-blocking):', dbError);
+    }
+
+    // Emit SSE for real-time preview update
+    eventBus.emit('preview-update', result);
+
+    return result;
   } catch (error) {
     console.error('[Email] Error:', error);
-    return {
+
+    const errorResult: ProcessorResult = {
       success: false,
-      error: error instanceof Error ? error.message : 'Email generation failed',
+      data_type: 'email',
+      action_type: input.action_type,
+      status: 'error',
+      session_id: '',
+      processing_time_ms: Date.now() - startTime,
+      error: error instanceof Error ? error.message : 'Email processing failed',
       timestamp,
-      stepId: 'email',
-      rfqId: input.rfqId,
     };
+
+    eventBus.emit('preview-update', errorResult);
+    return errorResult;
   }
 }
 
@@ -87,37 +117,16 @@ export async function generateEmailDrafts(
 // ---------------------------------------------
 
 /**
- * Generate email drafts based on template type
+ * Generate email draft from template using ProcessorInput data
  */
-async function generateDrafts(input: EmailInput): Promise<EmailDraft[]> {
-  const drafts: EmailDraft[] = [];
+function generateDraftFromTemplate(input: ProcessorInput): EmailDraftData {
+  const email = input.email;
 
-  for (const recipient of input.recipients) {
-    const draft = await generateSingleDraft(input, recipient);
-    drafts.push(draft);
-  }
-
-  return drafts;
-}
-
-/**
- * Generate a single email draft
- */
-async function generateSingleDraft(
-  input: EmailInput,
-  recipient: string
-): Promise<EmailDraft> {
-  // Get template based on type
-  const template = getEmailTemplate(input.templateType);
-
-  // Populate template with context
-  const subject = populateTemplate(template.subject, input.context);
-  const body = populateTemplate(template.body, input.context);
-
+  // Use provided content as the draft (already validated by validator)
   return {
-    to: recipient,
-    subject,
-    body,
+    to: email?.recipient_email || '',
+    subject: email?.subject || '',
+    body: email?.email_content || '',
   };
 }
 
@@ -130,16 +139,11 @@ interface EmailTemplate {
   body: string;
 }
 
-/**
- * Get email template by type
- */
-function getEmailTemplate(
-  templateType: EmailInput['templateType']
-): EmailTemplate {
-  const templates: Record<EmailInput['templateType'], EmailTemplate> = {
-    supplier_inquiry: {
-      subject: 'RFQ: {{item_description}} - Request for Quotation',
-      body: `Dear {{supplier_name}},
+/** Available email templates */
+const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
+  supplier_inquiry: {
+    subject: 'RFQ: {{item_description}} - Request for Quotation',
+    body: `Dear {{supplier_name}},
 
 We are writing to request a quotation for the following items:
 
@@ -152,10 +156,10 @@ Deadline for response: {{deadline}}
 Best regards,
 {{sender_name}}
 {{company_name}}`,
-    },
-    customer_response: {
-      subject: 'Re: {{original_subject}} - Quotation Ready',
-      body: `Dear {{customer_name}},
+  },
+  customer_response: {
+    subject: 'Re: {{original_subject}} - Quotation Ready',
+    body: `Dear {{customer_name}},
 
 Thank you for your inquiry. Please find attached our quotation for the requested items.
 
@@ -169,10 +173,10 @@ This quotation is valid until {{valid_until}}.
 Best regards,
 {{sender_name}}
 {{company_name}}`,
-    },
-    follow_up: {
-      subject: 'Follow-up: {{original_subject}}',
-      body: `Dear {{recipient_name}},
+  },
+  follow_up: {
+    subject: 'Follow-up: {{original_subject}}',
+    body: `Dear {{recipient_name}},
 
 We are following up on our previous communication regarding {{subject_matter}}.
 
@@ -183,48 +187,51 @@ Please let us know if you have any questions.
 Best regards,
 {{sender_name}}
 {{company_name}}`,
-    },
-  };
-
-  return templates[templateType];
-}
+  },
+};
 
 /**
  * Populate template with context values
  */
-function populateTemplate(
+export function populateTemplate(
   template: string,
   context: Record<string, unknown>
 ): string {
   let result = template;
-
-  // Replace all {{key}} placeholders with values from context
   for (const [key, value] of Object.entries(context)) {
     const placeholder = `{{${key}}}`;
     const replacement = String(value ?? '');
     result = result.replace(new RegExp(placeholder, 'g'), replacement);
   }
-
   return result;
 }
 
+/**
+ * Get email template by name
+ */
+export function getEmailTemplate(templateName: string): EmailTemplate | undefined {
+  return EMAIL_TEMPLATES[templateName];
+}
+
 // ---------------------------------------------
-// Send Email Action
+// Send Email via API
 // ---------------------------------------------
+
+/** Email draft data shape */
+interface EmailDraftData {
+  to: string;
+  subject: string;
+  body: string;
+  attachments?: string[];
+}
 
 /**
- * Send an email draft
- * @param draft - Email draft to send
- * @param rfqId - Associated RFQ ID
+ * Send an email via the email API
  */
-export async function sendEmail(
-  draft: EmailDraft,
-  rfqId: string
-): Promise<ActionResult<{ messageId: string }>> {
-  const timestamp = new Date().toISOString();
-
+async function sendEmailViaAPI(
+  draft: EmailDraftData
+): Promise<{ messageId: string }> {
   try {
-    // Send via email API using ky
     const response = await ky.post(EMAIL_API_URL, {
       json: {
         to: draft.to,
@@ -239,24 +246,13 @@ export async function sendEmail(
       },
     }).json<{ message_id: string }>();
 
-    // TODO: Log sent email in database when DB layer is implemented
-
-    return {
-      success: true,
-      data: { messageId: response.message_id },
-      timestamp,
-      stepId: 'email',
-      rfqId,
-    };
-
+    return { messageId: response.message_id };
   } catch (error) {
-    console.error('[Email] Send error:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to send email',
-      timestamp,
-      stepId: 'email',
-      rfqId,
-    };
+    // In development, return mock response
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[Email] API failed, using mock send response');
+      return { messageId: `mock-${Date.now()}` };
+    }
+    throw error;
   }
 }

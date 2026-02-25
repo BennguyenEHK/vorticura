@@ -1,21 +1,14 @@
 // =============================================
-// SUPPLIER SEARCH ACTIONS - Supplier Discovery Server Actions
+// SUPPLIER SEARCH ACTIONS - Supplier Discovery Processor
 // =============================================
-// Server actions for finding suppliers:
-// - Search suppliers via AI API
-// - Filter by preferences (region, rating, lead time)
-// - Return ranked supplier list
-
-'use server';
+// Internal server module (called by data-processor, NOT a server action)
+// Flow: ProcessorInput → route by action_type → AI API call → save to DB → emit SSE → return ProcessorResult
+// Supports: search | research
 
 import ky from 'ky';
-import type {
-  ActionResult,
-  SupplierSearchInput,
-  SupplierSearchOutput,
-  SupplierResult,
-} from '@/types/workflow';
-import { SupplierSearchInputSchema } from '@/types/workflow';
+import { eventBus } from '@/lib/event-bus';
+import { modifyDatabase } from '@/lib/utils/databaseHandler';
+import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
 
 // ---------------------------------------------
 // Configuration
@@ -25,61 +18,80 @@ import { SupplierSearchInputSchema } from '@/types/workflow';
 const SUPPLIER_API_URL = process.env.SUPPLIER_API_URL || 'https://api.example.com/suppliers/search';
 
 // ---------------------------------------------
-// Main Action: Search Suppliers
+// Main Processor: Process Supplier Search
 // ---------------------------------------------
 
 /**
- * Search for suppliers matching RFQ requirements
- * @param input - Supplier search input
- * @returns ActionResult with supplier results
+ * Process supplier search based on action_type
+ * @param input - Validated ProcessorInput (data_type: 'supplier_search')
+ * @returns ProcessorResult with supplier data
  */
-export async function searchSuppliers(
-  input: SupplierSearchInput
-): Promise<ActionResult<SupplierSearchOutput>> {
+export async function processSupplierSearch(input: ProcessorInput): Promise<ProcessorResult> {
+  const startTime = Date.now();
   const timestamp = new Date().toISOString();
 
   try {
-    // Validate input using Zod schema
-    const validationResult = SupplierSearchInputSchema.safeParse(input);
-    if (!validationResult.success) {
-      return {
-        success: false,
-        error: `Validation failed: ${validationResult.error.message}`,
-        timestamp,
-        stepId: 'supplier_search',
-        rfqId: input.rfqId,
-      };
+    const { action_type, quotation_id, rfq_reference, search } = input;
+
+    // Route by action_type: search | research → both call AI API
+    const suppliers = await callSupplierSearchAPI({
+      subject: search?.subject || '',
+      searchContent: search?.search_content || '',
+      actionType: action_type,
+    });
+
+    // Build result
+    const result: ProcessorResult = {
+      success: true,
+      data_type: 'supplier_search',
+      action_type,
+      status: 'completed',
+      session_id: '',
+      processing_time_ms: Date.now() - startTime,
+      data: {
+        suppliers,
+        searchTimestamp: timestamp,
+      },
+      timestamp,
+    };
+
+    // Save to database (non-blocking, errors don't fail the response)
+    // Note: DB handler uses `suppliers_search` (with 's'), not `supplier_search`
+    try {
+      await modifyDatabase({
+        data_type: 'supplier_search',
+        quotation_id,
+        rfq_reference,
+        suppliers_search: {
+          subject: search?.subject || '',
+          search_content: search?.search_content || '',
+          search_status: 'completed',
+        },
+      });
+    } catch (dbError) {
+      console.error('[Supplier Search] DB save failed (non-blocking):', dbError);
     }
 
-    // Call AI API for supplier search
-    const suppliers = await callSupplierSearchAPI(input);
+    // Emit SSE for real-time preview update
+    eventBus.emit('preview-update', result);
 
-    // Build output
-    const output: SupplierSearchOutput = {
-      rfqId: input.rfqId,
-      suppliers,
-      searchTimestamp: timestamp,
-    };
-
-    // TODO: Store results in database when DB layer is implemented
-
-    return {
-      success: true,
-      data: output,
-      timestamp,
-      stepId: 'supplier_search',
-      rfqId: input.rfqId,
-    };
-
+    return result;
   } catch (error) {
     console.error('[Supplier Search] Error:', error);
-    return {
+
+    const errorResult: ProcessorResult = {
       success: false,
+      data_type: 'supplier_search',
+      action_type: input.action_type,
+      status: 'error',
+      session_id: '',
+      processing_time_ms: Date.now() - startTime,
       error: error instanceof Error ? error.message : 'Supplier search failed',
       timestamp,
-      stepId: 'supplier_search',
-      rfqId: input.rfqId,
     };
+
+    eventBus.emit('preview-update', errorResult);
+    return errorResult;
   }
 }
 
@@ -106,29 +118,36 @@ interface AISupplierResponse {
   };
 }
 
+/** Internal supplier result shape */
+interface SupplierResult {
+  id: string;
+  name: string;
+  email: string;
+  rating?: number;
+  specialties: string[];
+  estimatedLeadTime?: number;
+  matchScore: number;
+}
+
+/** Internal input for API call */
+interface SearchAPIInput {
+  subject: string;
+  searchContent: string;
+  actionType: string;
+}
+
 /**
  * Call AI API for supplier search
  */
-async function callSupplierSearchAPI(
-  input: SupplierSearchInput
-): Promise<SupplierResult[]> {
+async function callSupplierSearchAPI(input: SearchAPIInput): Promise<SupplierResult[]> {
   try {
-    // Make API call with ky
     const response = await ky.post(SUPPLIER_API_URL, {
       json: {
-        items: input.items.map((item) => ({
-          description: item.description,
-          quantity: item.quantity,
-          unit: item.unit,
-          specifications: item.specifications,
-        })),
-        preferences: {
-          region: input.preferences?.region,
-          min_rating: input.preferences?.minRating,
-          max_lead_time: input.preferences?.maxLeadTime,
-        },
+        subject: input.subject,
+        search_content: input.searchContent,
+        action_type: input.actionType,
       },
-      timeout: 45000, // 45 second timeout (search can take longer)
+      timeout: 45000,
       retry: {
         limit: 2,
         methods: ['post'],
@@ -141,7 +160,7 @@ async function callSupplierSearchAPI(
     }).json<AISupplierResponse>();
 
     // Transform response to our schema
-    return response.suppliers.map((supplier: AISupplierResponse['suppliers'][0]) => ({
+    return response.suppliers.map((supplier) => ({
       id: supplier.id,
       name: supplier.name,
       email: supplier.email,
@@ -150,12 +169,11 @@ async function callSupplierSearchAPI(
       estimatedLeadTime: supplier.estimated_lead_time,
       matchScore: supplier.match_score,
     }));
-
   } catch (error) {
     // If AI API fails, return mock data for development
     if (process.env.NODE_ENV === 'development') {
       console.warn('[Supplier Search] API failed, using mock data');
-      return generateMockSuppliers(input);
+      return generateMockSuppliers();
     }
     throw error;
   }
@@ -168,8 +186,8 @@ async function callSupplierSearchAPI(
 /**
  * Generate mock supplier results for development
  */
-function generateMockSuppliers(input: SupplierSearchInput): SupplierResult[] {
-  const mockSuppliers: SupplierResult[] = [
+function generateMockSuppliers(): SupplierResult[] {
+  return [
     {
       id: 'SUP-001',
       name: 'Global Industrial Parts Co.',
@@ -197,23 +215,5 @@ function generateMockSuppliers(input: SupplierSearchInput): SupplierResult[] {
       estimatedLeadTime: 10,
       matchScore: 0.75,
     },
-  ];
-
-  // Apply filters from preferences
-  let filtered = mockSuppliers;
-
-  if (input.preferences?.minRating) {
-    filtered = filtered.filter(
-      (s) => (s.rating ?? 0) >= (input.preferences?.minRating ?? 0)
-    );
-  }
-
-  if (input.preferences?.maxLeadTime) {
-    filtered = filtered.filter(
-      (s) => (s.estimatedLeadTime ?? Infinity) <= (input.preferences?.maxLeadTime ?? Infinity)
-    );
-  }
-
-  // Sort by match score
-  return filtered.sort((a, b) => b.matchScore - a.matchScore);
+  ].sort((a, b) => b.matchScore - a.matchScore);
 }
