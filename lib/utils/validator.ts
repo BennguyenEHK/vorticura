@@ -48,6 +48,7 @@ export interface ProcessorInput {
   email?: EmailData;                    // For email data_type
   analysis?: AnalysisData;              // For rfq_analysis data_type
   search?: SearchData;                  // For supplier_search data_type
+  workspace?: import('@/lib/middleware/workspace-context').WorkspaceContext; // Workspace for tenant isolation
   [key: string]: unknown;               // Allow additional fields
 }
 

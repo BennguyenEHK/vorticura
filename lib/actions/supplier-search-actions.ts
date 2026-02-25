@@ -31,7 +31,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
   const timestamp = new Date().toISOString();
 
   try {
-    const { action_type, quotation_id, rfq_reference, search } = input;
+    const { action_type, quotation_id, rfq_reference, search, workspace } = input;
 
     // Route by action_type: search | research → both call AI API
     const suppliers = await callSupplierSearchAPI({
@@ -67,7 +67,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
           search_content: search?.search_content || '',
           search_status: 'completed',
         },
-      });
+      }, workspace!);
     } catch (dbError) {
       console.error('[Supplier Search] DB save failed (non-blocking):', dbError);
     }

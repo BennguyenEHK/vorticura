@@ -31,7 +31,7 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
   const timestamp = new Date().toISOString();
 
   try {
-    const { action_type, quotation_id, rfq_reference, analysis } = input;
+    const { action_type, quotation_id, rfq_reference, analysis, workspace } = input;
 
     // Route by action_type: analyze | reanalyze → both call AI API
     const aiResponse = await callAIAnalysis({
@@ -63,7 +63,7 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
           analysis_content: aiResponse.summary || analysis?.analysis_content || '',
           analysis_status: 'completed',
         },
-      });
+      }, workspace!);
     } catch (dbError) {
       console.error('[Analysis] DB save failed (non-blocking):', dbError);
     }

@@ -10,6 +10,7 @@ import { modifyDatabase, type ModifyDatabaseInput } from '@/lib/utils/databaseHa
 import { pricingCalculator } from '@/lib/services/pricing/pricing-calculator';
 import type { QuotationItem as PricingQuotationItem, PricingVariable } from '@/types/pricing';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
+import type { WorkspaceContext } from '@/lib/middleware/workspace-context';
 
 // ---------------------------------------------
 // Main Processor: Process Quotation
@@ -29,14 +30,16 @@ export async function processQuotation(input: ProcessorInput): Promise<Processor
     let resultData: unknown;
 
     // Route by action_type
+    const { workspace } = input;
+
     switch (action_type) {
       case 'generate':
       case 'update': {
-        resultData = await handleGenerateOrUpdate(input, timestamp);
+        resultData = await handleGenerateOrUpdate(input, timestamp, workspace!);
         break;
       }
       case 'manual_update': {
-        resultData = await handleManualUpdate(input, timestamp);
+        resultData = await handleManualUpdate(input, timestamp, workspace!);
         break;
       }
       default:
@@ -90,7 +93,8 @@ export async function processQuotation(input: ProcessorInput): Promise<Processor
  */
 async function handleGenerateOrUpdate(
   input: ProcessorInput,
-  timestamp: string
+  timestamp: string,
+  workspace: WorkspaceContext
 ): Promise<unknown> {
   const { quotation_data, pricing_variables, action_type } = input;
 
@@ -149,7 +153,7 @@ async function handleGenerateOrUpdate(
       quotationData,
       calculatedPricing,
       pricing_variables: pricingVarsForDB,
-    });
+    }, workspace);
   } catch (dbError) {
     console.error('[Quotation] DB save failed (non-blocking):', dbError);
   }
@@ -179,7 +183,8 @@ async function handleGenerateOrUpdate(
  */
 async function handleManualUpdate(
   input: ProcessorInput,
-  timestamp: string
+  timestamp: string,
+  workspace: WorkspaceContext
 ): Promise<unknown> {
   const { quotation_id, modify_content, comments } = input;
 
@@ -212,7 +217,7 @@ async function handleManualUpdate(
     await modifyDatabase({
       data_type: 'quotation',
       quotationData,
-    });
+    }, workspace);
   } catch (dbError) {
     console.error('[Quotation] DB save failed (non-blocking):', dbError);
   }

@@ -31,7 +31,7 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
   const timestamp = new Date().toISOString();
 
   try {
-    const { action_type, quotation_id, rfq_reference, email } = input;
+    const { action_type, quotation_id, rfq_reference, email, workspace } = input;
     let resultData: unknown;
     let emailStatus: string;
 
@@ -84,7 +84,7 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
           recipient_email: email?.recipient_email || '',
           email_status: emailStatus,
         },
-      });
+      }, workspace!);
     } catch (dbError) {
       console.error('[Email] DB save failed (non-blocking):', dbError);
     }

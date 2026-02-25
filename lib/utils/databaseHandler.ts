@@ -1,26 +1,16 @@
 // =============================================
-// DATABASE HANDLER - Drizzle ORM Port
+// DATABASE HANDLER - Unified via queries.ts
 // =============================================
 // Unified database operations with typed payload builders
 // - Build payload functions for all table types (only available fields)
 // - Check data existence with flexible key lookup
 // - Unified modifyDatabase function for INSERT/UPDATE
+// - All DB calls routed through queries.ts for workspace isolation
 // - Supports: quotations, quotation_items, customers, quotation_pricing,
 //             email_table, rfq_analysis, supplier_search
 // Reference: make_sales_sse_server/api/quotation/database-handler.js
 
-import { eq, and, type SQL } from 'drizzle-orm';
-import { db } from '@/lib/db/client';
-import {
-  quotations,
-  quotationItems,
-  quotationPricing,
-  customers,
-  emailTable,
-  rfqAnalysis,
-  supplierSearch,
-  clientCompany,
-} from '@/lib/db/schema';
+import { insertData, getData, updateData } from '@/lib/db/queries';
 import { WorkspaceContext } from '@/lib/middleware/workspace-context';
 
 // =============================================
@@ -72,7 +62,7 @@ export interface ModifyDatabaseInput {
 // =============================================
 // PAYLOAD BUILDERS
 // =============================================
-// Each builder maps input → database columns, only including present fields.
+// Each builder maps input -> database columns, only including present fields.
 // `update` flag excludes PK/FK columns (used in WHERE clause, not SET).
 
 /**
@@ -288,68 +278,40 @@ export function buildClientCompanyPayload(data: Record<string, unknown>): Payloa
 
 /**
  * Check if data exists in a table by quotation_id (or company_id for client_company)
- * @param table - Table name string for routing
+ * Uses getData from queries.ts for workspace-isolated lookups
+ * @param table - Table name string for routing (snake_case mapped to camelCase)
  * @param keysId - Primary key value to search
- * @param selectColumns - Optional columns to return (null = return all)
- * @param workspace - Optional workspace context for tenant filtering
+ * @param workspace - Workspace context for tenant filtering (required)
  * @returns Array of matching rows (empty if not found)
  */
 export async function checkDataExists(
   table: string,
   keysId: number,
-  workspace?: WorkspaceContext
+  workspace: WorkspaceContext
 ): Promise<Record<string, unknown>[]> {
   try {
-    // Build workspace-scoped WHERE conditions
-    const wsFilter: { company_id?: number; client_id?: number } = workspace
-      ? workspace.getDatabaseFilter()
-      : {};
+    // Map snake_case table names to camelCase keys used by queries.ts getTableByName()
+    const tableNameMap: Record<string, string> = {
+      'quotations': 'quotations',
+      'quotation_items': 'quotationItems',
+      'quotation_pricing': 'quotationPricing',
+      'customers': 'customers',
+      'email_table': 'emailTable',
+      'rfq_analysis': 'rfqAnalysis',
+      'supplier_search': 'supplierSearch',
+      'client_company': 'clientCompany',
+    };
 
-    // Route to correct table + build WHERE clause
-    switch (table) {
-      case 'quotations': {
-        const conditions: SQL[] = [eq(quotations.quotationId, keysId)];
-        if (wsFilter.company_id) conditions.push(eq(quotations.companyId, wsFilter.company_id));
-        return await db.select().from(quotations).where(and(...conditions)) as Record<string, unknown>[];
-      }
-      case 'quotation_items': {
-        const conditions: SQL[] = [eq(quotationItems.quotationId, keysId)];
-        if (wsFilter.company_id) conditions.push(eq(quotationItems.companyId, wsFilter.company_id));
-        return await db.select().from(quotationItems).where(and(...conditions)) as Record<string, unknown>[];
-      }
-      case 'quotation_pricing': {
-        const conditions: SQL[] = [eq(quotationPricing.quotationId, keysId)];
-        if (wsFilter.company_id) conditions.push(eq(quotationPricing.companyId, wsFilter.company_id));
-        return await db.select().from(quotationPricing).where(and(...conditions)) as Record<string, unknown>[];
-      }
-      case 'customers': {
-        const conditions: SQL[] = [eq(customers.quotationId, keysId)];
-        if (wsFilter.company_id) conditions.push(eq(customers.companyId, wsFilter.company_id));
-        return await db.select().from(customers).where(and(...conditions)) as Record<string, unknown>[];
-      }
-      case 'email_table': {
-        const conditions: SQL[] = [eq(emailTable.quotationId, keysId)];
-        if (wsFilter.company_id) conditions.push(eq(emailTable.companyId, wsFilter.company_id));
-        return await db.select().from(emailTable).where(and(...conditions)) as Record<string, unknown>[];
-      }
-      case 'rfq_analysis': {
-        const conditions: SQL[] = [eq(rfqAnalysis.quotationId, keysId)];
-        if (wsFilter.company_id) conditions.push(eq(rfqAnalysis.companyId, wsFilter.company_id));
-        return await db.select().from(rfqAnalysis).where(and(...conditions)) as Record<string, unknown>[];
-      }
-      case 'supplier_search': {
-        const conditions: SQL[] = [eq(supplierSearch.quotationId, keysId)];
-        if (wsFilter.company_id) conditions.push(eq(supplierSearch.companyId, wsFilter.company_id));
-        return await db.select().from(supplierSearch).where(and(...conditions)) as Record<string, unknown>[];
-      }
-      case 'client_company': {
-        return await db.select().from(clientCompany).where(eq(clientCompany.companyId, keysId)) as Record<string, unknown>[];
-      }
-      default: {
-        console.warn(`checkDataExists: unknown table "${table}", falling back to quotations`);
-        return await db.select().from(quotations).where(eq(quotations.quotationId, keysId)) as Record<string, unknown>[];
-      }
+    const tableName = tableNameMap[table];
+    if (!tableName) {
+      console.warn(`checkDataExists: unknown table "${table}", falling back to quotations`);
+      return await getData('quotations', { quotationId: keysId }, workspace) as Record<string, unknown>[];
     }
+
+    // client_company uses companyId as its lookup key
+    const filterColumn = table === 'client_company' ? 'companyId' : 'quotationId';
+
+    return await getData(tableName, { [filterColumn]: keysId }, workspace) as Record<string, unknown>[];
   } catch (error) {
     console.error(`Error checking data existence in ${table}:`, error);
     return []; // Return empty on error (assume not exists)
@@ -362,23 +324,18 @@ export async function checkDataExists(
 
 /**
  * Unified database modification function
- * Routes by data_type → checks existence → INSERT or UPDATE
+ * Routes by data_type -> checks existence -> INSERT or UPDATE
  * Handles quotation (multi-table) and single-table types
+ * All DB operations go through queries.ts (insertData/updateData/getData)
  * @param input - Structured input with data_type and content
- * @param workspace - Workspace context for tenant isolation
+ * @param workspace - Workspace context for tenant isolation (required)
  */
 export async function modifyDatabase(
   input: ModifyDatabaseInput,
-  workspace?: WorkspaceContext
+  workspace: WorkspaceContext
 ): Promise<void> {
   try {
     console.log(`[DB] Starting modification for data_type: ${input.data_type}`);
-
-    // Helper: inject workspace context into payload for INSERTs
-    const inject = (payload: Payload): Payload => {
-      if (!workspace) return payload;
-      return workspace.injectWorkspaceContext(payload as Record<string, unknown>);
-    };
 
     // ========== QUOTATION DATA TYPE ==========
     if (input.data_type === 'quotation' && input.quotationData) {
@@ -390,20 +347,20 @@ export async function modifyDatabase(
         if (existing.length > 0) {
           // UPDATE - exclude PK
           const payload = buildQuotationPayload(qd as unknown as Record<string, unknown>, true);
-          await db.update(quotations).set(payload).where(eq(quotations.quotationId, qd.quotation_id));
+          await updateData('quotations', { quotationId: qd.quotation_id }, payload, workspace);
           console.log(`[DB] Quotation updated: ${qd.quotation_id}`);
         } else {
           // INSERT with provided ID
-          const payload = inject(buildQuotationPayload(qd as unknown as Record<string, unknown>, false));
-          const result = await db.insert(quotations).values(payload as typeof quotations.$inferInsert).returning({ quotationId: quotations.quotationId });
-          qd.quotation_id = result[0]?.quotationId;
+          const payload = buildQuotationPayload(qd as unknown as Record<string, unknown>, false);
+          const result = await insertData('quotations', {}, payload, workspace);
+          qd.quotation_id = result?.quotationId;
           console.log(`[DB] Quotation inserted: ${qd.quotation_id}`);
         }
       } else {
         // INSERT with auto-generated ID
-        const payload = inject(buildQuotationPayload(qd as unknown as Record<string, unknown>, false));
-        const result = await db.insert(quotations).values(payload as typeof quotations.$inferInsert).returning({ quotationId: quotations.quotationId });
-        qd.quotation_id = result[0]?.quotationId;
+        const payload = buildQuotationPayload(qd as unknown as Record<string, unknown>, false);
+        const result = await insertData('quotations', {}, payload, workspace);
+        qd.quotation_id = result?.quotationId;
         console.log(`[DB] Quotation inserted (auto-ID): ${qd.quotation_id}`);
       }
 
@@ -412,11 +369,11 @@ export async function modifyDatabase(
         const existingCustomer = await checkDataExists('customers', qd.quotation_id, workspace);
         if (existingCustomer.length > 0) {
           const payload = buildCustomerPayload(qd as unknown as Record<string, unknown>, true);
-          await db.update(customers).set(payload).where(eq(customers.quotationId, qd.quotation_id));
+          await updateData('customers', { quotationId: qd.quotation_id }, payload, workspace);
           console.log(`[DB] Customer updated for quotation: ${qd.quotation_id}`);
         } else {
-          const payload = inject(buildCustomerPayload(qd as unknown as Record<string, unknown>, false));
-          await db.insert(customers).values(payload as typeof customers.$inferInsert);
+          const payload = buildCustomerPayload(qd as unknown as Record<string, unknown>, false);
+          await insertData('customers', {}, payload, workspace);
           console.log(`[DB] Customer inserted for quotation: ${qd.quotation_id}`);
         }
       }
@@ -427,14 +384,13 @@ export async function modifyDatabase(
           const itemId = item.item_id ? parseInt(String(item.item_id), 10) : null;
           let shouldInsert = true;
 
-          // Check existence by item_id + quotation_id
+          // Check existence by item_id + quotation_id (composite key)
           if (itemId) {
-            const existingItem = await db.select({ itemId: quotationItems.itemId })
-              .from(quotationItems)
-              .where(and(
-                eq(quotationItems.quotationId, qd.quotation_id!),
-                eq(quotationItems.itemId, itemId)
-              ));
+            const existingItem = await getData(
+              'quotationItems',
+              { quotationId: qd.quotation_id!, itemId },
+              workspace
+            );
 
             if (existingItem.length > 0) {
               // UPDATE existing item
@@ -442,8 +398,11 @@ export async function modifyDatabase(
                 { ...item, quotation_id: qd.quotation_id } as Record<string, unknown>,
                 true
               );
-              await db.update(quotationItems).set(payload).where(
-                and(eq(quotationItems.quotationId, qd.quotation_id!), eq(quotationItems.itemId, itemId))
+              await updateData(
+                'quotationItems',
+                { quotationId: qd.quotation_id!, itemId },
+                payload,
+                workspace
               );
               console.log(`[DB] Item ${itemId} updated`);
               shouldInsert = false;
@@ -454,8 +413,8 @@ export async function modifyDatabase(
             // INSERT new item
             const itemData: Record<string, unknown> = { ...item, quotation_id: qd.quotation_id };
             if (itemId) itemData.item_id = itemId;
-            const payload = inject(buildQuotationItemsPayload(itemData, false));
-            await db.insert(quotationItems).values(payload as typeof quotationItems.$inferInsert);
+            const payload = buildQuotationItemsPayload(itemData, false);
+            await insertData('quotationItems', {}, payload, workspace);
             console.log(`[DB] Item inserted ${itemId ? `(id: ${itemId})` : '(auto-ID)'}`);
           }
         }
@@ -482,19 +441,21 @@ export async function modifyDatabase(
             exchange_currency: input.exchange_currency || 'VND',
           };
 
-          // Check existence
+          // Check existence (composite key: quotation_id + item_id)
           if (itemId) {
-            const existingPricing = await db.select({ itemId: quotationPricing.itemId })
-              .from(quotationPricing)
-              .where(and(
-                eq(quotationPricing.quotationId, qd.quotation_id!),
-                eq(quotationPricing.itemId, itemId)
-              ));
+            const existingPricing = await getData(
+              'quotationPricing',
+              { quotationId: qd.quotation_id!, itemId },
+              workspace
+            );
 
             if (existingPricing.length > 0) {
               const payload = buildPricingPayload(payloadData, true);
-              await db.update(quotationPricing).set(payload).where(
-                and(eq(quotationPricing.quotationId, qd.quotation_id!), eq(quotationPricing.itemId, itemId))
+              await updateData(
+                'quotationPricing',
+                { quotationId: qd.quotation_id!, itemId },
+                payload,
+                workspace
               );
               console.log(`[DB] Pricing item ${itemId} updated`);
               shouldInsert = false;
@@ -503,17 +464,20 @@ export async function modifyDatabase(
 
           if (shouldInsert) {
             if (itemId) payloadData.item_id = itemId;
-            const payload = inject(buildPricingPayload(payloadData, false));
-            await db.insert(quotationPricing).values(payload as typeof quotationPricing.$inferInsert);
+            const payload = buildPricingPayload(payloadData, false);
+            await insertData('quotationPricing', {}, payload, workspace);
             console.log(`[DB] Pricing inserted ${itemId ? `(id: ${itemId})` : '(auto-ID)'}`);
           }
         }
 
         // Update total_amount in quotations table
         if (input.calculatedPricing.total_amount !== undefined && qd.quotation_id) {
-          await db.update(quotations)
-            .set({ totalAmount: String(input.calculatedPricing.total_amount) })
-            .where(eq(quotations.quotationId, qd.quotation_id));
+          await updateData(
+            'quotations',
+            { quotationId: qd.quotation_id },
+            { totalAmount: String(input.calculatedPricing.total_amount) },
+            workspace
+          );
           console.log(`[DB] Total amount updated: ${input.calculatedPricing.total_amount}`);
         }
       }
@@ -533,15 +497,14 @@ export async function modifyDatabase(
       if (input.email_id && input.quotation_id) {
         const existing = await checkDataExists('email_table', input.quotation_id, workspace);
         if (existing.length > 0) {
-          await db.update(emailTable).set(emailPayload).where(eq(emailTable.emailId, input.email_id));
+          await updateData('emailTable', { emailId: input.email_id }, emailPayload, workspace);
           console.log(`[DB] Email updated: ${input.email_id}`);
           shouldInsert = false;
         }
       }
 
       if (shouldInsert) {
-        const payload = inject(emailPayload);
-        await db.insert(emailTable).values(payload as typeof emailTable.$inferInsert);
+        await insertData('emailTable', {}, emailPayload, workspace);
         console.log(`[DB] Email inserted`);
       }
     }
@@ -559,15 +522,14 @@ export async function modifyDatabase(
       if (input.analysis_id && input.quotation_id) {
         const existing = await checkDataExists('rfq_analysis', input.quotation_id, workspace);
         if (existing.length > 0) {
-          await db.update(rfqAnalysis).set(analysisPayload).where(eq(rfqAnalysis.analysisId, input.analysis_id));
+          await updateData('rfqAnalysis', { analysisId: input.analysis_id }, analysisPayload, workspace);
           console.log(`[DB] RFQ analysis updated: ${input.analysis_id}`);
           shouldInsert = false;
         }
       }
 
       if (shouldInsert) {
-        const payload = inject(analysisPayload);
-        await db.insert(rfqAnalysis).values(payload as typeof rfqAnalysis.$inferInsert);
+        await insertData('rfqAnalysis', {}, analysisPayload, workspace);
         console.log(`[DB] RFQ analysis inserted`);
       }
     }
@@ -585,15 +547,14 @@ export async function modifyDatabase(
       if (input.search_id && input.quotation_id) {
         const existing = await checkDataExists('supplier_search', input.quotation_id, workspace);
         if (existing.length > 0) {
-          await db.update(supplierSearch).set(searchPayload).where(eq(supplierSearch.searchId, input.search_id));
+          await updateData('supplierSearch', { searchId: input.search_id }, searchPayload, workspace);
           console.log(`[DB] Supplier search updated: ${input.search_id}`);
           shouldInsert = false;
         }
       }
 
       if (shouldInsert) {
-        const payload = inject(searchPayload);
-        await db.insert(supplierSearch).values(payload as typeof supplierSearch.$inferInsert);
+        await insertData('supplierSearch', {}, searchPayload, workspace);
         console.log(`[DB] Supplier search inserted`);
       }
     }

@@ -1,7 +1,7 @@
 # QuoteFlow AI - Project Structure
 
-> **Last Updated:** February 12, 2026
-> **Version:** 5.9 (Pricing Panel Refactoring Plan)
+> **Last Updated:** February 24, 2026
+> **Version:** 6.0 (Data Processing Pipeline + Queries Refactor)
 
 ## Overview
 
@@ -96,6 +96,9 @@ quoteflow_ai/
 │   │   │   ├── route.ts ✓                 # GET /api/health
 │   │   │   └── database/route.ts          # GET /api/health/database
 │   │   │
+│   │   ├── preview-stream/
+│   │   │   └── route.ts ✓                 # GET /api/preview-stream (SSE preview streaming)
+│   │   │
 │   │   ├── events/route.ts                # GET /api/events (SSE endpoint)
 │   │   └── stats/route.ts                 # GET /api/stats
 │   │
@@ -153,6 +156,7 @@ quoteflow_ai/
 │   │   │   ├── comms-hub-trigger.tsx ✓    # Topbar icon with badge
 │   │   │   ├── comms-hub-dropdown.tsx ✓   # Dropdown panel (w-360px)
 │   │   │   └── channel-item.tsx ✓         # Individual channel card
+│   │   │   # Planned channels: Email, SMS, WhatsApp, Telegram, Zalo
 │   │   │
 │   │   ├── dashboard/                     # Dashboard UI components
 │   │   │   ├── index.ts ✓                 # Barrel exports
@@ -216,6 +220,13 @@ quoteflow_ai/
 │   │                                      # - Zod validation schemas
 │   │
 │   ├── utils/                             # Helper Functions
+│   │   ├── databaseHandler.ts ✓           # Unified DB handler using queries.ts (v6.0)
+│   │   │                                  # - Typed payload builders for all tables
+│   │   │                                  # - checkDataExists via getData()
+│   │   │                                  # - modifyDatabase via insertData/updateData()
+│   │   │
+│   │   ├── validator.ts ✓                 # Multi-data-type input validation (v6.0)
+│   │   │
 │   │   ├── rfq-queue.ts ✓                 # Per-RFQ sequential processor (v6.0):
 │   │   │                                  # - Sequential execution per RFQ_id
 │   │   │                                  # - Retry logic (max 3, exponential backoff)
@@ -247,6 +258,8 @@ quoteflow_ai/
 │   │       └── get-workspace.ts ✓
 │   │
 │   ├── services/                          # Business Logic Layer
+│   │   ├── auth/                          # Auth services (v6.0, placeholder)
+│   │   │
 │   │   ├── rfq-queue/                     # RFQ Queue services
 │   │   │   ├── index.ts ✓                 # Barrel exports
 │   │   │   └── queue-manager.ts ✓         # Queue CRUD, filtering, stage updates
@@ -255,25 +268,44 @@ quoteflow_ai/
 │   │   │   ├── index.ts ✓                 # Barrel exports
 │   │   │   └── comms-manager.ts ✓         # Channel & message management
 │   │   │
-│   │   └── pricing/                       # Pricing services (v5.9)
-│   │       ├── index.ts ✓                 # Barrel exports
-│   │       ├── pricing-calculator.ts ✓    # Core calculation engine
-│   │       ├── pricing-manager.ts ✓       # CRUD operations
-│   │       ├── currency-service.ts ✓      # Exchange rates & conversion
-│   │       └── validation.ts ✓            # Input validation
+│   │   ├── pricing/                       # Pricing services (v5.9)
+│   │   │   ├── index.ts ✓                 # Barrel exports
+│   │   │   ├── pricing-calculator.ts ✓    # Core calculation engine
+│   │   │   ├── pricing-manager.ts ✓       # CRUD operations
+│   │   │   ├── currency-service.ts ✓      # Exchange rates & conversion
+│   │   │   └── validation.ts ✓            # Input validation
+│   │   │
+│   │   ├── quotation/                     # Quotation services (v6.0, placeholder)
+│   │   ├── session/                       # Session services (v6.0, placeholder)
+│   │   ├── sse/                           # SSE services (v6.0, placeholder)
+│   │   ├── rfq-analysis/                  # RFQ Analysis services (v6.0, placeholder)
+│   │   └── supplier-search/               # Supplier Search services (v6.0, placeholder)
 │   │
 │   ├── hooks/                             # Custom React Hooks
 │   │   └── use-pricing.ts                 # Pricing state hook
 │   │
+│   ├── data-processor.ts ✓                # Data processing API (v6.0)
+│   │                                      # - DataProcessingAPI class
+│   │                                      # - Routes data to databaseHandler/validator
+│   │
+│   ├── event-bus.ts ✓                     # In-process pub/sub for SSE events (v6.0)
+│   │                                      # - EventBus singleton
+│   │                                      # - Publish/subscribe pattern
+│   │
+│   ├── validation/                        # Validation Layer (v6.0)
+│   │   └── schemas.ts ✓                   # Zod validation schemas
+│   │
 │   ├── db/                                # Database Layer
 │   │   ├── client.ts ✓                    # Drizzle client
 │   │   ├── schema.ts ✓                    # Schema definitions
-│   │   ├── queries.ts ✓                   # Reusable queries
-│   │   ├── workspace-helper.ts ✓          # Workspace wrapper
+│   │   ├── queries.ts ✓                   # Generic CRUD with workspace isolation
+│   │   │                                  # - insertData, getData, getCount
+│   │   │                                  # - updateData, deleteData
 │   │   └── migrations/migrate.ts ✓
 │   │
 │   └── middleware/                        # Middleware Helpers
-│       ├── workspace-context.ts ✓
+│       ├── workspace-context.ts ✓         # WorkspaceContext class (tenant isolation)
+│       ├── get-workspace.ts ✓             # Workspace helper (moved from lib/db/)
 │       └── auth-helpers.ts ✓
 │
 ├── types/                                 # TypeScript Types
@@ -618,6 +650,11 @@ app/layout.tsx (Root)
 | `/api/pricing` | POST | Calculate and save pricing (v5.9) |
 | `/api/pricing/variables` | GET | Get saved pricing variables (v5.9) |
 | `/api/pricing/variables` | PUT | Update pricing variables (v5.9) |
+| `/api/preview-stream` | GET | SSE preview streaming (v6.0) |
+| `/api/comms/sms` | POST | Send SMS message (planned) |
+| `/api/comms/whatsapp` | POST | Send WhatsApp message (planned) |
+| `/api/comms/telegram` | POST | Send Telegram message (planned) |
+| `/api/comms/zalo` | POST | Send Zalo message (planned) |
 
 ## Design Token System (v5.7 Standardized)
 

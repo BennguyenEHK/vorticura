@@ -22,16 +22,16 @@ import {
   type ProcessorResult,
   type DataType,
   type ActionType,
-} from '../utils/validator';
+} from './utils/validator';
 
 // Re-export types for consumers
 export type { ProcessorInput, ProcessorResult, DataType, ActionType };
 
 // ========== PROCESSOR MODULES ==========
-import { processQuotation } from '../actions/quotation-actions';
-import { processEmail } from '../actions/email-actions';
-import { processSupplierSearch } from '../actions/supplier-search-actions';
-import { processAnalysis } from '../actions/analysis-actions';
+import { processQuotation } from './actions/quotation-actions';
+import { processEmail } from './actions/email-actions';
+import { processSupplierSearch } from './actions/supplier-search-actions';
+import { processAnalysis } from './actions/analysis-actions';
 
 // =============================================
 // Types
