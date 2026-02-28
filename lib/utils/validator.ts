@@ -200,6 +200,11 @@ export function validateInput(input: ProcessorInput): ProcessorInput {
     throw new Error(`Invalid data_type: must be one of ${validDataTypes.join(' | ')}`);
   }
 
+  // Step 3.5: workspace context (tenant isolation) is required for all requests
+  if (!input.workspace) {
+    throw new Error('workspace context is required');
+  }
+
   // Step 4: action_type is required
   if (!input.action_type) {
     throw new Error('action_type is required');

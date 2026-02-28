@@ -70,5 +70,6 @@
       "Bash(cmd /c \"dir lib 2>&1 && echo ---DONE---\")",
       "Bash(cmd /c \"dir lib 2>&1\")"
     ]
-  }
+  },
+  "prefersReducedMotion": false
 }

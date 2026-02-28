@@ -32,6 +32,10 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
 
   try {
     const { action_type, quotation_id, rfq_reference, analysis, workspace } = input;
+    // workspace should be provided by validator, but guard defensively
+    if (!workspace) {
+      throw new Error('Missing workspace context');
+    }
 
     // Route by action_type: analyze | reanalyze → both call AI API
     const aiResponse = await callAIAnalysis({
@@ -63,7 +67,7 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
           analysis_content: aiResponse.summary || analysis?.analysis_content || '',
           analysis_status: 'completed',
         },
-      }, workspace!);
+      }, workspace);
     } catch (dbError) {
       console.error('[Analysis] DB save failed (non-blocking):', dbError);
     }

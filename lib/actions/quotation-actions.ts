@@ -26,20 +26,23 @@ export async function processQuotation(input: ProcessorInput): Promise<Processor
   const timestamp = new Date().toISOString();
 
   try {
-    const { action_type } = input;
+    const { action_type, workspace } = input;
     let resultData: unknown;
 
-    // Route by action_type
-    const { workspace } = input;
+    // ensure we have workspace context
+    if (!workspace) {
+      throw new Error('Missing workspace context');
+    }
 
+    // Route by action_type
     switch (action_type) {
       case 'generate':
       case 'update': {
-        resultData = await handleGenerateOrUpdate(input, timestamp, workspace!);
+        resultData = await handleGenerateOrUpdate(input, timestamp, workspace);
         break;
       }
       case 'manual_update': {
-        resultData = await handleManualUpdate(input, timestamp, workspace!);
+        resultData = await handleManualUpdate(input, timestamp, workspace);
         break;
       }
       default:

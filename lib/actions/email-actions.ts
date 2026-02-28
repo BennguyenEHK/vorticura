@@ -74,17 +74,21 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
 
     // Save to database (non-blocking)
     try {
-      await modifyDatabase({
-        data_type: 'email',
-        quotation_id,
-        rfq_reference,
-        email: {
-          subject: email?.subject || '',
-          email_content: email?.email_content || '',
-          recipient_email: email?.recipient_email || '',
-          email_status: emailStatus,
-        },
-      }, workspace!);
+      if (workspace) {
+        await modifyDatabase({
+          data_type: 'email',
+          quotation_id,
+          rfq_reference,
+          email: {
+            subject: email?.subject || '',
+            email_content: email?.email_content || '',
+            recipient_email: email?.recipient_email || '',
+            email_status: emailStatus,
+          },
+        }, workspace);
+      } else {
+        console.warn('[Email] Skipping DB save because workspace is missing');
+      }
     } catch (dbError) {
       console.error('[Email] DB save failed (non-blocking):', dbError);
     }

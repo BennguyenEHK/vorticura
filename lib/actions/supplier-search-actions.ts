@@ -58,16 +58,20 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     // Save to database (non-blocking, errors don't fail the response)
     // Note: DB handler uses `suppliers_search` (with 's'), not `supplier_search`
     try {
-      await modifyDatabase({
-        data_type: 'supplier_search',
-        quotation_id,
-        rfq_reference,
-        suppliers_search: {
-          subject: search?.subject || '',
-          search_content: search?.search_content || '',
-          search_status: 'completed',
-        },
-      }, workspace!);
+      if (workspace) {
+        await modifyDatabase({
+          data_type: 'supplier_search',
+          quotation_id,
+          rfq_reference,
+          suppliers_search: {
+            subject: search?.subject || '',
+            search_content: search?.search_content || '',
+            search_status: 'completed',
+          },
+        }, workspace);
+      } else {
+        console.warn('[Supplier Search] Skipping DB save because workspace is missing');
+      }
     } catch (dbError) {
       console.error('[Supplier Search] DB save failed (non-blocking):', dbError);
     }

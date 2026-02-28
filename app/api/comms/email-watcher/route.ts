@@ -14,7 +14,12 @@ import { getEmailWatcher, hasEmailWatcher } from '@/lib/services/comms/email-wat
  */
 export async function GET(request: NextRequest) {
   try {
-    requireWorkspace(request);
+    // ensure we await in case requireWorkspace becomes async in future
+    const workspace = await requireWorkspace(request);
+    // only admins (or internal callers) allowed to inspect watcher
+    if (workspace.role !== 'admin' && !process.env.EMAIL_WATCHER_INTERNAL) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -40,8 +45,13 @@ export async function GET(request: NextRequest) {
  * Body: { action: "start" | "stop" | "status" }
  */
 export async function POST(request: NextRequest) {
+  let workspace;
   try {
-    requireWorkspace(request);
+    workspace = await requireWorkspace(request);
+    // only admins or internal services may control the watcher
+    if (workspace.role !== 'admin' && !process.env.EMAIL_WATCHER_INTERNAL) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -81,6 +91,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'start') {
+      if (!hasEmailWatcher()) {
+        return NextResponse.json({ error: 'Email watcher not initialized' }, { status: 500 });
+      }
       const watcher = getEmailWatcher();
       await watcher.start();
       return NextResponse.json({
@@ -95,6 +108,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           status: 'stopped',
           message: 'Email watcher was not running',
+          stats: null,
         });
       }
       const watcher = getEmailWatcher();
@@ -112,4 +126,10 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+
+  // should never reach here, but satisfy exhaustive return
+  return NextResponse.json(
+    { error: `Unknown action: ${action}` },
+    { status: 400 }
+  );
 }
