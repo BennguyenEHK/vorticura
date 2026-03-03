@@ -96,7 +96,7 @@ export interface EmailDocumentData {
 // ---------------------------------------------
 
 export interface RfqAnalysisDocumentData {
-  analysis_id: number | null;
+  rfq_id: number | null;
   subject: string;
   analysis_content: string;
 }

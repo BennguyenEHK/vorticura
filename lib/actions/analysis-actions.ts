@@ -31,7 +31,7 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
   const timestamp = new Date().toISOString();
 
   try {
-    const { action_type, quotation_id, rfq_reference, analysis, workspace } = input;
+    const { action_type, rfq_id, rfq_reference, analysis, workspace } = input;
     // workspace should be provided by validator, but guard defensively
     if (!workspace) {
       throw new Error('Missing workspace context');
@@ -60,7 +60,7 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
     try {
       await modifyDatabase({
         data_type: 'rfq_analysis',
-        quotation_id,
+        rfq_id,
         rfq_reference,
         rfq_analysis: {
           subject: analysis?.subject || '',

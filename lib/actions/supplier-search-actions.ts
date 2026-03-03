@@ -31,7 +31,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
   const timestamp = new Date().toISOString();
 
   try {
-    const { action_type, quotation_id, rfq_reference, search, workspace } = input;
+    const { action_type, rfq_id, rfq_reference, search, workspace } = input;
 
     // Route by action_type: search | research → both call AI API
     const suppliers = await callSupplierSearchAPI({
@@ -61,7 +61,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
       if (workspace) {
         await modifyDatabase({
           data_type: 'supplier_search',
-          quotation_id,
+          rfq_id,
           rfq_reference,
           suppliers_search: {
             subject: search?.subject || '',

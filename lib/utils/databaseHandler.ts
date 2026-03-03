@@ -24,15 +24,16 @@ type Payload = Record<string, any>;
 /** Input shape for modifyDatabase - flexible JSON from processors */
 export interface ModifyDatabaseInput {
   data_type: string;               // quotation | email | rfq_analysis | supplier_search
-  quotation_id?: number;           // Top-level quotation ID (for non-quotation types)
+  rfq_id?: number;                 // Top-level RFQ ID (for rfq_analysis/supplier_search types)
+  quotation_id?: number;           // Top-level quotation ID (for quotation-stage types)
   rfq_reference?: string;          // RFQ reference string
   exchange_currency?: string;      // Target currency for pricing
   // Quotation-specific
   quotationData?: {
     quotation_id?: number;
+    rfq_id?: number;
     rfq_reference?: string;
     quotation_name?: string;
-    quotation_html?: string;
     commercial_terms?: string;
     quotation_status?: string;
     transfer_currency_code?: string;
@@ -53,7 +54,6 @@ export interface ModifyDatabaseInput {
   email_id?: number;
   // RFQ Analysis-specific
   rfq_analysis?: Record<string, unknown>;
-  analysis_id?: number;
   // Supplier Search-specific
   suppliers_search?: Record<string, unknown>;
   search_id?: number;
@@ -74,9 +74,9 @@ export function buildQuotationPayload(data: Record<string, unknown>, update = fa
   const payload: Payload = {};
 
   if (!update && data.quotation_id != null) payload.quotationId = data.quotation_id;
+  if (data.rfq_id != null) payload.rfqId = data.rfq_id;
   if (data.rfq_reference != null) payload.rfqReference = String(data.rfq_reference);
   if (data.quotation_name != null) payload.quotationName = String(data.quotation_name);
-  if (data.quotation_html != null) payload.quotationHtml = String(data.quotation_html);
   if (data.commercial_terms != null) payload.commercialTerms = String(data.commercial_terms);
   if (data.quotation_status != null) payload.quotationStatus = String(data.quotation_status);
   if (data.transfer_currency_code != null) payload.transferCurrencyCode = String(data.transfer_currency_code);
@@ -210,6 +210,7 @@ export function buildEmailPayload(data: Record<string, unknown>, update = false)
 
   if (!update && data.quotation_id != null) payload.quotationId = data.quotation_id;
   if (!update && data.email_id != null) payload.emailId = data.email_id;
+  if (data.rfq_id != null) payload.rfqId = data.rfq_id;
   if (data.rfq_reference != null) payload.rfqReference = String(data.rfq_reference);
   if (data.recipient_email != null) payload.recipientEmail = String(data.recipient_email);
   if (data.subject != null) payload.subject = String(data.subject);
@@ -228,8 +229,7 @@ export function buildEmailPayload(data: Record<string, unknown>, update = false)
 export function buildRfqAnalysisPayload(data: Record<string, unknown>, update = false): Payload {
   const payload: Payload = {};
 
-  if (!update && data.quotation_id != null) payload.quotationId = data.quotation_id;
-  if (!update && data.analysis_id != null) payload.analysisId = data.analysis_id;
+  if (!update && data.rfq_id != null) payload.rfqId = data.rfq_id;
   if (data.rfq_reference != null) payload.rfqReference = String(data.rfq_reference);
   if (data.subject != null) payload.subject = String(data.subject);
   if (data.analysis_content != null) payload.analysisContent = String(data.analysis_content);
@@ -246,7 +246,7 @@ export function buildRfqAnalysisPayload(data: Record<string, unknown>, update = 
 export function buildSupplierSearchPayload(data: Record<string, unknown>, update = false): Payload {
   const payload: Payload = {};
 
-  if (!update && data.quotation_id != null) payload.quotationId = data.quotation_id;
+  if (!update && data.rfq_id != null) payload.rfqId = data.rfq_id;
   if (!update && data.search_id != null) payload.searchId = data.search_id;
   if (data.rfq_reference != null) payload.rfqReference = String(data.rfq_reference);
   if (data.subject != null) payload.subject = String(data.subject);
@@ -277,7 +277,7 @@ export function buildClientCompanyPayload(data: Record<string, unknown>): Payloa
 // =============================================
 
 /**
- * Check if data exists in a table by quotation_id (or company_id for client_company)
+ * Check if data exists in a table by primary/foreign key
  * Uses getData from queries.ts for workspace-isolated lookups
  * @param table - Table name string for routing (snake_case mapped to camelCase)
  * @param keysId - Primary key value to search
@@ -308,8 +308,22 @@ export async function checkDataExists(
       return await getData('quotations', { quotationId: keysId }, workspace) as Record<string, unknown>[];
     }
 
-    // client_company uses companyId as its lookup key
-    const filterColumn = table === 'client_company' ? 'companyId' : 'quotationId';
+    // Determine the correct lookup column based on table
+    let filterColumn: string;
+    switch (table) {
+      case 'client_company':
+        filterColumn = 'companyId';
+        break;
+      case 'rfq_analysis':
+        filterColumn = 'rfqId';
+        break;
+      case 'supplier_search':
+        filterColumn = 'rfqId';
+        break;
+      default:
+        filterColumn = 'quotationId';
+        break;
+    }
 
     return await getData(tableName, { [filterColumn]: keysId }, workspace) as Record<string, unknown>[];
   } catch (error) {
@@ -364,7 +378,7 @@ export async function modifyDatabase(
         console.log(`[DB] Quotation inserted (auto-ID): ${qd.quotation_id}`);
       }
 
-      // STEP 2: CUSTOMERS table
+      // STEP 2: CUSTOMERS table (uses quotationId as FK now, not PK)
       if (qd.customer_info && qd.quotation_id) {
         const existingCustomer = await checkDataExists('customers', qd.quotation_id, workspace);
         if (existingCustomer.length > 0) {
@@ -488,6 +502,7 @@ export async function modifyDatabase(
       const emailPayload = buildEmailPayload({
         ...input.email,
         quotation_id: input.quotation_id,
+        rfq_id: input.rfq_id,
         rfq_reference: input.rfq_reference,
       });
 
@@ -513,17 +528,17 @@ export async function modifyDatabase(
     if (input.data_type === 'rfq_analysis' && input.rfq_analysis) {
       const analysisPayload = buildRfqAnalysisPayload({
         ...input.rfq_analysis,
-        quotation_id: input.quotation_id,
+        rfq_id: input.rfq_id,
         rfq_reference: input.rfq_reference,
       });
 
       let shouldInsert = true;
 
-      if (input.analysis_id && input.quotation_id) {
-        const existing = await checkDataExists('rfq_analysis', input.quotation_id, workspace);
+      if (input.rfq_id) {
+        const existing = await checkDataExists('rfq_analysis', input.rfq_id, workspace);
         if (existing.length > 0) {
-          await updateData('rfqAnalysis', { analysisId: input.analysis_id }, analysisPayload, workspace);
-          console.log(`[DB] RFQ analysis updated: ${input.analysis_id}`);
+          await updateData('rfqAnalysis', { rfqId: input.rfq_id }, analysisPayload, workspace);
+          console.log(`[DB] RFQ analysis updated: ${input.rfq_id}`);
           shouldInsert = false;
         }
       }
@@ -538,14 +553,14 @@ export async function modifyDatabase(
     if (input.data_type === 'supplier_search' && input.suppliers_search) {
       const searchPayload = buildSupplierSearchPayload({
         ...input.suppliers_search,
-        quotation_id: input.quotation_id,
+        rfq_id: input.rfq_id,
         rfq_reference: input.rfq_reference,
       });
 
       let shouldInsert = true;
 
-      if (input.search_id && input.quotation_id) {
-        const existing = await checkDataExists('supplier_search', input.quotation_id, workspace);
+      if (input.search_id && input.rfq_id) {
+        const existing = await checkDataExists('supplier_search', input.rfq_id, workspace);
         if (existing.length > 0) {
           await updateData('supplierSearch', { searchId: input.search_id }, searchPayload, workspace);
           console.log(`[DB] Supplier search updated: ${input.search_id}`);

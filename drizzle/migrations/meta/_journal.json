@@ -8,6 +8,13 @@
       "when": 1769131840591,
       "tag": "0000_yellow_rattler",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1769218240591,
+      "tag": "0001_schema_redesign",
+      "breakpoints": true
     }
   ]
 }

@@ -146,7 +146,7 @@ function transformResultToDocument(result: ProcessorResult): DocumentData | null
     case 'rfq_analysis': {
       // analysis-actions.ts returns: { summary, items, customerInfo, ... }
       const analysisData: RfqAnalysisDocumentData = {
-        analysis_id: null,
+        rfq_id: null,
         subject: (data.summary as string)?.substring(0, 100) || 'RFQ Analysis',
         analysis_content: (data.summary as string) || '',
       };

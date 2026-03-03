@@ -40,6 +40,7 @@ export interface ProcessorInput {
   action_type: ActionType;
   session_id?: string;
   quotation_id?: number;
+  rfq_id?: number;
   rfq_reference?: string;
   comments?: string;                    // Optional user comments for manual_update
   quotation_data?: QuotationData;       // For quotation data_type
@@ -125,7 +126,7 @@ interface EmailData {
 
 /** RFQ analysis data structure */
 interface AnalysisData {
-  analysis_id?: number;
+  rfq_id?: number;
   subject: string;
   analysis_content: string;
   [key: string]: unknown;
@@ -484,15 +485,16 @@ function validateEmail(input: ProcessorInput): ProcessorInput {
 
 /**
  * Validate rfq_analysis data_type (analyze, reanalyze)
- * Checks: quotation_id, rfq_reference, analysis object with subject/content
+ * Checks: rfq_id (optional for new analysis), rfq_reference, analysis object with subject/content
  * @param input - Raw input
  * @returns Validated input
  */
 function validateRfqAnalysis(input: ProcessorInput): ProcessorInput {
-  // quotation_id is required
-  if (!input.quotation_id) throw new Error('quotation_id is required for rfq_analysis data_type');
-  const qId = parseInt(String(input.quotation_id));
-  if (isNaN(qId) || qId <= 0) throw new Error('quotation_id must be a positive integer');
+  // rfq_id is optional (auto-generated on first insert), but must be valid if provided
+  if (input.rfq_id != null) {
+    const rId = parseInt(String(input.rfq_id));
+    if (isNaN(rId) || rId <= 0) throw new Error('rfq_id must be a positive integer');
+  }
 
   // rfq_reference is required
   if (!input.rfq_reference) throw new Error('rfq_reference is required for rfq_analysis data_type');
@@ -521,15 +523,16 @@ function validateRfqAnalysis(input: ProcessorInput): ProcessorInput {
 
 /**
  * Validate supplier_search data_type (search, research)
- * Checks: quotation_id, rfq_reference, search object with subject/content
+ * Checks: rfq_id (optional for new search), rfq_reference, search object with subject/content
  * @param input - Raw input
  * @returns Validated input
  */
 function validateSuppliersSearch(input: ProcessorInput): ProcessorInput {
-  // quotation_id is required
-  if (!input.quotation_id) throw new Error('quotation_id is required for supplier_search data_type');
-  const qId = parseInt(String(input.quotation_id));
-  if (isNaN(qId) || qId <= 0) throw new Error('quotation_id must be a positive integer');
+  // rfq_id is optional (resolved from rfq_reference if not provided), but must be valid if provided
+  if (input.rfq_id != null) {
+    const rId = parseInt(String(input.rfq_id));
+    if (isNaN(rId) || rId <= 0) throw new Error('rfq_id must be a positive integer');
+  }
 
   // rfq_reference is required
   if (!input.rfq_reference) throw new Error('rfq_reference is required for supplier_search data_type');

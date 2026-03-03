@@ -18,8 +18,12 @@ import {
   bigint,
   inet,
   primaryKey,
+  unique,
+  check,
+  index,
 } from 'drizzle-orm/pg-core';
 import { customType } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 // ============================================
 // 1. CLIENT_COMPANY TABLE
@@ -50,7 +54,7 @@ export const clientInfo = pgTable('client_info', {
   clientId: serial('client_id').primaryKey(),
 
   // Foreign key reference to company
-  companyId: integer('company_id'),
+  companyId: integer('company_id').references(() => clientCompany.companyId),
 
   // Authentication credentials
   username: varchar('username', { length: 50 }).notNull(),
@@ -75,14 +79,90 @@ export const clientInfo = pgTable('client_info', {
 });
 
 // ============================================
-// 3. CUSTOMERS TABLE
+// 3. RFQ_ANALYSIS TABLE (root entity — entry point)
 // ============================================
-export const customers = pgTable('customers', {
-  // Primary key - Quotation ID (acts as customer identifier)
+export const rfqAnalysis = pgTable('rfq_analysis', {
+  // Primary key - RENAMED from analysis_id to rfq_id
+  rfqId: serial('rfq_id').primaryKey(),
+
+  // Foreign keys — company_id is NOT NULL tenant FK
+  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
+  clientId: integer('client_id'),
+
+  // RFQ identification — NOT NULL
+  rfqReference: varchar('rfq_reference', { length: 100 }).notNull(),
+  subject: text('subject'),
+
+  // Analysis content
+  analysisContent: text('analysis_content'),
+
+  // Analysis status
+  analysisStatus: varchar('analysis_status', { length: 30 }).default('completed'),
+
+  // Timestamps
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false })
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+// ============================================
+// 4. QUOTATIONS TABLE — now references parent RFQ
+// ============================================
+export const quotations = pgTable('quotations', {
+  // Primary key - Auto-incrementing quotation ID
   quotationId: serial('quotation_id').primaryKey(),
 
-  // Foreign keys
-  companyId: integer('company_id'),
+  // NEW: FK to rfq_analysis (the parent RFQ)
+  rfqId: integer('rfq_id').notNull().references(() => rfqAnalysis.rfqId, { onDelete: 'cascade' }),
+
+  // Foreign keys — company_id is NOT NULL tenant FK
+  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
+  clientId: integer('client_id'),
+
+  // Quotation identification
+  rfqReference: varchar('rfq_reference', { length: 100 }),
+  quotationName: text('quotation_name'),
+
+  // REMOVED: quotation_html (JSON-as-Source-of-Truth replaces HTML rendering)
+
+  // Quotation status and versioning
+  quotationStatus: varchar('quotation_status', { length: 30 }).default('draft'),
+  versionNumber: integer('version_number').default(1),
+
+  // Financial summary
+  totalAmount: numeric('total_amount', { precision: 15, scale: 2 }),
+  transferCurrencyCode: varchar('transfer_currency_code', { length: 3 }),
+
+  // Commercial terms
+  commercialTerms: text('commercial_terms'),
+
+  // Metadata
+  generatedDay: date('generated_day'),
+  createdBy: varchar('created_by', { length: 100 }),
+
+  // Timestamps
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false })
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+}, (table) => ({
+  // Unique constraint: one quotation per RFQ per version
+  uqRfqVersion: unique('uq_quotations_rfq_version').on(table.rfqId, table.versionNumber),
+}));
+
+// ============================================
+// 5. CUSTOMERS TABLE — PK renamed to customer_id
+// ============================================
+export const customers = pgTable('customers', {
+  // Primary key - RENAMED from quotation_id to customer_id
+  customerId: serial('customer_id').primaryKey(),
+
+  // FK to quotations (was previously the PK, now a proper FK)
+  quotationId: integer('quotation_id').references(() => quotations.quotationId, { onDelete: 'cascade' }),
+
+  // Foreign keys — company_id NOT NULL
+  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
   clientId: integer('client_id'),
 
   // Customer company information
@@ -107,16 +187,20 @@ export const customers = pgTable('customers', {
 });
 
 // ============================================
-// 4. EMAIL_TABLE
+// 6. EMAIL_TABLE — can belong to either lifecycle stage
 // ============================================
 export const emailTable = pgTable('email_table', {
   // Primary key - Auto-incrementing email ID
   emailId: serial('email_id').primaryKey(),
 
+  // NEW: FK to rfq_analysis (for RFQ-stage emails)
+  rfqId: integer('rfq_id').references(() => rfqAnalysis.rfqId, { onDelete: 'set null' }),
+
   // Foreign keys
-  companyId: integer('company_id'),
-  quotationId: integer('quotation_id'),
+  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
+  quotationId: integer('quotation_id').references(() => quotations.quotationId, { onDelete: 'set null' }),
   clientId: integer('client_id'),
+
   // Email metadata
   rfqReference: varchar('rfq_reference', { length: 100 }),
   recipientEmail: varchar('recipient_email', { length: 255 }),
@@ -134,10 +218,15 @@ export const emailTable = pgTable('email_table', {
   updatedAt: timestamp('updated_at', { withTimezone: false })
     .defaultNow()
     .$onUpdate(() => new Date()),
-});
+}, (table) => ({
+  // CHECK: every email must belong to at least one stage
+  chkEmailHasParent: check('chk_email_has_parent',
+    sql`${table.rfqId} IS NOT NULL OR ${table.quotationId} IS NOT NULL`
+  ),
+}));
 
 // ============================================
-// 5. FILE_METADATA TABLE
+// 7. FILE_METADATA TABLE — add RFQ/quotation linkage
 // ============================================
 export const bytea = customType<{ data: Buffer }>({
   dataType() {
@@ -149,8 +238,14 @@ export const fileMetadata = pgTable('file_metadata', {
   // Primary key - Auto-incrementing file ID
   fileId: serial('file_id').primaryKey(),
 
-  // Foreign keys
-  companyId: integer('company_id'),
+  // NEW: FK to rfq_analysis (original RFQ attachments)
+  rfqId: integer('rfq_id').references(() => rfqAnalysis.rfqId, { onDelete: 'set null' }),
+
+  // NEW: FK to quotations (generated quotation documents)
+  quotationId: integer('quotation_id').references(() => quotations.quotationId, { onDelete: 'set null' }),
+
+  // Foreign keys — company_id NOT NULL
+  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
   clientId: integer('client_id'),
 
   // File information
@@ -172,15 +267,15 @@ export const fileMetadata = pgTable('file_metadata', {
 });
 
 // ============================================
-// 6. QUOTATION_ITEMS TABLE
+// 8. QUOTATION_ITEMS TABLE
 // ============================================
 export const quotationItems = pgTable('quotation_items', {
   // Primary key - Auto-incrementing item ID
   itemId: serial('item_id').primaryKey(),
 
-  // Foreign keys
-  companyId: integer('company_id'),
-  quotationId: integer('quotation_id').notNull(),
+  // Foreign keys — company_id NOT NULL, quotation_id FK
+  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
+  quotationId: integer('quotation_id').notNull().references(() => quotations.quotationId, { onDelete: 'cascade' }),
   clientId: integer('client_id'),
 
   // Item descriptions
@@ -204,15 +299,15 @@ export const quotationItems = pgTable('quotation_items', {
 });
 
 // ============================================
-// 7. QUOTATION_PRICING TABLE
+// 9. QUOTATION_PRICING TABLE
 // ============================================
 export const quotationPricing = pgTable('quotation_pricing', {
   // Primary key - Item ID (linked to quotation_items)
   itemId: serial('item_id').primaryKey(),
 
-  // Foreign keys
-  companyId: integer('company_id'),
-  quotationId: integer('quotation_id').notNull(),
+  // Foreign keys — company_id NOT NULL, quotation_id FK
+  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
+  quotationId: integer('quotation_id').notNull().references(() => quotations.quotationId, { onDelete: 'cascade' }),
   clientId: integer('client_id'),
 
   // Pricing calculations
@@ -231,75 +326,6 @@ export const quotationPricing = pgTable('quotation_pricing', {
 
   // Exchange rate (6 decimal places for precision)
   exchangeRate: numeric('exchange_rate', { precision: 15, scale: 6 }),
-
-  // Timestamps
-  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: false })
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-});
-
-// ============================================
-// 8. QUOTATIONS TABLE
-// ============================================
-export const quotations = pgTable('quotations', {
-  // Primary key - Auto-incrementing quotation ID
-  quotationId: serial('quotation_id').primaryKey(),
-
-  // Foreign keys
-  companyId: integer('company_id'),
-  clientId: integer('client_id'),
-
-  // Quotation identification
-  rfqReference: varchar('rfq_reference', { length: 100 }),
-  quotationName: text('quotation_name'),
-
-  // Generated HTML content
-  quotationHtml: text('quotation_html'),
-
-  // Quotation status and versioning
-  quotationStatus: varchar('quotation_status', { length: 30 }).default('draft'),
-  versionNumber: integer('version_number').default(1),
-
-  // Financial summary
-  totalAmount: numeric('total_amount', { precision: 15, scale: 2 }),
-  transferCurrencyCode: varchar('transfer_currency_code', { length: 3 }),
-
-  // Commercial terms
-  commercialTerms: text('commercial_terms'),
-
-  // Metadata
-  generatedDay: date('generated_day'),
-  createdBy: varchar('created_by', { length: 100 }),
-
-  // Timestamps
-  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: false })
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-});
-
-// ============================================
-// 9. RFQ_ANALYSIS TABLE
-// ============================================
-export const rfqAnalysis = pgTable('rfq_analysis', {
-  // Primary key - Auto-incrementing analysis ID
-  analysisId: serial('analysis_id').primaryKey(),
-
-  // Foreign keys
-  companyId: integer('company_id'),
-  quotationId: integer('quotation_id'),
-  clientId: integer('client_id'),
-
-  // RFQ identification
-  rfqReference: varchar('rfq_reference', { length: 100 }),
-  subject: text('subject'),
-
-  // Analysis content
-  analysisContent: text('analysis_content'),
-
-  // Analysis status
-  analysisStatus: varchar('analysis_status', { length: 30 }).default('completed'),
 
   // Timestamps
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
@@ -361,15 +387,17 @@ export const sseConnections = pgTable('sse_connections', {
 });
 
 // ============================================
-// 12. SUPPLIER_SEARCH TABLE
+// 12. SUPPLIER_SEARCH TABLE — belongs to RFQ stage
 // ============================================
 export const supplierSearch = pgTable('supplier_search', {
   // Primary key - Auto-incrementing search ID
   searchId: serial('search_id').primaryKey(),
 
-  // Foreign keys
-  companyId: integer('company_id'),
-  quotationId: integer('quotation_id'),
+  // CHANGED: quotation_id → rfq_id (supplier search happens during RFQ stage)
+  rfqId: integer('rfq_id').notNull().references(() => rfqAnalysis.rfqId, { onDelete: 'cascade' }),
+
+  // Foreign keys — company_id NOT NULL
+  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
   clientId: integer('client_id'),
 
   // Search identification
