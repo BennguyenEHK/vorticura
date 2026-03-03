@@ -68,7 +68,11 @@
       "Bash(cmd /c \"for %I in \\(\"\"C:\\\\Users\\\\LENOVO\\\\OneDrive\\\\M?y t?nh\"\"\\) do echo %~sI\")",
       "Bash(cmd /c \"dir /x C:\\\\Users\\\\LENOVO\\\\OneDrive\\\\ 2>&1 && echo DONE\")",
       "Bash(cmd /c \"dir lib 2>&1 && echo ---DONE---\")",
-      "Bash(cmd /c \"dir lib 2>&1\")"
+      "Bash(cmd /c \"dir lib 2>&1\")",
+      "Bash(npx drizzle-kit:*)",
+      "Bash(npx tsx:*)",
+      "Bash(rm:*)",
+      "Bash(node:*)"
     ]
   },
   "prefersReducedMotion": false

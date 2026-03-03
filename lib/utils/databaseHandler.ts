@@ -144,7 +144,7 @@ export function buildCustomerPayload(data: Record<string, unknown>, update = fal
   const payload: Payload = {};
   const ci = (data.customer_info || {}) as Record<string, unknown>;
 
-  if (!update && data.quotation_id != null) payload.quotationId = data.quotation_id;
+  if (!update && data.rfq_id != null) payload.rfqId = data.rfq_id;
   if (ci.company_name != null) payload.companyName = String(ci.company_name);
   if (ci.attention_person != null) payload.attentionPerson = String(ci.attention_person);
   if (ci.carbon_copy_person != null) {
@@ -315,9 +315,8 @@ export async function checkDataExists(
         filterColumn = 'companyId';
         break;
       case 'rfq_analysis':
-        filterColumn = 'rfqId';
-        break;
       case 'supplier_search':
+      case 'customers':
         filterColumn = 'rfqId';
         break;
       default:
@@ -378,17 +377,17 @@ export async function modifyDatabase(
         console.log(`[DB] Quotation inserted (auto-ID): ${qd.quotation_id}`);
       }
 
-      // STEP 2: CUSTOMERS table (uses quotationId as FK now, not PK)
-      if (qd.customer_info && qd.quotation_id) {
-        const existingCustomer = await checkDataExists('customers', qd.quotation_id, workspace);
+      // STEP 2: CUSTOMERS table (uses rfqId as FK — customer known at RFQ stage)
+      if (qd.customer_info && qd.rfq_id) {
+        const existingCustomer = await checkDataExists('customers', qd.rfq_id, workspace);
         if (existingCustomer.length > 0) {
           const payload = buildCustomerPayload(qd as unknown as Record<string, unknown>, true);
-          await updateData('customers', { quotationId: qd.quotation_id }, payload, workspace);
-          console.log(`[DB] Customer updated for quotation: ${qd.quotation_id}`);
+          await updateData('customers', { rfqId: qd.rfq_id }, payload, workspace);
+          console.log(`[DB] Customer updated for rfq: ${qd.rfq_id}`);
         } else {
           const payload = buildCustomerPayload(qd as unknown as Record<string, unknown>, false);
           await insertData('customers', {}, payload, workspace);
-          console.log(`[DB] Customer inserted for quotation: ${qd.quotation_id}`);
+          console.log(`[DB] Customer inserted for rfq: ${qd.rfq_id}`);
         }
       }
 

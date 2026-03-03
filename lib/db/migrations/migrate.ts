@@ -3,7 +3,7 @@
 // =============================================
 // Purpose: Run Drizzle ORM migrations to update database schema
 
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import { migrate } from 'drizzle-orm/neon-serverless/migrator';
 import { db, pool } from '../client';
 
 /**

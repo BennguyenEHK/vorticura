@@ -158,8 +158,8 @@ export const customers = pgTable('customers', {
   // Primary key - RENAMED from quotation_id to customer_id
   customerId: serial('customer_id').primaryKey(),
 
-  // FK to quotations (was previously the PK, now a proper FK)
-  quotationId: integer('quotation_id').references(() => quotations.quotationId, { onDelete: 'cascade' }),
+  // FK to rfq_analysis (customer is known at RFQ stage)
+  rfqId: integer('rfq_id').references(() => rfqAnalysis.rfqId, { onDelete: 'cascade' }),
 
   // Foreign keys — company_id NOT NULL
   companyId: integer('company_id').notNull().references(() => clientCompany.companyId),

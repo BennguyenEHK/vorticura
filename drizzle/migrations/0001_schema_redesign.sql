@@ -6,6 +6,17 @@
 -- Ordered to respect FK dependencies (parents before children)
 
 -- =============================================
+-- PHASE 0: DROP TRIGGERS that reference old column names
+-- =============================================
+-- Neon may have triggers referencing analysis_id — must drop before rename
+DROP TRIGGER IF EXISTS trigger_fill_analysis_id ON "rfq_analysis";
+--> statement-breakpoint
+DROP TRIGGER IF EXISTS before_insert_rfq_analysis ON "rfq_analysis";
+--> statement-breakpoint
+DROP FUNCTION IF EXISTS trigger_fill_analysis_id() CASCADE;
+--> statement-breakpoint
+
+-- =============================================
 -- PHASE A: RENAME PK + ADD NEW COLUMNS (nullable, no constraints yet)
 -- =============================================
 
