@@ -184,6 +184,6 @@ function updateStats(actionType: string): void {
 /**
  * Get processing statistics snapshot
  */
-export function getStats(): ProcessingStats {
+export async function getStats(): Promise<ProcessingStats> {
   return { ...stats };
 }
