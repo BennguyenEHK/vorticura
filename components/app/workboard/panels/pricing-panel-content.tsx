@@ -117,12 +117,12 @@ function PricingPanelInner({ className = "" }: { className?: string }) {
       <ItemSearch className="mb-2" />
 
       {/* Currency selector — pinned above scroll */}
-      <div className="mb-2">
+      <div className="mb-2 border-t border-border pt-2">
         <CurrencySelector />
       </div>
 
       {/* Scrollable item list — min-h-24 keeps gap when empty */}
-      <div className="flex-1 overflow-y-auto min-h-24">
+      <div className="flex-1 overflow-y-auto min-h-50 border-t border-border pt-2">
         <PricingItemList />
       </div>
 
