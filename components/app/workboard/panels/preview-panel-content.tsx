@@ -251,7 +251,7 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
       {/* ============================================================ */}
       {/* DOCUMENT CONTENT — Routes to correct component               */}
       {/* ============================================================ */}
-      <div className="flex-1 overflow-auto bg-secondary p-4">
+      <div className="flex-1 overflow-auto bg-background p-4">
         {state.isLoading && (
           <div className="flex items-center justify-center h-full text-muted-foreground">
             Loading document...
