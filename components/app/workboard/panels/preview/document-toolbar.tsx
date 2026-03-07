@@ -11,6 +11,7 @@ interface DocumentToolbarProps {
   isEditing: boolean;
   canUndo: boolean;
   canRedo: boolean;
+  hasDocument: boolean;
   onToggleEdit: () => void;
   onUndo: () => void;
   onRedo: () => void;
@@ -25,6 +26,7 @@ export function DocumentToolbar({
   isEditing,
   canUndo,
   canRedo,
+  hasDocument,
   onToggleEdit,
   onUndo,
   onRedo,
@@ -64,7 +66,7 @@ export function DocumentToolbar({
         size="icon"
         className="h-7 w-7"
         onClick={isEditing ? onSave : onToggleEdit}
-        disabled={isSaving}
+        disabled={!hasDocument || isSaving}
         title={isEditing ? 'Save changes' : 'Edit document'}
       >
         {isEditing ? (
@@ -80,7 +82,7 @@ export function DocumentToolbar({
         size="icon"
         className="h-7 w-7"
         onClick={onDownload}
-        disabled={isEditing}
+        disabled={!hasDocument || isEditing}
         title="Download document"
       >
         <Download className="w-3.5 h-3.5" />

@@ -219,21 +219,20 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
           })}
         </div>
 
-        {state.activeDocument && (
-          <DocumentToolbar
-            isEditing={state.isEditing}
-            canUndo={state.history.length > 0}
-            canRedo={state.future.length > 0}
-            onToggleEdit={() => actions.toggleEdit()}
-            onUndo={() => actions.undo()}
-            onRedo={() => actions.redo()}
-            onSave={handleSave}
-            onDownload={handleDownload}
-            onToggleHistory={handleToggleHistory}
-            isHistoryOpen={isHistoryOpen}
-            isSaving={isSaving}
-          />
-        )}
+        <DocumentToolbar
+          isEditing={state.isEditing}
+          canUndo={state.history.length > 0}
+          canRedo={state.future.length > 0}
+          hasDocument={!!state.activeDocument}
+          onToggleEdit={() => actions.toggleEdit()}
+          onUndo={() => actions.undo()}
+          onRedo={() => actions.redo()}
+          onSave={handleSave}
+          onDownload={handleDownload}
+          onToggleHistory={handleToggleHistory}
+          isHistoryOpen={isHistoryOpen}
+          isSaving={isSaving}
+        />
       </div>
 
       {/* ============================================================ */}
