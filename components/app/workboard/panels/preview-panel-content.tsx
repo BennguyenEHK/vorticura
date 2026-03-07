@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { handleHTTPRequest } from '@/lib/data-processor';
 
 // Hooks
-import { usePreviewReducer } from '@/hooks/use-preview-reducer';
+import { usePreview } from '@/hooks/preview-context';
 import { usePreviewSSE } from '@/hooks/use-preview-sse';
 
 // Document components
@@ -57,7 +57,7 @@ interface PreviewPanelContentProps {
 }
 
 export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps) {
-  const { state, actions } = usePreviewReducer();
+  const { state, actions } = usePreview();
   const [isSaving, setIsSaving] = useState(false);
 
   // History panel state

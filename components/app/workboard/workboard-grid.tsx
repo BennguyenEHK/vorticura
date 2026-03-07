@@ -51,6 +51,7 @@ import { WorkflowPanelContent } from "./panels/workflow-panel-content";
 import { PricingPanelContent } from "./panels/pricing-panel-content";
 import { PreviewPanelContent } from "./panels/preview-panel-content";
 import { AIChatPanel } from "../ai-chat/ai-chat-panel";
+import { PreviewProvider } from "@/hooks/preview-context";
 
 // =============================================
 // Grid Component
@@ -416,6 +417,7 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
   // =============================================
 
   return (
+    <PreviewProvider>
     <WorkboardDropZone className={className}>
       {/* Container div with ref for width measurement */}
       <div
@@ -469,5 +471,6 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
         )}
       </div>
     </WorkboardDropZone>
+    </PreviewProvider>
   );
 }
