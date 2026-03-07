@@ -6,7 +6,7 @@
 // Future: swap eventBus for Redis Pub/Sub subscriber
 
 import { eventBus } from '@/lib/event-bus';
-import type { ProcessorResult } from '@/lib/data-processor';
+import type { ProcessorResult } from '@/lib/utils/validator';
 
 // Disable static optimization — SSE must be dynamic
 export const dynamic = 'force-dynamic';

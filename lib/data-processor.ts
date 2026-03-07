@@ -24,9 +24,6 @@ import {
   type ActionType,
 } from './utils/validator';
 
-// Re-export types for consumers
-export type { ProcessorInput, ProcessorResult, DataType, ActionType };
-
 // ========== PROCESSOR MODULES ==========
 import { processQuotation } from './actions/quotation-actions';
 import { processEmail } from './actions/email-actions';
