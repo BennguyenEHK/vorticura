@@ -23,9 +23,12 @@ import {
   RfqAnalysisDocument,
   SupplierSearchDocument,
   DocumentToolbar,
+  WorkboardHistory,
+  BlankDocument,
 } from './preview';
 
-import type { DocumentData } from '@/types/preview';
+import { getWorkboardSnapshots, getSnapshotById } from '@/lib/actions/snapshot-actions';
+import type { DocumentData, WorkboardSnapshotRecord } from '@/types/preview';
 import type { DataType } from '@/lib/utils/validator';
 
 // ---------------------------------------------
@@ -39,10 +42,10 @@ const DATA_TYPE_TABS: Array<{
   icon: typeof FileText;
   color: string;
 }> = [
-  { type: 'quotation', label: 'Quotation', icon: FileText, color: 'text-blue-600' },
-  { type: 'email', label: 'Email', icon: Mail, color: 'text-purple-600' },
-  { type: 'rfq_analysis', label: 'RFQ Analysis', icon: BarChart3, color: 'text-amber-600' },
-  { type: 'supplier_search', label: 'Suppliers', icon: Search, color: 'text-green-600' },
+  { type: 'quotation', label: 'Quotation', icon: FileText, color: 'text-doc-quotation' },
+  { type: 'email', label: 'Email', icon: Mail, color: 'text-doc-email' },
+  { type: 'rfq_analysis', label: 'RFQ Analysis', icon: BarChart3, color: 'text-doc-analysis' },
+  { type: 'supplier_search', label: 'Suppliers', icon: Search, color: 'text-doc-supplier' },
 ];
 
 // ---------------------------------------------
@@ -56,6 +59,11 @@ interface PreviewPanelContentProps {
 export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps) {
   const { state, actions } = usePreviewReducer();
   const [isSaving, setIsSaving] = useState(false);
+
+  // History panel state
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [snapshots, setSnapshots] = useState<WorkboardSnapshotRecord[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
   // SSE: receive documents from server and load into reducer
   const handleDocumentReceived = useCallback(
@@ -114,22 +122,101 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
     window.print();
   }, [state.activeDocument]);
 
+  // Toggle history panel and load snapshots
+  const handleToggleHistory = useCallback(async () => {
+    const opening = !isHistoryOpen;
+    setIsHistoryOpen(opening);
+
+    if (opening) {
+      setIsHistoryLoading(true);
+      try {
+        // TODO: Replace with real rfqId and workspace from context
+        // For now uses placeholder — will be wired when RFQ context is available
+        const rfqId = (state.activeDocument?.type === 'rfq_analysis'
+          ? (state.activeDocument.data as any).rfq_id
+          : null) as number | null;
+
+        if (rfqId) {
+          const result = await getWorkboardSnapshots(rfqId, {
+            client_id: 1,
+            company_id: 1,
+          });
+          if (result.success && result.data) {
+            setSnapshots(result.data as WorkboardSnapshotRecord[]);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load snapshots:', err);
+      } finally {
+        setIsHistoryLoading(false);
+      }
+    }
+  }, [isHistoryOpen, state.activeDocument]);
+
+  // Revert to a specific snapshot
+  const handleRevert = useCallback(async (snapshotId: number) => {
+    try {
+      // TODO: Replace with real workspace from context
+      const result = await getSnapshotById(snapshotId, {
+        client_id: 1,
+        company_id: 1,
+      });
+
+      if (result.success && result.data) {
+        const snapshot = result.data;
+
+        // Load panels snapshot into preview reducer
+        if (snapshot.panelsSnapshot?.preview) {
+          actions.loadDocument(snapshot.panelsSnapshot.preview as DocumentData);
+        }
+
+        // Close history panel after revert
+        setIsHistoryOpen(false);
+      }
+    } catch (err) {
+      actions.setError(err instanceof Error ? err.message : 'Revert failed');
+    }
+  }, [actions]);
+
   // Determine active tab from current document type
   const activeType = state.activeDocument?.type || null;
 
   return (
     <div className={`flex flex-col h-full ${className}`}>
       {/* ============================================================ */}
-      {/* HEADER: Title + Toolbar                                       */}
+      {/* HEADER: Title + Editing indicator                              */}
       {/* ============================================================ */}
-      <div className="flex items-center justify-between px-4 pt-3 pb-2">
-        <div>
-          <h3 className="text-sm font-medium text-foreground">Document Preview</h3>
-          {state.isEditing && (
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Editing — changes tracked for undo/redo
-            </p>
-          )}
+      <div className="px-4 pt-3 pb-2">
+        <h3 className="text-sm font-medium text-foreground">Document Preview</h3>
+        {state.isEditing && (
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Editing — changes tracked for undo/redo
+          </p>
+        )}
+      </div>
+
+      {/* ============================================================ */}
+      {/* DATA TYPE TABS + TOOLBAR — Tabs left, actions right           */}
+      {/* ============================================================ */}
+      <div className="flex items-center justify-between px-4 pb-2 border-b border-border">
+        <div className="flex items-center gap-1">
+          {DATA_TYPE_TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeType === tab.type;
+
+            return (
+              <Button
+                key={tab.type}
+                variant={isActive ? 'default' : 'ghost'}
+                size="sm"
+                className={`h-7 text-xs gap-1 ${isActive ? '' : 'text-muted-foreground'}`}
+                disabled={!state.activeDocument || state.activeDocument.type !== tab.type}
+              >
+                <Icon className={`w-3 h-3 ${isActive ? '' : tab.color}`} />
+                {tab.label}
+              </Button>
+            );
+          })}
         </div>
 
         {state.activeDocument && (
@@ -142,39 +229,30 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
             onRedo={() => actions.redo()}
             onSave={handleSave}
             onDownload={handleDownload}
+            onToggleHistory={handleToggleHistory}
+            isHistoryOpen={isHistoryOpen}
             isSaving={isSaving}
           />
         )}
       </div>
 
       {/* ============================================================ */}
-      {/* DATA TYPE TABS — Filter by document type                     */}
-      {/* Same pattern as AuthForm switching between login/signup      */}
+      {/* HISTORY PANEL (collapsible)                                   */}
       {/* ============================================================ */}
-      <div className="flex items-center gap-1 px-4 pb-2 border-b border-border">
-        {DATA_TYPE_TABS.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeType === tab.type;
-
-          return (
-            <Button
-              key={tab.type}
-              variant={isActive ? 'default' : 'ghost'}
-              size="sm"
-              className={`h-7 text-xs gap-1 ${isActive ? '' : 'text-muted-foreground'}`}
-              disabled={!state.activeDocument || state.activeDocument.type !== tab.type}
-            >
-              <Icon className={`w-3 h-3 ${isActive ? '' : tab.color}`} />
-              {tab.label}
-            </Button>
-          );
-        })}
-      </div>
+      {isHistoryOpen && (
+        <div className="border-b border-border bg-muted/30">
+          <WorkboardHistory
+            snapshots={snapshots}
+            onRevert={handleRevert}
+            isLoading={isHistoryLoading}
+          />
+        </div>
+      )}
 
       {/* ============================================================ */}
       {/* DOCUMENT CONTENT — Routes to correct component               */}
       {/* ============================================================ */}
-      <div className="flex-1 overflow-auto bg-gray-100 p-4">
+      <div className="flex-1 overflow-auto bg-secondary p-4">
         {state.isLoading && (
           <div className="flex items-center justify-center h-full text-muted-foreground">
             Loading document...
@@ -182,16 +260,13 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
         )}
 
         {state.error && (
-          <div className="flex items-center justify-center h-full text-red-500 text-sm">
+          <div className="flex items-center justify-center h-full text-error text-sm">
             {state.error}
           </div>
         )}
 
         {!state.activeDocument && !state.isLoading && !state.error && (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <FileText className="w-12 h-12 mb-3 opacity-30" />
-            <p className="text-sm">Generated documents will appear here</p>
-          </div>
+          <BlankDocument />
         )}
 
         {/* Route to correct document component based on data_type */}

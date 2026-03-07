@@ -111,6 +111,12 @@
   --color-icon-circle-start: var(--icon-circle-start); /* from-icon-circle-start = icon bg gradient start */
   --color-icon-circle-end: var(--icon-circle-end);     /* to-icon-circle-end = icon bg gradient end */
 
+  /* ----- Document Type Icon Tokens ----- */
+  --color-doc-quotation: var(--doc-quotation);   /* text-doc-quotation = blue icon */
+  --color-doc-email: var(--doc-email);           /* text-doc-email = purple icon */
+  --color-doc-analysis: var(--doc-analysis);     /* text-doc-analysis = amber icon */
+  --color-doc-supplier: var(--doc-supplier);     /* text-doc-supplier = green icon */
+
   /* ----- Chart Tokens ----- */
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -219,6 +225,12 @@
   --border: oklch(0.929 0.009 264.182);            /* #e2e8f0 - slate-200 */
   --input: oklch(0.929 0.009 264.182);             /* #e2e8f0 - slate-200 */
   --ring: oklch(0.704 0.025 264.182);              /* #94a3b8 - slate-400 */
+
+  /* ----- Document Type Icon Colors ----- */
+  --doc-quotation: oklch(0.546 0.245 262.881);     /* #2563eb - blue-600 */
+  --doc-email: oklch(0.558 0.288 302.321);         /* #9333ea - purple-600 */
+  --doc-analysis: oklch(0.666 0.179 58.318);       /* #d97706 - amber-600 */
+  --doc-supplier: oklch(0.627 0.194 149.214);      /* #16a34a - green-600 */
 
   /* ----- Chart Colors (Feature card gradients) ----- */
   --chart-1: oklch(0.685 0.169 237.323);           /* sky-500 - AI Quotation */
@@ -331,6 +343,12 @@
   --border: oklch(1 0 0 / 10%);                    /* white/10% */
   --input: oklch(1 0 0 / 15%);                     /* white/15% */
   --ring: oklch(0.517 0.035 264.364);              /* slate-500 */
+
+  /* ----- Document Type Icon Colors (Dark Mode) ----- */
+  --doc-quotation: oklch(0.623 0.214 259.815);     /* #3b82f6 - blue-500 */
+  --doc-email: oklch(0.627 0.265 303.9);           /* #a855f7 - purple-500 */
+  --doc-analysis: oklch(0.769 0.188 70.08);        /* #f59e0b - amber-500 */
+  --doc-supplier: oklch(0.723 0.219 149.579);      /* #22c55e - green-500 */
 
   /* ----- Chart Colors (Adjusted for dark) ----- */
   --chart-1: oklch(0.488 0.243 264.376);           /* indigo variant */

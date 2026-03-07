@@ -4,7 +4,7 @@
 
 'use client';
 
-import { Edit, Save, Undo2, Redo2, Download } from 'lucide-react';
+import { Edit, Save, Undo2, Redo2, Download, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface DocumentToolbarProps {
@@ -16,6 +16,8 @@ interface DocumentToolbarProps {
   onRedo: () => void;
   onSave: () => void;
   onDownload: () => void;
+  onToggleHistory?: () => void;
+  isHistoryOpen?: boolean;
   isSaving?: boolean;
 }
 
@@ -28,35 +30,33 @@ export function DocumentToolbar({
   onRedo,
   onSave,
   onDownload,
+  onToggleHistory,
+  isHistoryOpen = false,
   isSaving = false,
 }: DocumentToolbarProps) {
   return (
     <div className="flex items-center gap-1">
-      {/* Undo/Redo (only visible in edit mode) */}
-      {isEditing && (
-        <>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={onUndo}
-            disabled={!canUndo}
-            title={`Undo (${canUndo ? 'available' : 'nothing to undo'})`}
-          >
-            <Undo2 className="w-3.5 h-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={onRedo}
-            disabled={!canRedo}
-            title={`Redo (${canRedo ? 'available' : 'nothing to redo'})`}
-          >
-            <Redo2 className="w-3.5 h-3.5" />
-          </Button>
-        </>
-      )}
+      {/* Undo/Redo — always visible, disabled when unavailable */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7"
+        onClick={onUndo}
+        disabled={!canUndo}
+        title={`Undo (${canUndo ? 'available' : 'nothing to undo'})`}
+      >
+        <Undo2 className="w-3.5 h-3.5" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7"
+        onClick={onRedo}
+        disabled={!canRedo}
+        title={`Redo (${canRedo ? 'available' : 'nothing to redo'})`}
+      >
+        <Redo2 className="w-3.5 h-3.5" />
+      </Button>
 
       {/* Edit / Save toggle */}
       <Button
@@ -68,7 +68,7 @@ export function DocumentToolbar({
         title={isEditing ? 'Save changes' : 'Edit document'}
       >
         {isEditing ? (
-          <Save className="w-3.5 h-3.5 text-green-600" />
+          <Save className="w-3.5 h-3.5 text-success" />
         ) : (
           <Edit className="w-3.5 h-3.5" />
         )}
@@ -85,6 +85,19 @@ export function DocumentToolbar({
       >
         <Download className="w-3.5 h-3.5" />
       </Button>
+
+      {/* History toggle */}
+      {onToggleHistory && (
+        <Button
+          variant={isHistoryOpen ? 'default' : 'ghost'}
+          size="icon"
+          className="h-7 w-7"
+          onClick={onToggleHistory}
+          title={isHistoryOpen ? 'Close history' : 'View history'}
+        >
+          <History className="w-3.5 h-3.5" />
+        </Button>
+      )}
     </div>
   );
 }
