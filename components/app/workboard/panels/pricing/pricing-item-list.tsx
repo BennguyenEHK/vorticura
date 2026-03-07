@@ -7,6 +7,7 @@
 // Manages bulk update popover state
 
 import { useState, useCallback, useMemo } from "react";
+import { PackageOpen } from "lucide-react";
 import { usePricingPanel } from "./pricing-panel-provider";
 import { PricingItemCard } from "./pricing-item-card";
 import { BulkUpdatePopover } from "./bulk-update-popover";
@@ -97,16 +98,19 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
     );
   };
 
-  // Empty state
+  // Empty state — placeholder card
   if (items.length === 0) {
     return (
-      <div className={`flex items-center justify-center p-8 ${className}`}>
-        <div className="text-center">
-          <p className="text-muted-foreground text-sm">
-            No quotation items loaded
+      <div className={`p-4 ${className}`}>
+        <div className="rounded-lg border-2 border-dashed border-border bg-muted/50 p-6 flex flex-col items-center justify-center text-center">
+          <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center mb-3">
+            <PackageOpen className="w-5 h-5 text-muted-foreground" />
+          </div>
+          <p className="text-sm font-medium text-foreground">
+            Item list will appear here
           </p>
-          <p className="text-placeholder text-xs mt-1">
-            Load a quotation to configure pricing variables
+          <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
+            Load a quotation to configure per-item pricing variables
           </p>
         </div>
       </div>
