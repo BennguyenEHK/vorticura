@@ -13,7 +13,7 @@
  * All functions enforce workspace isolation using WorkspaceContext directly
  */
 
-import { eq, SQL, and, count } from 'drizzle-orm';
+import { eq, SQL, and, count, desc, max } from 'drizzle-orm';
 import { PgTable } from 'drizzle-orm/pg-core';
 import { WorkspaceContext } from '@/lib/middleware/workspace-context'; // Direct usage, no helper wrapper
 import { db } from './client';
@@ -33,6 +33,7 @@ import {
   sseConnections,
   supplierSearch,
   userSessions,
+  workboardSnapshots,
 } from './schema';
 
 // =============================================
@@ -95,6 +96,7 @@ function getTableByName(tableName: string): PgTable {
     sseConnections,
     supplierSearch,
     userSessions,
+    workboardSnapshots,
   };
 
   const table = tableMap[tableName];
@@ -477,6 +479,119 @@ export async function deleteData(
 }
 
 // =============================================
+// 5️⃣ WORKBOARD SNAPSHOT QUERIES
+// =============================================
+
+/**
+ * Get the latest snapshot version for a given RFQ
+ * Used to auto-increment the version number when creating new snapshots
+ */
+export async function getLatestSnapshotVersion(
+  rfqId: number,
+  workspace: WorkspaceContext
+): Promise<number> {
+  try {
+    const filter = workspace.getDatabaseFilter();
+    const result = await db
+      .select({ maxVersion: max(workboardSnapshots.version) })
+      .from(workboardSnapshots)
+      .where(
+        and(
+          eq(workboardSnapshots.rfqId, rfqId),
+          eq(workboardSnapshots.companyId, filter.company_id)
+        )
+      );
+
+    return result[0]?.maxVersion ?? 0;
+  } catch (error) {
+    console.error('Failed to get latest snapshot version:', error);
+    throw new Error('Failed to get latest snapshot version.');
+  }
+}
+
+/**
+ * Insert a new workboard snapshot with workspace context
+ */
+export async function insertSnapshot(
+  data: {
+    rfqId: number;
+    version: number;
+    triggeredBy: string;
+    label: string | null;
+    panelsSnapshot: unknown;
+    workflowSnapshot: unknown;
+  },
+  workspace: WorkspaceContext
+): Promise<any> {
+  try {
+    const dataWithContext = workspace.injectWorkspaceContext(data);
+
+    const results = await db
+      .insert(workboardSnapshots)
+      .values(dataWithContext as any)
+      .returning();
+
+    return results[0] || null;
+  } catch (error) {
+    console.error('Failed to insert snapshot:', error);
+    throw new Error('Failed to insert snapshot.');
+  }
+}
+
+/**
+ * Get all snapshots for an RFQ, newest first
+ */
+export async function getSnapshotsByRfq(
+  rfqId: number,
+  workspace: WorkspaceContext
+): Promise<any[]> {
+  try {
+    const filter = workspace.getDatabaseFilter();
+    const results = await db
+      .select()
+      .from(workboardSnapshots)
+      .where(
+        and(
+          eq(workboardSnapshots.rfqId, rfqId),
+          eq(workboardSnapshots.companyId, filter.company_id)
+        )
+      )
+      .orderBy(desc(workboardSnapshots.version));
+
+    return results;
+  } catch (error) {
+    console.error('Failed to get snapshots by RFQ:', error);
+    throw new Error('Failed to get snapshots.');
+  }
+}
+
+/**
+ * Get a single snapshot by ID with workspace isolation
+ */
+export async function getSnapshotById(
+  snapshotId: number,
+  workspace: WorkspaceContext
+): Promise<any> {
+  try {
+    const filter = workspace.getDatabaseFilter();
+    const results = await db
+      .select()
+      .from(workboardSnapshots)
+      .where(
+        and(
+          eq(workboardSnapshots.snapshotId, snapshotId),
+          eq(workboardSnapshots.companyId, filter.company_id)
+        )
+      );
+
+    return results[0] || null;
+  } catch (error) {
+    console.error('Failed to get snapshot by ID:', error);
+    throw new Error('Failed to get snapshot.');
+  }
+}
+
+// =============================================
 // EXPORT TABLE REFERENCES
 // =============================================
 // Export all tables for direct access if needed
@@ -494,6 +609,7 @@ export {
   sseConnections,
   supplierSearch,
   userSessions,
+  workboardSnapshots,
 };
 
-// Functions are exported directly above (insertData, getData, getCount, updateData, deleteData)
+// Functions are exported directly above (insertData, getData, getCount, updateData, deleteData, snapshot queries)

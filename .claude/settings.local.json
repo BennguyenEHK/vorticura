@@ -72,7 +72,8 @@
       "Bash(npx drizzle-kit:*)",
       "Bash(npx tsx:*)",
       "Bash(rm:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(npx next:*)"
     ]
   },
   "prefersReducedMotion": false

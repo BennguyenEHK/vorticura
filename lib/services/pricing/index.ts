@@ -28,8 +28,12 @@ export {
   pricingCalculator,
 } from './pricing-calculator';
 
-// Export pricing manager
+// Export pricing manager server actions
 export {
-  PricingManager,
-  pricingManager,
+  getQuotationItems,
+  loadPricingVariables,
+  savePricingVariables,
+  saveCalculatedPricing,
+  loadPricingData,
+  initializeVariables,
 } from './pricing-manager';

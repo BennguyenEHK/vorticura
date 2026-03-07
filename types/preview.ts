@@ -3,6 +3,7 @@
 // =============================================
 
 import type { DataType } from '@/lib/utils/validator';
+import type { WorkflowStep, WorkflowStepId } from '@/types/workflow';
 
 // ---------------------------------------------
 // Seller Info (from CLIENT_COMPANY table)
@@ -147,3 +148,33 @@ export type PreviewAction =
   | { type: 'SET_LOADING'; isLoading: boolean }
   | { type: 'SET_ERROR'; error: string | null }
   | { type: 'CLEAR' };
+
+// ---------------------------------------------
+// Workboard Snapshot Types (Layer 2 versioning)
+// ---------------------------------------------
+
+/** Pricing data included in a snapshot */
+export interface PricingSnapshotData {
+  quotation_id: number | null;
+  items: Array<Record<string, unknown>>;
+  total_amount: number;
+  currency: string;
+}
+
+/** Full panels state captured in a snapshot */
+export interface PanelsSnapshot {
+  preview: DocumentData | null;
+  pricing: PricingSnapshotData | null;
+}
+
+/** A workboard snapshot record (maps to DB row) */
+export interface WorkboardSnapshotRecord {
+  snapshot_id: number;
+  rfq_id: number;
+  version: number;
+  triggered_by: WorkflowStepId;
+  label: string | null;
+  panels_snapshot: PanelsSnapshot;
+  workflow_snapshot: WorkflowStep[];
+  created_at: string;
+}

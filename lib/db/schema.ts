@@ -17,6 +17,7 @@ import {
   date,
   bigint,
   inet,
+  jsonb,
   primaryKey,
   unique,
   check,
@@ -446,6 +447,39 @@ export const userSessions = pgTable(
 );
 
 // ============================================
+// 14. WORKBOARD_SNAPSHOTS TABLE — persistent workboard versioning
+// ============================================
+export const workboardSnapshots = pgTable('workboard_snapshots', {
+  // Primary key
+  snapshotId: serial('snapshot_id').primaryKey(),
+
+  // FK to rfq_analysis (which RFQ this snapshot belongs to)
+  rfqId: integer('rfq_id').notNull().references(() => rfqAnalysis.rfqId, { onDelete: 'cascade' }),
+
+  // Tenant isolation
+  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
+  clientId: integer('client_id'),
+
+  // Snapshot versioning
+  version: integer('version').notNull(),
+
+  // The workflow step that triggered this snapshot
+  triggeredBy: varchar('triggered_by', { length: 50 }).notNull(),
+
+  // Snapshot label (e.g., "Analysis accepted")
+  label: text('label'),
+
+  // Full workboard state as JSON
+  panelsSnapshot: jsonb('panels_snapshot').notNull(),
+  workflowSnapshot: jsonb('workflow_snapshot').notNull(),
+
+  // Timestamps
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  uqRfqVersion: unique('uq_workboard_snapshots_rfq_version').on(table.rfqId, table.version),
+}));
+
+// ============================================
 // TYPE EXPORTS
 // ============================================
 // Export inferred types for TypeScript usage
@@ -487,3 +521,6 @@ export type NewSupplierSearch = typeof supplierSearch.$inferInsert;
 
 export type UserSession = typeof userSessions.$inferSelect;
 export type NewUserSession = typeof userSessions.$inferInsert;
+
+export type WorkboardSnapshot = typeof workboardSnapshots.$inferSelect;
+export type NewWorkboardSnapshot = typeof workboardSnapshots.$inferInsert;
