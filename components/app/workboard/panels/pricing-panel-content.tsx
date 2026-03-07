@@ -114,22 +114,25 @@ function PricingPanelInner({ className = "" }: { className?: string }) {
       </div>
 
       {/* Search bar */}
-      <ItemSearch className="mb-3" />
+      <ItemSearch className="mb-2" />
 
-      {/* Main scrollable content area */}
-      <div className="flex-1 overflow-y-auto space-y-3 min-h-0">
-        {/* Currency selector */}
+      {/* Currency selector — pinned above scroll */}
+      <div className="mb-2">
         <CurrencySelector />
+      </div>
 
-        {/* Item list with pricing variables */}
+      {/* Scrollable item list */}
+      <div className="flex-1 overflow-y-auto min-h-0">
         <PricingItemList />
+      </div>
 
-        {/* Profit summary table */}
+      {/* Profit summary — pinned below scroll */}
+      <div className="mt-2 pt-2 border-t border-border">
         <ProfitSummaryTable />
       </div>
 
-      {/* Footer with actions - fixed at bottom */}
-      <div className="mt-3 pt-3 border-t border-border">
+      {/* Footer with actions */}
+      <div className="mt-2 pt-2 border-t border-border">
         <PricingActions />
       </div>
     </div>
