@@ -8,13 +8,18 @@
 import ky from 'ky';
 import { eventBus } from '@/lib/event-bus';
 import { modifyDatabase } from '@/lib/utils/databaseHandler';
+import { getLocalModel } from '@/lib/ai-agent/local-model';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
+import type { SearchAPIInput, SupplierResult } from '@/types/ai-agent';
 
 // ---------------------------------------------
 // Configuration
 // ---------------------------------------------
 
-/** AI Supplier Search API endpoint */
+/** AI inference mode: 'local' = run model locally, anything else = call remote API */
+const AI_MODE = process.env.AI_MODE || 'remote';
+
+/** AI Supplier Search API endpoint (used when AI_MODE !== 'local') */
 const SUPPLIER_API_URL = process.env.SUPPLIER_API_URL || 'https://api.example.com/suppliers/search';
 
 // ---------------------------------------------
@@ -103,7 +108,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
 // AI API Call
 // ---------------------------------------------
 
-/** AI API response shape */
+/** AI API response shape (remote API only) */
 interface AISupplierResponse {
   suppliers: Array<{
     id: string;
@@ -122,28 +127,30 @@ interface AISupplierResponse {
   };
 }
 
-/** Internal supplier result shape */
-interface SupplierResult {
-  id: string;
-  name: string;
-  email: string;
-  rating?: number;
-  specialties: string[];
-  estimatedLeadTime?: number;
-  matchScore: number;
-}
-
-/** Internal input for API call */
-interface SearchAPIInput {
-  subject: string;
-  searchContent: string;
-  actionType: string;
-}
+// SupplierResult and SearchAPIInput types imported from '@/types/ai-agent'
 
 /**
- * Call AI API for supplier search
+ * Call AI for supplier search — routes to local model or remote API based on AI_MODE.
+ * Local mode: runs model in-process via @xenova/transformers
+ * Remote mode: calls external API via ky with retries
  */
 async function callSupplierSearchAPI(input: SearchAPIInput): Promise<SupplierResult[]> {
+  // Route: local model inference (no network required)
+  if (AI_MODE === 'local') {
+    console.log('[Supplier Search] Using local AI model');
+    try {
+      return await getLocalModel().searchSuppliers(input);
+    } catch (error) {
+      console.error('[Supplier Search] Local model failed:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[Supplier Search] Local model failed, using mock data');
+        return generateMockSuppliers();
+      }
+      throw error;
+    }
+  }
+
+  // Route: remote API call
   try {
     const response = await ky.post(SUPPLIER_API_URL, {
       json: {

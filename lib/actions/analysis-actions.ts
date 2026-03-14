@@ -8,13 +8,18 @@
 import ky from 'ky';
 import { eventBus } from '@/lib/event-bus';
 import { modifyDatabase } from '@/lib/utils/databaseHandler';
+import { getLocalModel } from '@/lib/ai-agent/local-model';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
+import type { AICallInput, AnalysisData } from '@/types/ai-agent';
 
 // ---------------------------------------------
 // Configuration
 // ---------------------------------------------
 
-/** AI API endpoint for RFQ analysis */
+/** AI inference mode: 'local' = run model locally, anything else = call remote API */
+const AI_MODE = process.env.AI_MODE || 'remote';
+
+/** AI API endpoint for RFQ analysis (used when AI_MODE !== 'local') */
 const AI_API_URL = process.env.AI_API_URL || 'https://api.example.com/analyze';
 
 // ---------------------------------------------
@@ -99,7 +104,7 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
 // AI API Call
 // ---------------------------------------------
 
-/** AI API response shape */
+/** AI API response shape (remote API only) */
 interface AIAnalysisResponse {
   summary: string;
   extracted_items: Array<{
@@ -119,18 +124,29 @@ interface AIAnalysisResponse {
   confidence_score: number;
 }
 
-/** Internal input for AI call */
-interface AICallInput {
-  subject: string;
-  analysisContent: string;
-  actionType: string;
-}
-
 /**
- * Call AI API for RFQ analysis
- * Uses ky for HTTP requests with automatic retries
+ * Call AI for RFQ analysis — routes to local model or remote API based on AI_MODE.
+ * Local mode: runs model in-process via @xenova/transformers
+ * Remote mode: calls external API via ky with retries
  */
 async function callAIAnalysis(input: AICallInput): Promise<AnalysisData> {
+  // Route: local model inference (no network required)
+  if (AI_MODE === 'local') {
+    console.log('[Analysis] Using local AI model');
+    try {
+      return await getLocalModel().analyzeRFQ(input);
+    } catch (error) {
+      console.error('[Analysis] Local model failed:', error);
+      // Fallback to mock data in development
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[Analysis] Local model failed, using mock data');
+        return generateMockAnalysis(input);
+      }
+      throw error;
+    }
+  }
+
+  // Route: remote API call
   try {
     const response = await ky.post(AI_API_URL, {
       json: {
@@ -166,25 +182,7 @@ async function callAIAnalysis(input: AICallInput): Promise<AnalysisData> {
 // Response Transformation
 // ---------------------------------------------
 
-/** Analysis data shape returned to caller */
-interface AnalysisData {
-  summary: string;
-  items: Array<{
-    description: string;
-    quantity?: number;
-    unit?: string;
-    specifications?: string;
-  }>;
-  customerInfo: {
-    name: string;
-    email: string;
-    company?: string;
-    phone?: string;
-  };
-  deadlines?: string[];
-  specialRequirements?: string[];
-  confidence: number;
-}
+// AnalysisData type imported from '@/types/ai-agent' (shared with local-model.ts)
 
 /**
  * Transform AI API response to our schema

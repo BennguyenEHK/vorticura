@@ -14,6 +14,7 @@
     "@hookform/resolvers": "^5.2.2",
     "@neondatabase/serverless": "^1.0.2",
     "@radix-ui/react-dialog": "^1.1.15",
+    "@xenova/transformers": "^2.17.2",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
