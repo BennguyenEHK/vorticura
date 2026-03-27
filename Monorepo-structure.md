@@ -1,7 +1,7 @@
 # QuoteFlow AI - Project Structure
 
-> **Last Updated:** February 24, 2026
-> **Version:** 6.0 (Data Processing Pipeline + Queries Refactor)
+> **Last Updated:** March 27, 2026
+> **Version:** 7.0 (OAuth Email Watcher + Webhook Push Notifications)
 
 ## Overview
 
@@ -55,7 +55,10 @@ quoteflow_ai/
 │   │   │   ├── login/route.ts ✓           # POST /api/auth/login
 │   │   │   ├── logout/route.ts ✓          # POST /api/auth/logout
 │   │   │   ├── me/route.ts ✓              # GET /api/auth/me
-│   │   │   └── verify/route.ts ✓          # GET /api/auth/verify
+│   │   │   ├── verify/route.ts ✓          # GET /api/auth/verify
+│   │   │   └── callback/                  # OAuth callbacks (v7.0)
+│   │   │       ├── google/route.ts ✓      # GET /api/auth/callback/google
+│   │   │       └── microsoft/route.ts ✓   # GET /api/auth/callback/microsoft
 │   │   │
 │   │   ├── rfq-queue/                     # RFQ Queue API
 │   │   │   └── route.ts ✓                 # GET/POST /api/rfq-queue
@@ -64,9 +67,14 @@ quoteflow_ai/
 │   │   │   └── route.ts ✓                 # GET/POST /api/comms
 │   │   │
 │   │   ├── webhooks/
+│   │   │   ├── gmail/route.ts ✓           # POST /api/webhooks/gmail (Pub/Sub push, v7.0)
+│   │   │   ├── microsoft/route.ts ✓       # POST /api/webhooks/microsoft (Graph push, v7.0)
 │   │   │   ├── module-update/route.ts     # POST /api/webhooks/module-update
 │   │   │   ├── workflow-complete/route.ts # POST /api/webhooks/workflow-complete
 │   │   │   └── make/data-processing/route.ts
+│   │   │
+│   │   ├── cron/                          # Vercel Cron Jobs (v7.0)
+│   │   │   └── refresh-tokens/route.ts ✓  # GET /api/cron/refresh-tokens (every 45 min)
 │   │   │
 │   │   ├── quotations/
 │   │   │   ├── route.ts ✓                 # GET/POST /api/quotations
@@ -183,7 +191,10 @@ quoteflow_ai/
 │   │   └── Footer.tsx ✓                   # Footer with links
 │   │
 │   ├── auth/                              # Authentication components
-│   │   └── AuthForm.tsx ✓                 # Reusable auth form
+│   │   └── AuthForm.tsx ✓                 # Reusable auth form (+ OAuth buttons v7.0)
+│   │
+│   ├── settings/                          # Settings components (v7.0)
+│   │   └── EmailConnectionPanel.tsx ✓     # Email connection management UI
 │   │
 │   └── ui/                                # Reusable UI components (Shadcn)
 │       ├── logo.tsx ✓                     # Shared Logo SVG component
@@ -200,6 +211,7 @@ quoteflow_ai/
 │   ├── actions/                           # Server Actions ('use server') - v6.0
 │   │   ├── analysis-actions.ts ✓          # RFQ analysis: email → AI API → analysis JSON
 │   │   ├── email-actions.ts ✓             # Email drafting & sending to suppliers
+│   │   ├── email-connection-actions.ts ✓  # Email connection CRUD (connect, disconnect, pause, v7.0)
 │   │   ├── supplier-search-actions.ts ✓   # Supplier search via AI API
 │   │   ├── quotation-actions.ts ✓         # Quotation generate/update operations
 │   │   └── pricing-actions.ts ✓           # Price calculation & database storage
@@ -245,7 +257,7 @@ quoteflow_ai/
 │   │   │   ├── quotation-validator.ts
 │   │   │   ├── email-validator.ts
 │   │   │   ├── input-validator.ts
-│   │   │   └── schemas.ts ✓
+│   │   │   └── schemas.ts ✓               # Zod schemas: login, signup, field validators (moved from lib/validation/)
 │   │   │
 │   │   ├── generators/
 │   │   │   ├── id-generator.ts
@@ -260,13 +272,20 @@ quoteflow_ai/
 │   ├── services/                          # Business Logic Layer
 │   │   ├── auth/                          # Auth services (v6.0, placeholder)
 │   │   │
+│   │   ├── email/                         # Email Integration (OAuth + Webhooks, v7.0)
+│   │   │   ├── email-pipeline.ts ✓        # Extracted reusable processing pipeline
+│   │   │   ├── oauth-helper.ts ✓          # OAuth URL builders, token exchange, AES-256-GCM
+│   │   │   ├── gmail-client.ts ✓          # Gmail API wrapper (watch, history, messages)
+│   │   │   └── outlook-client.ts ✓        # Microsoft Graph wrapper (subscriptions, messages)
+│   │   │
 │   │   ├── rfq-queue/                     # RFQ Queue services
 │   │   │   ├── index.ts ✓                 # Barrel exports
 │   │   │   └── queue-manager.ts ✓         # Queue CRUD, filtering, stage updates
 │   │   │
 │   │   ├── comms/                         # Communications services
 │   │   │   ├── index.ts ✓                 # Barrel exports
-│   │   │   └── comms-manager.ts ✓         # Channel & message management
+│   │   │   ├── comms-manager.ts ✓         # Channel & message management
+│   │   │   └── email-watcher.ts ⚠️        # DEPRECATED: IMAP watcher (re-exports from email-pipeline.ts)
 │   │   │
 │   │   ├── pricing/                       # Pricing services (v5.9)
 │   │   │   ├── index.ts ✓                 # Barrel exports
@@ -292,8 +311,6 @@ quoteflow_ai/
 │   │                                      # - EventBus singleton
 │   │                                      # - Publish/subscribe pattern
 │   │
-│   ├── validation/                        # Validation Layer (v6.0)
-│   │   └── schemas.ts ✓                   # Zod validation schemas
 │   │
 │   ├── db/                                # Database Layer
 │   │   ├── client.ts ✓                    # Drizzle client
@@ -349,6 +366,7 @@ quoteflow_ai/
 │   ├── demo-users.json
 │   └── workspace.config.ts ✓
 │
+├── vercel.json ✓                          # Vercel cron configuration (v7.0)
 ├── .env.example
 ├── .eslintrc.json
 ├── .prettierrc
@@ -651,6 +669,11 @@ app/layout.tsx (Root)
 | `/api/pricing/variables` | GET | Get saved pricing variables (v5.9) |
 | `/api/pricing/variables` | PUT | Update pricing variables (v5.9) |
 | `/api/preview-stream` | GET | SSE preview streaming (v6.0) |
+| `/api/auth/callback/google` | GET | Google OAuth callback (v7.0) |
+| `/api/auth/callback/microsoft` | GET | Microsoft OAuth callback (v7.0) |
+| `/api/webhooks/gmail` | POST | Gmail Pub/Sub push notifications (v7.0) |
+| `/api/webhooks/microsoft` | POST | Microsoft Graph change notifications (v7.0) |
+| `/api/cron/refresh-tokens` | GET | Token refresh + subscription renewal cron (v7.0) |
 | `/api/comms/sms` | POST | Send SMS message (planned) |
 | `/api/comms/whatsapp` | POST | Send WhatsApp message (planned) |
 | `/api/comms/telegram` | POST | Send Telegram message (planned) |

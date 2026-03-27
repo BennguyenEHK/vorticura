@@ -59,8 +59,12 @@ export const clientInfo = pgTable('client_info', {
 
   // Authentication credentials
   username: varchar('username', { length: 50 }).notNull(),
-  passwordHash: varchar('password_hash', { length: 255 }).notNull(),
+  passwordHash: varchar('password_hash', { length: 255 }), // Nullable for OAuth-only users
   email: varchar('email', { length: 255 }),
+
+  // OAuth provider info (null = traditional email/password signup)
+  oauthProvider: varchar('oauth_provider', { length: 20 }),       // 'google' | 'microsoft' | null
+  oauthProviderId: varchar('oauth_provider_id', { length: 255 }), // Provider's unique user ID
 
   // User role and permissions
   clientRole: varchar('client_role', { length: 30 }).default('user'),
@@ -480,6 +484,49 @@ export const workboardSnapshots = pgTable('workboard_snapshots', {
 }));
 
 // ============================================
+// 15. EMAIL_CONNECTIONS TABLE — OAuth email integrations
+// ============================================
+export const emailConnections = pgTable('email_connections', {
+  // Primary key
+  connectionId: serial('connection_id').primaryKey(),
+
+  // Foreign keys — tenant isolation
+  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
+  clientId: integer('client_id').notNull().references(() => clientInfo.clientId),
+
+  // Provider info
+  provider: varchar('provider', { length: 20 }).notNull(),          // 'gmail' | 'outlook'
+  providerAccountId: varchar('provider_account_id', { length: 255 }), // Google sub / Microsoft oid
+  emailAddress: varchar('email_address', { length: 255 }).notNull(),
+
+  // OAuth tokens (encrypted at rest via AES-256-GCM)
+  accessToken: text('access_token').notNull(),
+  refreshToken: text('refresh_token').notNull(),
+  tokenExpiresAt: timestamp('token_expires_at', { withTimezone: false }).notNull(),
+  scopes: text('scopes'), // Granted OAuth scopes
+
+  // Webhook/push subscription state
+  subscriptionId: varchar('subscription_id', { length: 255 }),     // Pub/Sub or Graph subscription ID
+  historyId: varchar('history_id', { length: 255 }),               // Gmail: last known historyId
+  subscriptionExpires: timestamp('subscription_expires', { withTimezone: false }), // MS: subscription expiry (max 3 days)
+
+  // Connection state
+  status: varchar('status', { length: 20 }).default('active'),     // active | paused | expired | revoked
+  lastSyncAt: timestamp('last_sync_at', { withTimezone: false }),
+  lastError: text('last_error'),
+  errorCount: integer('error_count').default(0),
+
+  // Timestamps
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false })
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+}, (table) => ({
+  // One email address per company
+  uqCompanyEmail: unique('uq_email_connections_company_email').on(table.companyId, table.emailAddress),
+}));
+
+// ============================================
 // TYPE EXPORTS
 // ============================================
 // Export inferred types for TypeScript usage
@@ -524,3 +571,6 @@ export type NewUserSession = typeof userSessions.$inferInsert;
 
 export type WorkboardSnapshot = typeof workboardSnapshots.$inferSelect;
 export type NewWorkboardSnapshot = typeof workboardSnapshots.$inferInsert;
+
+export type EmailConnection = typeof emailConnections.$inferSelect;
+export type NewEmailConnection = typeof emailConnections.$inferInsert;

@@ -12,7 +12,7 @@ import { eq } from 'drizzle-orm';
 import { generateJWT } from '@/lib/middleware/auth-helpers';
 import { workspaceConfig } from '@/config/workspace.config';
 // Validation helper (relocated from lib/utils/validation)
-import { isEmail } from '@/lib/validation/schemas';
+import { isEmail } from '@/lib/utils/validation/schemas';
 
 /**
  * POST /api/auth/login
@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
         username: clientInfo.username,
         email: clientInfo.email,
         passwordHash: clientInfo.passwordHash,
+        oauthProvider: clientInfo.oauthProvider, // Check if user signed up via OAuth
         role: clientInfo.clientRole,
         status: clientInfo.clientStatus,
       })
@@ -70,12 +71,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Defensive check: verify user.passwordHash exists before comparing
+    // OAuth-only users have no password — guide them to use OAuth login
     if (!user.passwordHash) {
-      console.warn('Login attempt: missing passwordHash');
       return NextResponse.json(
-        { error: 'Invalid username or password' },
-        { status: 401 }
+        { error: 'This account uses Google or Microsoft login. Please use the OAuth buttons instead.' },
+        { status: 400 }
       );
     }
 

@@ -17,8 +17,10 @@ const PUBLIC_ROUTES = [
   '/',                // Homepage (public landing page)
   '/login',           // Login page
   '/signup',          // Signup page
-  '/api/auth',        // All auth endpoints (login, signup, logout, verify)
+  '/api/auth',        // All auth endpoints (login, signup, logout, verify, OAuth callbacks)
   '/api/health',      // Health check endpoints
+  '/api/webhooks',    // Email webhook endpoints (Gmail Pub/Sub, Microsoft Graph — self-authenticated)
+  '/api/cron',        // Vercel cron jobs (authenticated via CRON_SECRET bearer token)
   '/_next',           // Next.js internal routes
   '/favicon.ico',     // Favicon
 ];

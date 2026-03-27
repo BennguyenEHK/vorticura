@@ -1,33 +1,67 @@
 // =============================================
 // EMAIL WATCHER SERVICE - IMAP Real-Time Listener
 // =============================================
-// Long-running IMAP listener that watches a mailbox for incoming emails,
-// extracts content + attachments, classifies each email, checks for
-// duplicates, and forwards the payload to handleHTTPRequest().
+// @deprecated Use lib/services/email/email-pipeline.ts + webhook handlers instead.
+// This IMAP-based watcher is kept as fallback for self-hosted deployments
+// that cannot use OAuth webhooks. Will be removed in v2.
+//
+// Pipeline functions (extractEmailContent, classifyEmailType, etc.) have been
+// extracted to email-pipeline.ts — this file re-exports them for backward compat.
 //
 // Singleton via globalThis (survives HMR in dev, same pattern as event-bus.ts)
 //
-// Dataflow:
+// Dataflow (DEPRECATED):
 //   IMAP Mailbox → fetchMessage → extractContent → extractAttachments
 //   → classifyType → checkDuplicate → buildPayload → dispatchToProcessor
 //   → mark \Seen on success → eventBus.emit('comms-update')
 
 import { ImapFlow } from 'imapflow';
-import { simpleParser, type ParsedMail, type Attachment } from 'mailparser';
-import { getDocument, type PDFDocumentProxy } from 'pdfjs-dist/legacy/build/pdf.mjs';
-import sharp from 'sharp';
 
 import { handleHTTPRequest } from '@/lib/data-processor';
-import type { ProcessorInput, DataType, ActionType } from '@/lib/utils/validator';
+import type { ProcessorInput } from '@/lib/utils/validator';
 import { eventBus } from '@/lib/event-bus';
-import { getData, getCount } from '@/lib/db/queries';
 import { WorkspaceContext } from '@/lib/middleware/workspace-context';
 
+// Import pipeline functions for use by the IMAP EmailWatcher class
+import {
+  extractEmailContent,
+  extractAttachmentContent,
+  classifyEmailType,
+  checkDuplicateInDB,
+  buildProcessorPayload,
+} from '@/lib/services/email/email-pipeline';
+
 // =============================================
-// 1. CONFIGURATION
+// RE-EXPORTS FROM EMAIL PIPELINE
+// =============================================
+// Pipeline functions extracted to email-pipeline.ts for reuse by webhook handlers.
+// Re-exported here for backward compatibility with existing imports.
+export {
+  extractEmailContent,
+  extractAttachmentContent,
+  classifyEmailType,
+  checkDuplicateInDB,
+  buildProcessorPayload,
+  buildAnalysisContent,
+  extractRfqReference,
+  processEmailMessage,
+  processEmailFromJSON,
+} from '@/lib/services/email/email-pipeline';
+
+export type {
+  ExtractedEmail,
+  RawAttachment,
+  ProcessedAttachment,
+  ClassificationResult,
+  EmailJSONInput,
+  PipelineResult,
+} from '@/lib/services/email/email-pipeline';
+
+// =============================================
+// 1. CONFIGURATION (IMAP-SPECIFIC, DEPRECATED)
 // =============================================
 
-/** IMAP + watcher runtime configuration */
+/** @deprecated IMAP + watcher runtime configuration — use OAuth webhooks instead */
 export interface EmailWatcherConfig {
   host: string;
   port: number;
@@ -44,6 +78,7 @@ export interface EmailWatcherConfig {
 }
 
 /**
+ * @deprecated IMAP-specific config loader — use OAuth webhooks instead.
  * Load configuration from environment variables.
  * Throws if required IMAP credentials are missing.
  */
@@ -72,49 +107,10 @@ export function loadConfig(): EmailWatcherConfig {
 }
 
 // =============================================
-// 2. INTERFACES
+// 2. IMAP-SPECIFIC INTERFACES
 // =============================================
 
-/** Parsed email content after mailparser extraction */
-export interface ExtractedEmail {
-  messageId: string;
-  from: string;
-  fromName: string;
-  to: string[];
-  cc: string[];
-  subject: string;
-  textBody: string;
-  htmlBody: string;
-  date: Date;
-  rawAttachments: RawAttachment[];
-}
-
-/** Raw attachment from mailparser before content extraction */
-export interface RawAttachment {
-  filename: string;
-  contentType: string;
-  size: number;
-  content: Buffer;
-}
-
-/** Attachment after PDF/image content extraction */
-export interface ProcessedAttachment {
-  filename: string;
-  contentType: string;
-  size: number;
-  extractedText: string;
-  thumbnailBase64: string | null;
-}
-
-/** Result of email classification */
-export interface ClassificationResult {
-  dataType: DataType;
-  actionType: ActionType;
-  confidence: 'high' | 'medium' | 'low';
-  reason: string;
-}
-
-/** Watcher runtime statistics */
+/** Watcher runtime statistics (IMAP-specific) */
 export interface WatcherStats {
   status: 'stopped' | 'connecting' | 'watching' | 'error';
   processedCount: number;
@@ -126,370 +122,11 @@ export interface WatcherStats {
 }
 
 // =============================================
-// 3. extractEmailContent()
+// 3. IMAP dispatchToProcessor() — uses client.messageFlagsAdd()
 // =============================================
 
 /**
- * Parse raw IMAP message buffer into structured ExtractedEmail.
- * Uses mailparser.simpleParser for MIME decoding.
- */
-export async function extractEmailContent(rawMessage: Buffer): Promise<ExtractedEmail> {
-  const parsed: ParsedMail = await simpleParser(rawMessage);
-
-  const fromAddr = parsed.from?.value?.[0];
-  const toAddrs = parsed.to
-    ? (Array.isArray(parsed.to) ? parsed.to : [parsed.to])
-        .flatMap((addr) => addr.value.map((v) => v.address || ''))
-    : [];
-  const ccAddrs = parsed.cc
-    ? (Array.isArray(parsed.cc) ? parsed.cc : [parsed.cc])
-        .flatMap((addr) => addr.value.map((v) => v.address || ''))
-    : [];
-
-  const rawAttachments: RawAttachment[] = (parsed.attachments || []).map(
-    (att: Attachment) => ({
-      filename: att.filename || 'unnamed',
-      contentType: att.contentType,
-      size: att.size,
-      content: att.content,
-    })
-  );
-
-  return {
-    messageId: parsed.messageId || `no-id-${Date.now()}`,
-    from: fromAddr?.address || '',
-    fromName: fromAddr?.name || '',
-    to: toAddrs,
-    cc: ccAddrs,
-    subject: parsed.subject || '(no subject)',
-    textBody: parsed.text || '',
-    htmlBody: parsed.html || '',
-    date: parsed.date || new Date(),
-    rawAttachments,
-  };
-}
-
-// =============================================
-// 4. extractAttachmentContent()
-// =============================================
-
-/**
- * Extract text and thumbnail from attachments.
- * - PDF → text via pdfjs-dist, first-page thumbnail via sharp
- * - Images → resize thumbnail via sharp
- * - Others → skip content extraction
- *
- * Failures are isolated per-attachment (marked [extraction_failed]).
- */
-export async function extractAttachmentContent(
-  attachments: RawAttachment[]
-): Promise<ProcessedAttachment[]> {
-  const results: ProcessedAttachment[] = [];
-
-  for (const att of attachments) {
-    try {
-      if (att.contentType === 'application/pdf') {
-        results.push(await extractPdfContent(att));
-      } else if (att.contentType.startsWith('image/')) {
-        results.push(await extractImageContent(att));
-      } else {
-        results.push({
-          filename: att.filename,
-          contentType: att.contentType,
-          size: att.size,
-          extractedText: '',
-          thumbnailBase64: null,
-        });
-      }
-    } catch (error) {
-      console.error(`[email-watcher] Attachment extraction failed for ${att.filename}:`, error);
-      results.push({
-        filename: att.filename,
-        contentType: att.contentType,
-        size: att.size,
-        extractedText: '[extraction_failed]',
-        thumbnailBase64: null,
-      });
-    }
-  }
-
-  return results;
-}
-
-/** Extract text from PDF using pdfjs-dist */
-async function extractPdfContent(att: RawAttachment): Promise<ProcessedAttachment> {
-  const uint8 = new Uint8Array(att.content);
-  const doc: PDFDocumentProxy = await getDocument({ data: uint8 }).promise;
-
-  const textParts: string[] = [];
-  const pageCount = Math.min(doc.numPages, 50); // cap at 50 pages
-
-  for (let i = 1; i <= pageCount; i++) {
-    const page = await doc.getPage(i);
-    const content = await page.getTextContent();
-    const pageText = content.items
-      .map((item: any) => ('str' in item ? item.str : ''))
-      .join(' ');
-    textParts.push(pageText);
-  }
-
-  return {
-    filename: att.filename,
-    contentType: att.contentType,
-    size: att.size,
-    extractedText: textParts.join('\n\n'),
-    thumbnailBase64: null, // PDF thumbnail generation skipped for simplicity
-  };
-}
-
-/** Resize image and encode as base64 thumbnail via sharp */
-async function extractImageContent(att: RawAttachment): Promise<ProcessedAttachment> {
-  const thumbnail = await sharp(att.content)
-    .resize(200, 200, { fit: 'inside' })
-    .jpeg({ quality: 70 })
-    .toBuffer();
-
-  return {
-    filename: att.filename,
-    contentType: att.contentType,
-    size: att.size,
-    extractedText: '',
-    thumbnailBase64: thumbnail.toString('base64'),
-  };
-}
-
-// =============================================
-// 5. classifyEmailType()
-// =============================================
-
-/** RFQ indicator patterns (case-insensitive) */
-const RFQ_SUBJECT_PATTERNS = [
-  /\brfq\b/i,
-  /\brequest\s+for\s+quotation\b/i,
-  /\brequest\s+for\s+quote\b/i,
-  /\bquotation\s+request\b/i,
-  /\bprice\s+inquiry\b/i,
-  /\binquiry\b/i,
-  /\bbid\s+request\b/i,
-  /\btender\b/i,
-];
-
-const RFQ_BODY_KEYWORDS = [
-  /\bplease\s+quote\b/i,
-  /\bprovide\s+(?:a\s+)?quotation\b/i,
-  /\bunit\s+price\b/i,
-  /\bdelivery\s+time\b/i,
-  /\blead\s+time\b/i,
-  /\bprocure\b/i,
-  /\bprocurement\b/i,
-  /\bspecification\b/i,
-  /\bquantity\b/i,
-];
-
-const RFQ_ATTACHMENT_PATTERNS = [
-  /rfq/i,
-  /quotation/i,
-  /specification/i,
-  /requirement/i,
-  /tender/i,
-  /bid/i,
-];
-
-/**
- * Rule-based email classifier.
- * Priority: subject patterns → body keywords → attachment filenames → default 'email'
- */
-export function classifyEmailType(email: ExtractedEmail, attachments: ProcessedAttachment[]): ClassificationResult {
-  // Check subject lines
-  for (const pattern of RFQ_SUBJECT_PATTERNS) {
-    if (pattern.test(email.subject)) {
-      return {
-        dataType: 'rfq_analysis',
-        actionType: 'analyze',
-        confidence: 'high',
-        reason: `Subject matches RFQ pattern: ${pattern.source}`,
-      };
-    }
-  }
-
-  // Check body content
-  let bodyMatchCount = 0;
-  for (const keyword of RFQ_BODY_KEYWORDS) {
-    if (keyword.test(email.textBody) || keyword.test(email.htmlBody)) {
-      bodyMatchCount++;
-    }
-  }
-  if (bodyMatchCount >= 2) {
-    return {
-      dataType: 'rfq_analysis',
-      actionType: 'analyze',
-      confidence: 'medium',
-      reason: `Body contains ${bodyMatchCount} RFQ keywords`,
-    };
-  }
-
-  // Check attachment filenames
-  const allFilenames = attachments.map((a) => a.filename).join(' ');
-  for (const pattern of RFQ_ATTACHMENT_PATTERNS) {
-    if (pattern.test(allFilenames)) {
-      return {
-        dataType: 'rfq_analysis',
-        actionType: 'analyze',
-        confidence: 'medium',
-        reason: `Attachment filename matches RFQ pattern: ${pattern.source}`,
-      };
-    }
-  }
-
-  // Check if attachment text content has RFQ indicators
-  const attachmentText = attachments.map((a) => a.extractedText).join(' ');
-  let attachmentMatchCount = 0;
-  for (const keyword of RFQ_BODY_KEYWORDS) {
-    if (keyword.test(attachmentText)) {
-      attachmentMatchCount++;
-    }
-  }
-  if (attachmentMatchCount >= 3) {
-    return {
-      dataType: 'rfq_analysis',
-      actionType: 'analyze',
-      confidence: 'low',
-      reason: `Attachment content contains ${attachmentMatchCount} RFQ keywords`,
-    };
-  }
-
-  // Default: general email
-  return {
-    dataType: 'email',
-    actionType: 'generate',
-    confidence: 'low',
-    reason: 'No RFQ indicators found, classified as general email',
-  };
-}
-
-// =============================================
-// 6. checkDuplicateInDB()
-// =============================================
-
-/**
- * Check if this email (by messageId) has already been processed.
- * Uses getCount() for efficient check without loading rows.
- */
-export async function checkDuplicateInDB(
-  messageId: string,
-  workspace: WorkspaceContext
-): Promise<boolean> {
-  try {
-    const count = await getCount(
-      'emailTable',
-      { message_id: messageId },
-      workspace
-    );
-    return count > 0;
-  } catch {
-    // If the column doesn't exist yet or query fails, treat as non-duplicate
-    // to avoid blocking email processing during schema evolution
-    console.warn(`[email-watcher] Duplicate check failed for messageId: ${messageId}, treating as non-duplicate`);
-    return false;
-  }
-}
-
-// =============================================
-// 7. buildProcessorPayload()
-// =============================================
-
-/**
- * Assemble a ProcessorInput payload from extracted email data.
- * Routes to either 'rfq_analysis' or 'email' processor pipeline.
- */
-export function buildProcessorPayload(
-  email: ExtractedEmail,
-  attachments: ProcessedAttachment[],
-  classification: ClassificationResult,
-  workspace: WorkspaceContext
-): ProcessorInput {
-  const basePayload = {
-    data_type: classification.dataType,
-    action_type: classification.actionType,
-    workspace,
-    // Email metadata carried as extra fields (index signature allows this)
-    email_message_id: email.messageId,
-    email_from: email.from,
-    email_from_name: email.fromName,
-    email_to: email.to,
-    email_cc: email.cc,
-    email_date: email.date.toISOString(),
-    email_subject: email.subject,
-    classification_confidence: classification.confidence,
-    classification_reason: classification.reason,
-    attachment_count: attachments.length,
-    attachments: attachments.map((a) => ({
-      filename: a.filename,
-      contentType: a.contentType,
-      size: a.size,
-      extractedText: a.extractedText,
-      hasThumbnail: !!a.thumbnailBase64,
-    })),
-  };
-
-  if (classification.dataType === 'rfq_analysis') {
-    return {
-      ...basePayload,
-      // rfq_analysis processor expects analysis object
-      analysis: {
-        subject: email.subject,
-        analysis_content: buildAnalysisContent(email, attachments),
-      },
-      // Use subject as rfq_reference placeholder until analysis extracts the real one
-      rfq_reference: extractRfqReference(email.subject) || `EMAIL-${Date.now()}`,
-      quotation_id: 0, // Will be created by the analysis processor
-    } as ProcessorInput;
-  }
-
-  // Default: email data_type
-  return {
-    ...basePayload,
-    email: {
-      recipient_email: email.from,
-      subject: `RE: ${email.subject}`,
-      email_content: email.textBody || email.htmlBody,
-    },
-    rfq_reference: extractRfqReference(email.subject) || `EMAIL-${Date.now()}`,
-    quotation_id: 0,
-  } as ProcessorInput;
-}
-
-/** Combine email body + attachment text for analysis */
-function buildAnalysisContent(email: ExtractedEmail, attachments: ProcessedAttachment[]): string {
-  const parts: string[] = [];
-
-  if (email.textBody) {
-    parts.push('--- EMAIL BODY ---');
-    parts.push(email.textBody);
-  }
-
-  for (const att of attachments) {
-    if (att.extractedText && att.extractedText !== '[extraction_failed]') {
-      parts.push(`--- ATTACHMENT: ${att.filename} ---`);
-      parts.push(att.extractedText);
-    }
-  }
-
-  return parts.join('\n\n');
-}
-
-/** Try to extract an RFQ reference number from the subject line */
-function extractRfqReference(subject: string): string | null {
-  // Match patterns like RFQ-2024-001, RFQ#123, RFQ 456, Q-2024-001
-  const match = subject.match(/(?:RFQ|Q|REF|PO|PR)[- #]?\d{1,}[-\d]*/i);
-  return match ? match[0].toUpperCase() : null;
-}
-
-// =============================================
-// 8. dispatchToProcessor()
-// =============================================
-
-/**
+ * @deprecated IMAP-specific dispatch — webhook handlers use email-pipeline.ts dispatch instead.
  * Send assembled payload to handleHTTPRequest() and handle results.
  * On success: marks email \Seen, emits SSE event.
  * On failure: logs error, does NOT mark \Seen (email will be retried).
@@ -537,9 +174,10 @@ async function dispatchToProcessor(
 }
 
 // =============================================
-// 9. EmailWatcher CLASS (Singleton)
+// 9. EmailWatcher CLASS (Singleton) — DEPRECATED
 // =============================================
 
+/** @deprecated Use OAuth webhook handlers instead. Kept for self-hosted IMAP fallback. */
 export class EmailWatcher {
   private client: ImapFlow | null = null;
   private config: EmailWatcherConfig;
@@ -806,6 +444,7 @@ const globalForWatcher = globalThis as unknown as {
 };
 
 /**
+ * @deprecated Use OAuth webhook handlers instead.
  * Get the singleton EmailWatcher instance.
  * Creates a new instance on first call (lazy initialization).
  * Returns the existing instance on subsequent calls.
@@ -819,6 +458,7 @@ export function getEmailWatcher(): EmailWatcher {
 }
 
 /**
+ * @deprecated Use OAuth webhook handlers instead.
  * Check if the email watcher singleton exists without creating it.
  * Useful for status checks before configuration is available.
  */
