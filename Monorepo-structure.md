@@ -1,7 +1,7 @@
 # QuoteFlow AI - Project Structure
 
-> **Last Updated:** March 27, 2026
-> **Version:** 7.0 (OAuth Email Watcher + Webhook Push Notifications)
+> **Last Updated:** March 30, 2026
+> **Version:** 7.1 (OAuth Webhooks, IMAP removed, DB handler aligned)
 
 ## Overview
 
@@ -14,373 +14,287 @@ QuoteFlow AI uses Next.js 15 App Router with a professional route group architec
 quoteflow_ai/
 ├── app/                                    # Next.js App Router
 │   ├── (home)/                            # Route group: Public marketing pages
-│   │   ├── layout.tsx ✓                   # Marketing layout (minimal)
-│   │   └── page.tsx ✓                     # Homepage "/"
+│   │   ├── layout.tsx                     # Marketing layout (minimal)
+│   │   └── page.tsx                       # Homepage "/"
 │   │
 │   ├── (app)/                             # Route group: Authenticated app
-│   │   ├── layout.tsx ✓                   # App layout (sidebar + topbar + providers)
-│   │   │                                  # Includes: SidebarProvider, AIChatProvider,
-│   │   │                                  # WorkboardProvider, DndContext
-│   │   │
-│   │   ├── dashboard/                     # Dashboard route
-│   │   │   └── page.tsx ✓                 # Dashboard page "/dashboard"
-│   │   │
-│   │   ├── workspace/                     # Workspace route
-│   │   │   └── [quotationId]/
-│   │   │       └── page.tsx ✓             # Workspace "/workspace/[quotationId]"
-│   │   │                                  # Uses WorkboardGrid for dynamic panels
-│   │   │
-│   │   ├── storage/                       # Storage route
-│   │   │   └── page.tsx                   # Storage page "/storage"
-│   │   │
-│   │   ├── upload/                        # Upload route
-│   │   │   └── page.tsx                   # Upload page "/upload"
-│   │   │
-│   │   ├── settings/                      # Settings route
-│   │   │   └── page.tsx                   # Settings page "/settings"
-│   │   │
-│   │   └── pipeline/                      # Pipeline View route
-│   │       └── page.tsx                   # Pipeline page "/pipeline"
+│   │   ├── layout.tsx                     # App layout (sidebar + topbar + providers)
+│   │   ├── dashboard/
+│   │   │   └── page.tsx                   # Dashboard page "/dashboard"
+│   │   └── workspace/
+│   │       └── [quotationId]/
+│   │           └── page.tsx               # Workspace "/workspace/[quotationId]"
 │   │
 │   ├── (auth)/                            # Route group: Authentication
-│   │   ├── layout.tsx ✓                   # Auth layout (split-screen)
+│   │   ├── layout.tsx                     # Auth layout (split-screen)
 │   │   ├── login/
-│   │   │   └── page.tsx ✓                 # Login page "/login"
+│   │   │   └── page.tsx                   # Login page "/login"
 │   │   └── signup/
-│   │       └── page.tsx ✓                 # Signup page "/signup"
+│   │       └── page.tsx                   # Signup page "/signup"
 │   │
 │   ├── api/                               # API Routes (Controllers)
 │   │   ├── auth/
-│   │   │   ├── signup/route.ts ✓          # POST /api/auth/signup
-│   │   │   ├── login/route.ts ✓           # POST /api/auth/login
-│   │   │   ├── logout/route.ts ✓          # POST /api/auth/logout
-│   │   │   ├── me/route.ts ✓              # GET /api/auth/me
-│   │   │   ├── verify/route.ts ✓          # GET /api/auth/verify
-│   │   │   └── callback/                  # OAuth callbacks (v7.0)
-│   │   │       ├── google/route.ts ✓      # GET /api/auth/callback/google
-│   │   │       └── microsoft/route.ts ✓   # GET /api/auth/callback/microsoft
+│   │   │   ├── signup/route.ts            # POST /api/auth/signup
+│   │   │   ├── login/route.ts             # POST /api/auth/login
+│   │   │   ├── logout/route.ts            # POST /api/auth/logout
+│   │   │   ├── me/route.ts               # GET /api/auth/me
+│   │   │   ├── verify/route.ts            # GET /api/auth/verify
+│   │   │   └── callback/                  # OAuth callbacks
+│   │   │       ├── google/route.ts        # GET /api/auth/callback/google
+│   │   │       └── microsoft/route.ts     # GET /api/auth/callback/microsoft
 │   │   │
-│   │   ├── rfq-queue/                     # RFQ Queue API
-│   │   │   └── route.ts ✓                 # GET/POST /api/rfq-queue
-│   │   │
-│   │   ├── comms/                         # Communications API
-│   │   │   └── route.ts ✓                 # GET/POST /api/comms
+│   │   ├── comms/
+│   │   │   └── route.ts                   # GET/POST /api/comms
 │   │   │
 │   │   ├── webhooks/
-│   │   │   ├── gmail/route.ts ✓           # POST /api/webhooks/gmail (Pub/Sub push, v7.0)
-│   │   │   ├── microsoft/route.ts ✓       # POST /api/webhooks/microsoft (Graph push, v7.0)
-│   │   │   ├── module-update/route.ts     # POST /api/webhooks/module-update
-│   │   │   ├── workflow-complete/route.ts # POST /api/webhooks/workflow-complete
-│   │   │   └── make/data-processing/route.ts
+│   │   │   ├── gmail/route.ts             # POST /api/webhooks/gmail (Pub/Sub push)
+│   │   │   ├── microsoft/route.ts         # POST /api/webhooks/microsoft (Graph push)
+│   │   │   ├── make/data-processing/      # Make.com webhook (placeholder)
+│   │   │   ├── module-update/             # Module update webhook (placeholder)
+│   │   │   └── workflow-complete/         # Workflow complete webhook (placeholder)
 │   │   │
-│   │   ├── cron/                          # Vercel Cron Jobs (v7.0)
-│   │   │   └── refresh-tokens/route.ts ✓  # GET /api/cron/refresh-tokens (every 45 min)
+│   │   ├── cron/
+│   │   │   └── refresh-tokens/route.ts    # GET /api/cron/refresh-tokens (every 45 min)
 │   │   │
-│   │   ├── quotations/
-│   │   │   ├── route.ts ✓                 # GET/POST /api/quotations
-│   │   │   ├── [id]/route.ts              # GET/PUT/DELETE /api/quotations/:id
-│   │   │   ├── save/route.ts              # POST /api/quotations/save
-│   │   │   └── pricing-variables/route.ts # POST /api/quotations/pricing-variables
-│   │   │
-│   │   ├── pricing/                       # NEW: Pricing API (v5.9)
-│   │   │   ├── route.ts ✓                 # GET/POST /api/pricing
-│   │   │   └── variables/
-│   │   │       └── route.ts ✓             # GET/PUT /api/pricing/variables
-│   │   │
-│   │   ├── database/
-│   │   │   ├── insert/route.ts ✓          # POST /api/database/insert
-│   │   │   ├── select/route.ts ✓          # POST /api/database/select
-│   │   │   ├── update/route.ts ✓          # POST /api/database/update
-│   │   │   ├── delete/route.ts ✓          # DELETE /api/database/delete
-│   │   │   └── stats/route.ts ✓           # GET /api/database/stats
-│   │   │
-│   │   ├── sessions/
-│   │   │   ├── route.ts ✓                 # GET /api/sessions
-│   │   │   └── [sessionId]/route.ts       # GET /api/sessions/:sessionId
-│   │   │
-│   │   ├── files/[fileId]/image/route.ts  # GET /api/files/:fileId/image
-│   │   │
-│   │   ├── health/
-│   │   │   ├── route.ts ✓                 # GET /api/health
-│   │   │   └── database/route.ts          # GET /api/health/database
-│   │   │
-│   │   ├── preview-stream/
-│   │   │   └── route.ts ✓                 # GET /api/preview-stream (SSE preview streaming)
-│   │   │
-│   │   ├── events/route.ts                # GET /api/events (SSE endpoint)
-│   │   └── stats/route.ts                 # GET /api/stats
+│   │   └── preview-stream/
+│   │       └── route.ts                   # GET /api/preview-stream (SSE)
 │   │
-│   ├── providers.tsx ✓                    # Global providers (ThemeProvider)
-│   ├── layout.tsx ✓                       # Root layout (html, body, providers)
-│   └── globals.css ✓                      # Global styles & design tokens
+│   ├── providers.tsx                      # Global providers (ThemeProvider)
+│   ├── layout.tsx                         # Root layout (html, body, providers)
+│   └── globals.css                        # Global styles & design tokens
 │
 ├── components/                            # React Components
 │   ├── app/                               # App-level components (authenticated section)
-│   │   ├── index.ts ✓                     # Barrel exports for app components
-│   │   ├── sidebar.tsx ✓                  # Collapsible sidebar (redesigned v4.0)
-│   │   ├── topbar.tsx ✓                   # Fixed topbar with Comms Hub (updated v4.0)
-│   │   ├── sidebar-provider.tsx ✓         # SidebarProvider context for collapse state
+│   │   ├── index.ts                       # Barrel exports
+│   │   ├── sidebar.tsx                    # Collapsible sidebar
+│   │   ├── topbar.tsx                     # Fixed topbar with Comms Hub
+│   │   ├── sidebar-provider.tsx           # SidebarProvider context
 │   │   │
-│   │   ├── ai-chat/                       # AI Chat FAB components (NEW v5.0)
-│   │   │   ├── index.ts ✓                 # Barrel exports
-│   │   │   ├── ai-chat-provider.tsx ✓     # Context: state, position, docked status
-│   │   │   ├── ai-chat-fab.tsx ✓          # Floating circular icon + badge (Bot icon)
-│   │   │   ├── ai-chat-popover.tsx ✓      # Small side chatbox (click to open)
-│   │   │   └── ai-chat-panel.tsx ✓        # Full panel (when docked to Workboard)
+│   │   ├── ai-chat/                       # AI Chat FAB components
+│   │   │   ├── index.ts
+│   │   │   ├── ai-chat-provider.tsx       # Context: state, position, docked status
+│   │   │   ├── ai-chat-fab.tsx            # Floating circular icon + badge
+│   │   │   ├── ai-chat-popover.tsx        # Small side chatbox
+│   │   │   └── ai-chat-panel.tsx          # Full panel (docked to Workboard)
 │   │   │
-│   │   ├── workboard/                     # Workboard panel system (v5.3)
-│   │   │   ├── index.ts ✓                 # Barrel exports
-│   │   │   ├── workboard-provider.tsx ✓   # Context: layout state, panel configs
-│   │   │   ├── workboard-grid.tsx ✓       # react-grid-layout with custom auto-fill
-│   │   │   ├── workboard-panel.tsx ✓      # Generic draggable/resizable panel
-│   │   │   ├── workboard-drop-zone.tsx ✓  # Drop target for AI Chat FAB
-│   │   │   ├── panel-header.tsx ✓         # Drag handle + controls (maximize/restore, close/hide v5.8)
-│   │   │   ├── use-workboard-layout.ts ✓  # Hook: load/save layout to localStorage
+│   │   ├── workboard/                     # Workboard panel system
+│   │   │   ├── index.ts
+│   │   │   ├── workboard-provider.tsx     # Context: layout state, panel configs
+│   │   │   ├── workboard-grid.tsx         # react-grid-layout with auto-fill
+│   │   │   ├── workboard-panel.tsx        # Generic draggable/resizable panel
+│   │   │   ├── workboard-drop-zone.tsx    # Drop target for AI Chat FAB
+│   │   │   ├── panel-header.tsx           # Drag handle + controls
+│   │   │   ├── utils/
+│   │   │   │   └── grid-layout.ts         # Grid utilities: auto-fill, height calc, swap
 │   │   │   │
 │   │   │   └── panels/                    # Panel content components
-│   │   │       ├── index.ts ✓             # Barrel exports
-│   │   │       ├── workflow-panel-content.tsx ✓  # Workflow tracker content
-│   │   │       ├── pricing-panel-content.tsx ✓   # Pricing editor orchestrator (v5.9 refactor)
-│   │   │       ├── preview-panel-content.tsx ✓   # Quotation preview + approval workflow (v5.5)
+│   │   │       ├── index.ts
+│   │   │       ├── workflow-panel-content.tsx
+│   │   │       ├── pricing-panel-content.tsx
+│   │   │       ├── preview-panel-content.tsx
 │   │   │       │
-│   │   │       └── pricing/               # NEW: Pricing panel components (v5.9)
-│   │   │           ├── index.ts ✓         # Barrel exports
-│   │   │           ├── pricing-panel-provider.tsx ✓  # Context: state, actions
-│   │   │           ├── currency-selector.tsx ✓       # Global currency dropdown
-│   │   │           ├── item-search.tsx ✓             # Search/filter items
-│   │   │           ├── pricing-item-list.tsx ✓       # Scrollable item list
-│   │   │           ├── pricing-item-card.tsx ✓       # Per-item variable inputs
-│   │   │           ├── profit-summary-table.tsx ✓    # Profit calculation display
-│   │   │           ├── bulk-update-popover.tsx ✓     # Right-click bulk update
-│   │   │           └── pricing-actions.tsx ✓         # Apply/Reset buttons
+│   │   │       ├── preview/               # Preview panel sub-components
+│   │   │       │   ├── index.ts
+│   │   │       │   ├── blank-document.tsx
+│   │   │       │   ├── document-toolbar.tsx
+│   │   │       │   ├── email-document.tsx
+│   │   │       │   ├── quotation-document.tsx
+│   │   │       │   ├── rfq-analysis-document.tsx
+│   │   │       │   ├── supplier-search-document.tsx
+│   │   │       │   └── workboard-history.tsx
+│   │   │       │
+│   │   │       └── pricing/               # Pricing panel sub-components
+│   │   │           ├── index.ts
+│   │   │           ├── pricing-panel-provider.tsx
+│   │   │           ├── currency-selector.tsx
+│   │   │           ├── item-search.tsx
+│   │   │           ├── pricing-item-list.tsx
+│   │   │           ├── pricing-item-card.tsx
+│   │   │           ├── profit-summary-table.tsx
+│   │   │           ├── bulk-update-popover.tsx
+│   │   │           └── pricing-actions.tsx
 │   │   │
 │   │   ├── rfq-queue/                     # RFQ Queue components
-│   │   │   ├── index.ts ✓                 # Barrel exports
-│   │   │   ├── rfq-queue-list.tsx ✓       # Scrollable RFQ list (top 3 visible)
-│   │   │   └── rfq-queue-item.tsx ✓       # Individual RFQ item with status
+│   │   │   ├── index.ts
+│   │   │   ├── rfq-queue-list.tsx
+│   │   │   └── rfq-queue-item.tsx
 │   │   │
 │   │   ├── comms-hub/                     # Communications Hub components
-│   │   │   ├── index.ts ✓                 # Barrel exports
-│   │   │   ├── comms-hub-trigger.tsx ✓    # Topbar icon with badge
-│   │   │   ├── comms-hub-dropdown.tsx ✓   # Dropdown panel (w-360px)
-│   │   │   └── channel-item.tsx ✓         # Individual channel card
-│   │   │   # Planned channels: Email, SMS, WhatsApp, Telegram, Zalo
+│   │   │   ├── index.ts
+│   │   │   ├── comms-hub-trigger.tsx
+│   │   │   ├── comms-hub-dropdown.tsx
+│   │   │   └── channel-item.tsx
 │   │   │
-│   │   ├── dashboard/                     # Dashboard UI components
-│   │   │   ├── index.ts ✓                 # Barrel exports
-│   │   │   ├── stats-card.tsx ✓           # Single stat card component
-│   │   │   ├── recent-quotations-card.tsx ✓ # Recent quotations table card
-│   │   │   └── quick-actions-card.tsx ✓   # Quick actions panel card
-│   │   │
-│   │   ├── horizontal-scroll-container.tsx ✓ # Horizontal scroll with nav buttons (NEW v5.2)
-│   │   │
-│   │   └── workspace/                     # Workspace panel components (legacy)
-│   │       ├── index.ts ✓                 # Barrel exports (backward compat)
-│   │       ├── chat-panel.tsx ✓           # AI Chat panel placeholder
-│   │       └── workflow-panel.tsx ✓       # Workflow tracker placeholder
+│   │   └── dashboard/                     # Dashboard components
+│   │       ├── index.ts
+│   │       ├── stats-card.tsx
+│   │       ├── recent-quotations-card.tsx
+│   │       └── quick-actions-card.tsx
 │   │
 │   ├── home/                              # Homepage (marketing) components
-│   │   ├── index.ts ✓                     # Barrel exports
-│   │   ├── Navbar.tsx ✓                   # Sticky nav with Logo + theme toggle
-│   │   ├── HeroSection.tsx ✓              # Hero with headline, CTAs
-│   │   ├── FeaturesSection.tsx ✓          # Feature cards grid
-│   │   ├── HowItWorksSection.tsx ✓        # 3-step process
-│   │   ├── PricingSection.tsx ✓           # Pricing tiers (disabled)
-│   │   ├── TestimonialsSection.tsx ✓      # Customer reviews
-│   │   ├── CTASection.tsx ✓               # Final CTA
-│   │   └── Footer.tsx ✓                   # Footer with links
+│   │   ├── index.ts
+│   │   ├── Navbar.tsx
+│   │   ├── HeroSection.tsx
+│   │   ├── FeaturesSection.tsx
+│   │   ├── HowItWorksSection.tsx
+│   │   ├── PricingSection.tsx
+│   │   ├── TestimonialsSection.tsx
+│   │   ├── CTASection.tsx
+│   │   └── Footer.tsx
 │   │
-│   ├── auth/                              # Authentication components
-│   │   └── AuthForm.tsx ✓                 # Reusable auth form (+ OAuth buttons v7.0)
+│   ├── auth/
+│   │   └── AuthForm.tsx                   # Reusable auth form (+ OAuth buttons)
 │   │
-│   ├── settings/                          # Settings components (v7.0)
-│   │   └── EmailConnectionPanel.tsx ✓     # Email connection management UI
+│   ├── settings/
+│   │   └── EmailConnectionPanel.tsx       # Email connection management UI
 │   │
 │   └── ui/                                # Reusable UI components (Shadcn)
-│       ├── logo.tsx ✓                     # Shared Logo SVG component
-│       ├── button.tsx ✓                   # Button component
-│       ├── input.tsx ✓                    # Input component
-│       ├── label.tsx ✓                    # Label component
-│       ├── form.tsx ✓                     # Form components
-│       ├── card.tsx ✓                     # Card component
-│       ├── dialog.tsx ✓                   # Dialog component
-│       └── table.tsx ✓                    # Table component
+│       ├── logo.tsx
+│       ├── button.tsx
+│       ├── input.tsx
+│       ├── label.tsx
+│       ├── form.tsx
+│       ├── card.tsx
+│       ├── dialog.tsx
+│       └── table.tsx
 │
 ├── lib/                                   # Business Logic & Utilities
-│   │
-│   ├── actions/                           # Server Actions ('use server') - v6.0
-│   │   ├── analysis-actions.ts ✓          # RFQ analysis: email → AI API → analysis JSON
-│   │   ├── email-actions.ts ✓             # Email drafting & sending to suppliers
-│   │   ├── email-connection-actions.ts ✓  # Email connection CRUD (connect, disconnect, pause, v7.0)
-│   │   ├── supplier-search-actions.ts ✓   # Supplier search via AI API
-│   │   ├── quotation-actions.ts ✓         # Quotation generate/update operations
-│   │   └── pricing-actions.ts ✓           # Price calculation & database storage
-│   │
-│   ├── stores/                            # Zustand State Management - v6.0
-│   │   └── workboard-store.ts ✓           # Single store with slices:
-│   │                                      # - analysisSlice: RFQ analysis state
-│   │                                      # - emailSlice: Email draft state
-│   │                                      # - supplierSlice: Supplier search state
-│   │                                      # - quotationSlice: Quotation data state
-│   │                                      # - pricingSlice: Pricing calculation state
-│   │                                      # - workflowSlice: Current workflow step
-│   │
-│   ├── types/                             # Shared TypeScript Types - v6.0
-│   │   └── workflow.ts ✓                  # Workflow types + Zod schemas:
-│   │                                      # - ActionResult, WorkflowStep
-│   │                                      # - RFQContext, StepStatus
-│   │                                      # - Zod validation schemas
+│   ├── actions/                           # Server Actions ('use server')
+│   │   ├── analysis-actions.ts            # RFQ analysis: email -> AI -> analysis JSON
+│   │   ├── email-actions.ts               # Email drafting & sending
+│   │   ├── email-connection-actions.ts    # Email connection CRUD (OAuth)
+│   │   ├── supplier-search-actions.ts     # Supplier search via AI
+│   │   ├── quotation-actions.ts           # Quotation generate/update
+│   │   ├── snapshot-actions.ts            # Workboard snapshot CRUD
+│   │   └── pricing-actions.ts             # Price calculation & storage
 │   │
 │   ├── utils/                             # Helper Functions
-│   │   ├── databaseHandler.ts ✓           # Unified DB handler using queries.ts (v6.0)
-│   │   │                                  # - Typed payload builders for all tables
-│   │   │                                  # - checkDataExists via getData()
-│   │   │                                  # - modifyDatabase via insertData/updateData()
-│   │   │
-│   │   ├── validator.ts ✓                 # Multi-data-type input validation (v6.0)
-│   │   │
-│   │   ├── rfq-queue.ts ✓                 # Per-RFQ sequential processor (v6.0):
-│   │   │                                  # - Sequential execution per RFQ_id
-│   │   │                                  # - Retry logic (max 3, exponential backoff)
-│   │   │                                  # - Stage advancement via queue-manager
-│   │   │
-│   │   ├── grid-layout.ts ✓               # Grid utilities: auto-fill, height calc, swap detection (v5.7)
-│   │   │
-│   │   ├── formatting/
-│   │   │   ├── currency.ts
-│   │   │   ├── date.ts
-│   │   │   ├── mime-types.ts
-│   │   │   ├── sanitize.ts
-│   │   │   └── uptime.ts
-│   │   │
-│   │   ├── validation/
-│   │   │   ├── quotation-validator.ts
-│   │   │   ├── email-validator.ts
-│   │   │   ├── input-validator.ts
-│   │   │   └── schemas.ts ✓               # Zod schemas: login, signup, field validators (moved from lib/validation/)
-│   │   │
-│   │   ├── generators/
-│   │   │   ├── id-generator.ts
-│   │   │   └── token-generator.ts
-│   │   │
-│   │   ├── config/
-│   │   │   └── config-loader.ts
-│   │   │
-│   │   └── api/
-│   │       └── get-workspace.ts ✓
+│   │   ├── databaseHandler.ts             # Unified DB handler (payload builders + modifyDatabase)
+│   │   ├── validator.ts                   # Multi-data-type input validation
+│   │   └── validation/
+│   │       └── schemas.ts                 # Zod schemas: login, signup, field validators
 │   │
 │   ├── services/                          # Business Logic Layer
-│   │   ├── auth/                          # Auth services (v6.0, placeholder)
-│   │   │
-│   │   ├── email/                         # Email Integration (OAuth + Webhooks, v7.0)
-│   │   │   ├── email-pipeline.ts ✓        # Extracted reusable processing pipeline
-│   │   │   ├── oauth-helper.ts ✓          # OAuth URL builders, token exchange, AES-256-GCM
-│   │   │   ├── gmail-client.ts ✓          # Gmail API wrapper (watch, history, messages)
-│   │   │   └── outlook-client.ts ✓        # Microsoft Graph wrapper (subscriptions, messages)
-│   │   │
-│   │   ├── rfq-queue/                     # RFQ Queue services
-│   │   │   ├── index.ts ✓                 # Barrel exports
-│   │   │   └── queue-manager.ts ✓         # Queue CRUD, filtering, stage updates
+│   │   ├── email/                         # Email Integration (OAuth + Webhooks)
+│   │   │   ├── email-pipeline.ts          # Provider-agnostic processing pipeline
+│   │   │   ├── oauth-helper.ts            # OAuth URL builders, token exchange, AES-256-GCM
+│   │   │   ├── gmail-client.ts            # Gmail API wrapper (watch, history, messages)
+│   │   │   └── outlook-client.ts          # Microsoft Graph wrapper (subscriptions, messages)
 │   │   │
 │   │   ├── comms/                         # Communications services
-│   │   │   ├── index.ts ✓                 # Barrel exports
-│   │   │   ├── comms-manager.ts ✓         # Channel & message management
-│   │   │   └── email-watcher.ts ⚠️        # DEPRECATED: IMAP watcher (re-exports from email-pipeline.ts)
+│   │   │   ├── index.ts                   # Barrel exports
+│   │   │   └── comms-manager.ts           # Channel & message management
 │   │   │
-│   │   ├── pricing/                       # Pricing services (v5.9)
-│   │   │   ├── index.ts ✓                 # Barrel exports
-│   │   │   ├── pricing-calculator.ts ✓    # Core calculation engine
-│   │   │   ├── pricing-manager.ts ✓       # CRUD operations
-│   │   │   ├── currency-service.ts ✓      # Exchange rates & conversion
-│   │   │   └── validation.ts ✓            # Input validation
+│   │   ├── rfq-queue/                     # RFQ Queue services
+│   │   │   ├── index.ts
+│   │   │   └── queue-manager.ts           # Queue CRUD, filtering, stage updates
 │   │   │
-│   │   ├── quotation/                     # Quotation services (v6.0, placeholder)
-│   │   ├── session/                       # Session services (v6.0, placeholder)
-│   │   ├── sse/                           # SSE services (v6.0, placeholder)
-│   │   ├── rfq-analysis/                  # RFQ Analysis services (v6.0, placeholder)
-│   │   └── supplier-search/               # Supplier Search services (v6.0, placeholder)
+│   │   ├── pricing/                       # Pricing services
+│   │   │   ├── index.ts
+│   │   │   ├── pricing-calculator.ts      # Core calculation engine
+│   │   │   ├── pricing-manager.ts         # CRUD operations
+│   │   │   ├── currency-service.ts        # Exchange rates & conversion
+│   │   │   └── validation.ts              # Input validation
+│   │   │
+│   │   ├── auth/                          # Auth services (placeholder)
+│   │   ├── quotation/                     # Quotation services (placeholder)
+│   │   ├── session/                       # Session services (placeholder)
+│   │   ├── sse/                           # SSE services (placeholder)
+│   │   ├── rfq-analysis/                  # RFQ Analysis services (placeholder)
+│   │   └── supplier-search/               # Supplier Search services (placeholder)
 │   │
-│   ├── hooks/                             # Custom React Hooks
-│   │   └── use-pricing.ts                 # Pricing state hook
-│   │
-│   ├── data-processor.ts ✓                # Data processing API (v6.0)
-│   │                                      # - DataProcessingAPI class
-│   │                                      # - Routes data to databaseHandler/validator
-│   │
-│   ├── event-bus.ts ✓                     # In-process pub/sub for SSE events (v6.0)
-│   │                                      # - EventBus singleton
-│   │                                      # - Publish/subscribe pattern
-│   │
+│   ├── ai-agent/                          # AI Agent Layer
+│   │   ├── local-model.ts                 # Local model inference (@xenova/transformers)
+│   │   └── ai-model/                      # Model storage (placeholder)
 │   │
 │   ├── db/                                # Database Layer
-│   │   ├── client.ts ✓                    # Drizzle client
-│   │   ├── schema.ts ✓                    # Schema definitions
-│   │   ├── queries.ts ✓                   # Generic CRUD with workspace isolation
-│   │   │                                  # - insertData, getData, getCount
-│   │   │                                  # - updateData, deleteData
-│   │   └── migrations/migrate.ts ✓
+│   │   ├── client.ts                      # Drizzle ORM client (PostgreSQL/Neon)
+│   │   ├── schema.ts                      # 16 table definitions (Drizzle schema)
+│   │   ├── queries.ts                     # Generic CRUD with workspace isolation
+│   │   └── migrations/
+│   │       └── migrate.ts                 # Migration runner
 │   │
-│   └── middleware/                        # Middleware Helpers
-│       ├── workspace-context.ts ✓         # WorkspaceContext class (tenant isolation)
-│       ├── get-workspace.ts ✓             # Workspace helper (moved from lib/db/)
-│       └── auth-helpers.ts ✓
+│   ├── middleware/                         # Middleware Helpers
+│   │   ├── workspace-context.ts           # WorkspaceContext class (tenant isolation)
+│   │   ├── get-workspace.ts               # Workspace helper
+│   │   └── auth-helpers.ts                # JWT verification helpers
+│   │
+│   ├── data-processor.ts                  # Main server action entry point (handleHTTPRequest)
+│   ├── data-loader.ts                     # Data loading for pipeline chaining
+│   ├── event-bus.ts                       # In-process pub/sub for SSE events
+│   └── utils.ts                           # General utilities (cn, etc.)
+│
+├── hooks/                                 # Custom React Hooks
+│   ├── preview-context.tsx                # Preview state context
+│   ├── use-preview-reducer.ts             # Preview state reducer
+│   └── use-preview-sse.ts                 # SSE connection for preview updates
 │
 ├── types/                                 # TypeScript Types
-│   ├── ai-chat.ts ✓                       # AI Chat types (NEW v5.0)
-│   ├── workboard.ts ✓                     # Workboard types (NEW v5.0)
-│   ├── pricing.ts ✓                       # Pricing types (NEW v5.9)
-│   ├── rfq-queue.ts ✓                     # RFQ Queue types
-│   ├── comms.ts ✓                         # Communications types
-│   ├── quotation.ts
-│   ├── email.ts
-│   ├── rfq.ts
-│   ├── suppliers.ts
-│   ├── session.ts
-│   ├── user.ts
-│   ├── workspace.ts ✓
-│   ├── api.ts
-│   └── database.ts ✓
+│   ├── ai-agent.ts                        # AI agent types
+│   ├── ai-chat.ts                         # AI Chat types
+│   ├── workboard.ts                       # Workboard types
+│   ├── workflow.ts                        # Workflow step types
+│   ├── pricing.ts                         # Pricing types
+│   ├── rfq-queue.ts                       # RFQ Queue types
+│   ├── comms.ts                           # Communications types
+│   ├── preview.ts                         # Preview panel types
+│   ├── workspace.ts                       # Workspace types
+│   └── database.ts                        # Database types
+│
+├── config/                                # Configuration
+│   └── workspace.config.ts                # Workspace config
+│
+├── Documents/                             # Project Documentation
+│   ├── google_console_setup.md            # Google Cloud OAuth setup
+│   ├── microsoft_setup.md                 # Microsoft Azure OAuth setup
+│   ├── watcher-service.md                 # Email watcher v2 migration plan
+│   ├── EMAIL_WATCHER.md                   # Original email watcher spec
+│   ├── architecture-redis-pubsub.md       # Redis/Pub/Sub architecture
+│   ├── auth_FLOW.md                       # Authentication flow
+│   ├── Deployment.md                      # Deployment instructions
+│   ├── Current-context.md                 # System context and status
+│   ├── Dashboard_factor.md                # Dashboard design spec
+│   ├── Preview.md                         # Preview panel spec
+│   ├── Commit.md                          # Commit conventions
+│   └── DISCUSSION_2026-02-27.md           # Architecture discussion
+│
+├── drizzle/                               # Drizzle ORM Output
+│   ├── migrations/                        # Generated SQL migrations
+│   └── schema/                            # Generated schema snapshots
 │
 ├── public/                                # Static Assets
-│   ├── templates/
 │   ├── assets/
-│   └── favicon.ico
-│
-├── drizzle/                               # Drizzle ORM
-│   ├── migrations/
-│   └── schema/
-│
-├── scripts/                               # Utility Scripts
-│   ├── session-manager.ts
-│   ├── port-manager.ts
-│   ├── generate-token.ts
-│   └── show-config.ts
+│   │   ├── generated/                     # Generated files
+│   │   ├── logos/                          # Logo assets
+│   │   └── signatures/                    # Signature assets
+│   └── templates/                         # Document templates
 │
 ├── tests/                                 # Tests
 │   ├── unit/
+│   │   ├── services/
+│   │   └── utils/
 │   ├── integration/
+│   │   ├── api/
+│   │   └── quotation/
 │   └── fixtures/
+│       └── quotations/
 │
-├── config/                                # Configuration
-│   ├── environments.json
-│   ├── demo-users.json
-│   └── workspace.config.ts ✓
+├── scripts/                               # Utility Scripts (placeholder)
 │
-├── vercel.json ✓                          # Vercel cron configuration (v7.0)
-├── .env.example
-├── .eslintrc.json
-├── .prettierrc
-├── drizzle.config.ts ✓
-├── middleware.ts ✓
-├── next.config.ts
-├── package.json
-├── postcss.config.mjs ✓
-├── tsconfig.json
-├── Dashboard_factor.md ✓                  # Dashboard design specification
-├── Chatbox_design.md ✓                    # AI Chat FAB design specification
-├── Workboard_factoring.md ✓               # Workboard panel system specification
-├── PricingPanel.md ✓                      # Pricing panel refactoring specification (NEW v5.9)
-└── README.md
+├── .env.local                             # Environment configuration
+├── drizzle.config.ts                      # Drizzle Kit config
+├── instrumentation.ts                     # Next.js instrumentation hook
+├── middleware.ts                           # Next.js middleware (auth + workspace)
+├── next.config.ts                         # Next.js config
+├── vercel.json                            # Vercel cron configuration
+├── package.json                           # Dependencies & scripts
+├── tsconfig.json                          # TypeScript config
+├── postcss.config.mjs                     # PostCSS config
+├── eslint.config.mjs                      # ESLint config
+├── .eslintrc.json                         # ESLint legacy config
+├── .prettierrc                            # Prettier config
+├── Monorepo-structure.md                  # This file
+└── README.md                              # Project readme
 ```
 
 ## Key Architecture Decisions
@@ -393,227 +307,54 @@ quoteflow_ai/
 | `(app)` | Authenticated app | Shared sidebar + topbar |
 | `(auth)` | Authentication | Split-screen |
 
-### Sidebar Structure (v4.0)
+### Email Processing Architecture (v7.1)
 
-The sidebar has been redesigned with the following sections:
+IMAP-based email watcher has been fully removed. Email processing uses OAuth webhooks:
 
-| Section | Items | Description |
-|---------|-------|-------------|
-| **Workspace** | Dashboard, Workboard | Main navigation |
-| **RFQ Queue** | Dynamic list | Top 3 visible, scrollable for more |
-| **Documents** | Storage, Upload | File management |
-| **System** | Settings, Pipeline View | Configuration & visualization |
-
-### Workboard Panel System (v5.8)
-
-The workspace now uses a dynamic panel system powered by `react-grid-layout` with custom auto-fill:
-
-| Feature | Description |
-|---------|-------------|
-| **Resize** | Drag panel edges (se, e, s handles) to resize |
-| **Reposition** | Drag panel headers to swap positions |
-| **Custom Auto-Fill** | Panels expand to fill horizontal gaps (lib/utils/grid-layout.ts) |
-| **Persistence** | Layout saved to localStorage with versioning |
-| **Lock/Unlock** | Toggle layout editing (static mode) |
-| **React-Native** | Native React component - no sync issues |
-| **Drop Zone** | AI Chat FAB can be dropped to create docked panel |
-| **Panel Toggle** | Circular buttons to hide/show individual panels (v5.4) |
-| **Grid Height Constraint** | Fixed grid height prevents unlimited vertical expansion (v5.7) |
-| **Swap Size Exchange** | When panels swap positions, their sizes are also exchanged (v5.7) |
-| **Maximize/Restore** | Single button toggles between maximized (full space) and normal state (NEW v5.8) |
-
-#### Grid Height Constraint (v5.7)
-
-The grid container now has a fixed height calculated from the panel layout:
-
-| Aspect | Behavior |
-|--------|----------|
-| **Calculation** | `height = maxRows × rowHeight + (maxRows - 1) × marginY` |
-| **Purpose** | Prevents panels from being pushed below grid boundary |
-| **Effect** | When dragging panels, they swap horizontally instead of stacking vertically |
-| **CSS Class** | `.workboard-grid-constrained` with `overflow: hidden` |
-
-#### Panel Swap with Size Exchange (v5.7)
-
-When panels swap positions during drag operations:
-
-| Step | Action |
-|------|--------|
-| 1. **Pre-drag Snapshot** | Layout captured before drag starts |
-| 2. **Swap Detection** | On drag stop, detect if Panel A now occupies Panel B's old position (and vice versa) |
-| 3. **Size Exchange** | Panel A gets Panel B's original size, Panel B gets Panel A's original size |
-| 4. **Constraints** | `minW`, `minH`, `maxW`, `maxH` are also exchanged |
-
-**Example:**
-- Preview (6×7) dragged to Workflow's position
-- Preview becomes 6×2 (Workflow's original size)
-- Workflow becomes 6×7 (Preview's original size)
-
-#### Panel Toggle Buttons (v5.4)
-
-Three circular toggle buttons in the workspace header allow users to hide/show individual panels:
-
-| Button | Icon | Panel | Behavior |
-|--------|------|-------|----------|
-| Workflow | `GitBranch` | Workflow tracker | Hide/show with position preserved |
-| Pricing | `DollarSign` | Pricing editor | Hide/show with position preserved |
-| Preview | `FileText` | Quotation preview | Hide/show with position preserved |
-
-**States:**
-- **Active (visible)**: `bg-primary text-primary-foreground` - Panel is showing
-- **Inactive (hidden)**: `bg-muted text-muted-foreground` - Panel is hidden
-
-**Position Preservation:** When a panel is hidden, its layout position and size are saved. When shown again, the panel restores to its exact previous position.
-
-#### Panel Close Buttons (v5.6)
-
-All panels now have a close button (X) in their header. The behavior differs based on panel type:
-
-| Panel | Close Button | Behavior | Restore Method |
-|-------|--------------|----------|----------------|
-| Workflow | "Hide panel" | Hides panel, preserves position | Click toggle icon in header |
-| Pricing | "Hide panel" | Hides panel, preserves position | Click toggle icon in header |
-| Preview | "Hide panel" | Hides panel, preserves position | Click toggle icon in header |
-| Chat | "Close panel" | Undocks to FAB mode | Drag FAB back to workboard |
-
-**Close Button Styling:**
-- Normal: `ghost` variant, `h-6 w-6`
-- Hover: `hover:bg-destructive/10 hover:text-destructive`
-- Icon: `X` from lucide-react, `w-3 h-3`
-
-**User Flow:**
-1. Click close (X) on Workflow/Pricing/Preview → Panel hides → Toggle icon turns gray
-2. Click gray toggle icon in workspace header → Panel restores at saved position
-3. Click close (X) on Chat → Panel removed → Returns to floating FAB mode
-
-#### Panel Maximize/Restore Feature (v5.8)
-
-Each panel header now has a maximize/restore button that toggles between normal and maximized states:
-
-| State | Icon | Action | Effect |
-|-------|------|--------|--------|
-| **Normal** | `Maximize2` | Click to maximize | Hides all other panels, current panel expands to fill space |
-| **Maximized** | `Minimize2` | Click to restore | Shows all hidden panels, current panel shrinks back |
-
-**Maximize Flow:**
-1. User clicks Maximize2 icon on Panel A
-2. All other panels (B, C) are saved to `hiddenPanels` Map with their positions
-3. Panel A removed from `panels` and `layout` arrays (only Panel A remains)
-4. `compactAndFillAll()` expands Panel A to fill entire grid space
-5. `maximizedPanelId` set to Panel A's ID
-6. Icon switches to `Minimize2`
-
-**Restore Flow:**
-1. User clicks Minimize2 icon on maximized Panel A
-2. All panels from `hiddenPanels` Map are restored at their original positions
-3. `resolveOverlapShrinkWidth()` shrinks Panel A to avoid overlaps
-4. `maximizedPanelId` set to `null`
-5. Icon switches back to `Maximize2`
-
-**State Persistence:**
-- `maximizedPanelId` is saved to localStorage with the layout
-- On page reload, maximized state is restored automatically
-
-**Button Styling:**
-- Same as other header buttons: `ghost` variant, `h-6 w-6`
-- Icon size: `w-3 h-3`
-
-#### Preview Panel Approval Workflow (v5.5)
-
-The Preview panel now includes a complete approval workflow for AI-generated content:
-
-| Section | Features |
-|---------|----------|
-| **Header** | Edit button, Revert button (↺), Download button, Version badge |
-| **Content** | Selectable text with floating "Add Note" tooltip |
-| **Footer** | Collapsible feedback section, Regenerate button, Approve button |
-
-**Inline Feedback Flow:**
-1. User selects text in preview → "Add Note" button appears above selection
-2. Click → popover opens with textarea for feedback
-3. Save → note stored with selected text reference
-4. Notes displayed in collapsible feedback section
-
-**Smart Tooltip Positioning:**
-- Tooltip appears **above** selection if enough space, otherwise **below**
-- Horizontal position clamped within container bounds
-- Only triggers for selections **inside** the content area
-
-**Action Buttons:**
-- **Regenerate** (outline): Only enabled when feedback exists, sends all notes to AI
-- **Approve** (success/green): Finalizes the content using `bg-success` token
-
-> **Note:** Migrated back from Gridstack.js due to race conditions with React's rendering model (see Grid.md for analysis).
-
-#### Pricing Panel System (v5.9)
-
-The Pricing Panel has been refactored with a modular architecture for per-item pricing calculations:
-
-| Component | Purpose |
-|-----------|---------|
-| **PricingPanelProvider** | Context for state management (items, variables, calculated pricing) |
-| **CurrencySelector** | Global target currency selection (VND, USD, EUR, JPY) |
-| **ItemSearch** | Search/filter items by keyword |
-| **PricingItemCard** | Per-item variable inputs (shipping, tax, exchange, profit, discount) |
-| **ProfitSummaryTable** | Displays potential profit per item |
-| **BulkUpdatePopover** | Right-click context menu for bulk variable updates |
-| **PricingActions** | Apply (calculate) and Reset buttons |
-
-**Pricing Formula:**
 ```
-actual_unit_price = ((unit_price + shipping_cost) × tax_rate) × exchange_rate
-profit_unit_price = actual_unit_price × profit_rate
-sales_unit_price = profit_unit_price - (profit_unit_price × discount_rate)
-potential_profit = (profit_unit_price - actual_unit_price) × qty
+Gmail inbox -> Google Pub/Sub -> POST /api/webhooks/gmail -> email-pipeline.ts
+Outlook inbox -> Microsoft Graph -> POST /api/webhooks/microsoft -> email-pipeline.ts
+
+Pipeline: extractContent -> checkDuplicate -> classifyType -> buildPayload -> handleHTTPRequest
 ```
 
-**Service Layer:**
-| Service | Purpose |
-|---------|---------|
-| `pricing-calculator.ts` | Core calculation engine with formula implementation |
-| `pricing-manager.ts` | CRUD operations for pricing variables & results |
-| `currency-service.ts` | Exchange rate management & currency conversion |
-| `validation.ts` | Input validation for pricing variables |
+### Database Schema (16 tables)
 
-**API Endpoints:**
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/pricing` | GET | Load pricing data for quotation |
-| `/api/pricing` | POST | Calculate and save pricing |
-| `/api/pricing/variables` | GET | Get saved pricing variables |
-| `/api/pricing/variables` | PUT | Update pricing variables |
+| Table | Purpose |
+|-------|---------|
+| `client_company` | Tenant companies |
+| `client_info` | User accounts (password + OAuth) |
+| `rfq_analysis` | RFQ analysis records (root entity) |
+| `quotations` | Generated quotations (FK to rfq_analysis) |
+| `customers` | Customer info (FK to rfq_analysis) |
+| `email_table` | Email records (FK to rfq_analysis + quotations) |
+| `file_metadata` | File attachments (FK to rfq_analysis + quotations) |
+| `quotation_items` | Line items per quotation |
+| `quotation_pricing` | Pricing per item |
+| `supplier_search` | Supplier search results |
+| `supplier_item_status` | Per-item supplier availability tracking |
+| `sessions` | Processing sessions |
+| `sse_connections` | SSE connection tracking |
+| `user_sessions` | User session state (composite PK) |
+| `workboard_snapshots` | Workboard version history |
+| `email_connections` | OAuth token storage (AES-256-GCM encrypted) |
 
-> **Note:** See `PricingPanel.md` for complete refactoring specification.
+### API Endpoints
 
-### AI Chat FAB System (v5.0)
-
-Floating AI Chat button with drag & drop integration:
-
-| Feature | Description |
-|---------|-------------|
-| **Click** | Opens side popover chatbox |
-| **Drag** | Can be dragged to workboard |
-| **Drop** | Creates docked chat panel in grid |
-| **Undock** | Close button returns to FAB mode |
-
-### Component Organization (v5.0)
-
-**New Components Added:**
-- `components/app/ai-chat/` - AI Chat FAB and popover system
-- `components/app/workboard/` - Dynamic panel grid system
-- `components/app/workboard/panels/` - Panel content components
-
-**New Types Added:**
-- `types/ai-chat.ts` - Message, Position, ChatState types
-- `types/workboard.ts` - Layout, PanelConfig, GridConfig, HiddenPanelInfo, SwapResult types
-
-**Dependencies Used:**
-- `react-grid-layout` (v2.2+) - Panel resize/reposition with custom auto-fill
-- `@dnd-kit/core` - Drag & drop for FAB
-- `@dnd-kit/utilities` - DnD utilities
-
-**Removed Dependencies:**
-- `gridstack` - Removed due to React sync issues (see Grid.md)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/auth/signup` | POST | User registration |
+| `/api/auth/login` | POST | User login |
+| `/api/auth/logout` | POST | User logout |
+| `/api/auth/me` | GET | Current user info |
+| `/api/auth/verify` | GET | Token verification |
+| `/api/auth/callback/google` | GET | Google OAuth callback |
+| `/api/auth/callback/microsoft` | GET | Microsoft OAuth callback |
+| `/api/comms` | GET/POST | Communications hub |
+| `/api/webhooks/gmail` | POST | Gmail Pub/Sub push notifications |
+| `/api/webhooks/microsoft` | POST | Microsoft Graph change notifications |
+| `/api/cron/refresh-tokens` | GET | Token refresh cron (every 45 min) |
+| `/api/preview-stream` | GET | SSE preview streaming |
 
 ### Provider Hierarchy
 
@@ -627,113 +368,16 @@ app/layout.tsx (Root)
             └── AIChatProvider
                 └── WorkboardProvider
                     └── DndContext
-                        ├── dashboard/* - All providers work here
-                        └── workspace/* - All providers work here
+                        ├── dashboard/*
+                        └── workspace/*
 ```
 
-### Shared Components
+### Scripts
 
-| Component | Location | Used By |
-|-----------|----------|---------|
-| `Logo` | `components/ui/logo.tsx` | Navbar, Topbar, Auth |
-| `SidebarProvider` | `components/app/sidebar-provider.tsx` | App layout, Sidebar |
-| `AIChatProvider` | `components/app/ai-chat/` | App layout, FAB, Popover, Panel |
-| `WorkboardProvider` | `components/app/workboard/` | App layout, WorkboardGrid |
-| `RFQQueueList` | `components/app/rfq-queue/` | Sidebar |
-| `CommsHubTrigger` | `components/app/comms-hub/` | Topbar |
-| Theme Toggle | `components/app/topbar.tsx` | Dashboard, Homepage |
-
-### URL Mapping
-
-| Route Group | URL | Page |
-|-------------|-----|------|
-| `(home)` | `/` | Homepage (public landing) |
-| `(app)/dashboard` | `/dashboard` | Dashboard overview |
-| `(app)/workspace/[id]` | `/workspace/Q-2024-001` | Quotation workspace |
-| `(app)/storage` | `/storage` | Document storage |
-| `(app)/upload` | `/upload` | File uploads |
-| `(app)/settings` | `/settings` | App settings |
-| `(app)/pipeline` | `/pipeline` | Pipeline view |
-| `(auth)` | `/login`, `/signup` | Auth forms |
-
-### API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/rfq-queue` | GET | List queued RFQs with filters |
-| `/api/rfq-queue` | POST | Update RFQ status/stage |
-| `/api/comms` | GET | List channels, status, messages |
-| `/api/comms` | POST | Update channel or mark message read |
-| `/api/pricing` | GET | Load pricing data for quotation (v5.9) |
-| `/api/pricing` | POST | Calculate and save pricing (v5.9) |
-| `/api/pricing/variables` | GET | Get saved pricing variables (v5.9) |
-| `/api/pricing/variables` | PUT | Update pricing variables (v5.9) |
-| `/api/preview-stream` | GET | SSE preview streaming (v6.0) |
-| `/api/auth/callback/google` | GET | Google OAuth callback (v7.0) |
-| `/api/auth/callback/microsoft` | GET | Microsoft OAuth callback (v7.0) |
-| `/api/webhooks/gmail` | POST | Gmail Pub/Sub push notifications (v7.0) |
-| `/api/webhooks/microsoft` | POST | Microsoft Graph change notifications (v7.0) |
-| `/api/cron/refresh-tokens` | GET | Token refresh + subscription renewal cron (v7.0) |
-| `/api/comms/sms` | POST | Send SMS message (planned) |
-| `/api/comms/whatsapp` | POST | Send WhatsApp message (planned) |
-| `/api/comms/telegram` | POST | Send Telegram message (planned) |
-| `/api/comms/zalo` | POST | Send Zalo message (planned) |
-
-## Design Token System (v5.7 Standardized)
-
-All styling uses design tokens from `app/globals.css`. **v5.2 standardizes all components to use tokens instead of hardcoded Tailwind values.**
-
-### Grid Layout Classes (v5.7)
-
-| Class | Purpose |
-|-------|---------|
-| `.workboard-grid` | Base grid styling |
-| `.workboard-grid-constrained` | Fixed height grid with overflow hidden |
-| `.react-grid-placeholder` | Placeholder styling during drag |
-
-### Color Tokens (Complete List)
-
-| Category | Tokens | Usage |
-|----------|--------|-------|
-| **Backgrounds** | `bg-background`, `bg-card`, `bg-muted`, `bg-sidebar`, `bg-secondary`, `bg-accent`, `bg-popover` | Page, card, section backgrounds |
-| **Text** | `text-foreground`, `text-body`, `text-muted-foreground`, `text-label`, `text-placeholder`, `text-on-dark` | Typography hierarchy |
-| **Primary** | `bg-primary`, `text-primary-foreground`, `bg-primary-hover` | Buttons, CTAs |
-| **Brand** | `bg-brand`, `text-brand`, `bg-brand-hover`, `bg-brand-muted`, `text-brand-light`, `text-brand-dark` | Brand accent color (sky palette) |
-| **Status** | `bg-status-draft`, `bg-status-pending`, `bg-status-complete` + foreground variants | Status badges |
-| **Success** | `bg-success`, `text-success-foreground`, `bg-success-hover`, `bg-success-muted` | Approve buttons (emerald palette) |
-| **Destructive** | `bg-destructive`, `text-error`, `bg-error-bg`, `border-error-border` | Error states |
-| **Borders** | `border-border`, `ring-ring` | Input borders, focus rings |
-| **Glass** | `bg-glass`, `bg-glass-heavy` | Navbar overlays, modals |
-| **Hero** | `bg-hero-orb-1`, `bg-hero-orb-2`, `bg-gradient-line`, `bg-gradient-subtle` | Decorative gradients |
-| **Avatar** | `bg-avatar`, `text-avatar-foreground` | User avatars |
-| **Chart** | `bg-chart-1` to `bg-chart-5` | Data visualization |
-| **Sidebar** | `bg-sidebar`, `text-sidebar-foreground`, `border-sidebar-border` | Dashboard sidebar |
-
-### Border Radius Tokens
-- `rounded-sm` → `rounded-4xl` (from `--radius` base: 0.625rem)
-
-### Token Mapping (Hardcoded → Token)
-
-| Old Value | New Token |
-|-----------|-----------|
-| `slate-900` | `primary` or `foreground` |
-| `slate-800` | `primary-hover` |
-| `slate-700` | `label` |
-| `slate-600` | `body` |
-| `slate-500` | `muted-foreground` |
-| `slate-400` | `placeholder` |
-| `slate-200` | `border` |
-| `slate-100` | `secondary` or `accent` |
-| `slate-50` | `muted` |
-| `sky-500` | `brand` |
-| `sky-600` | `brand-hover` |
-| `sky-400` | `brand-light` |
-| `red-500` | `destructive` or `error` |
-| `emerald-500` | `success` |
-| `emerald-600` | `success-hover` |
-| `emerald-50` | `success-muted` |
-
-## Legend
-
-- ✓ = File exists and is implemented
-- Empty = Placeholder or to be implemented
+| Script | Command | Description |
+|--------|---------|-------------|
+| `dev` | `next dev` | Development server |
+| `build` | `next build` | Production build |
+| `start` | `next start` | Production server |
+| `lint` | `eslint` | Linting |
+| `test` | `start /B next dev && ngrok http 3000` | Dev server + ngrok tunnel |

@@ -1,7 +1,7 @@
 // =============================================
 // EMAIL PIPELINE - Reusable Email Processing
 // =============================================
-// Extracted from lib/services/comms/email-watcher.ts
+// Provider-agnostic email processing pipeline (extract → classify → dispatch)
 // Provider-agnostic pipeline: MIME parse → dedup → classify → build payload → dispatch
 // Used by both Gmail and Microsoft webhook handlers.
 //

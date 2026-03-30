@@ -257,6 +257,32 @@ export function buildSupplierSearchPayload(data: Record<string, unknown>, update
 }
 
 /**
+ * Build supplier item status payload for SUPPLIER_ITEM_STATUS table
+ * Used by supplier_respond flow to track per-item availability from suppliers
+ * @param data - Input supplier item data
+ * @param update - Exclude PK/FK for UPDATE operations
+ */
+export function buildSupplierItemStatusPayload(data: Record<string, unknown>, update = false): Payload {
+  const payload: Payload = {};
+
+  // PK/FK — exclude on UPDATE (with numeric validation)
+  if (!update && data.id != null) payload.id = parseInt(String(data.id), 10);
+  if (!update && data.rfq_id != null) payload.rfqId = parseInt(String(data.rfq_id), 10);
+  if (data.item_id != null) payload.itemId = parseInt(String(data.item_id), 10);
+  if (data.supplier_id != null) payload.supplierId = parseInt(String(data.supplier_id), 10);
+  if (data.supplier_name != null) payload.supplierName = String(data.supplier_name);
+  if (data.source_url != null) payload.sourceUrl = String(data.source_url);
+  // Status: 'pending' | 'available' | 'unavailable'
+  if (data.status != null) payload.status = String(data.status);
+  if (data.unit_price != null) payload.unitPrice = String(data.unit_price);
+  if (data.delivery_time != null) payload.deliveryTime = String(data.delivery_time);
+  if (data.notes != null) payload.notes = String(data.notes);
+  if (data.responded_at != null) payload.respondedAt = data.responded_at;
+
+  return payload;
+}
+
+/**
  * Build client company payload for CLIENT_COMPANY table
  * @param data - Input company data
  */
@@ -300,6 +326,7 @@ export async function checkDataExists(
       'rfq_analysis': 'rfqAnalysis',
       'supplier_search': 'supplierSearch',
       'client_company': 'clientCompany',
+      'supplier_item_status': 'supplierItemStatus',
     };
 
     const tableName = tableNameMap[table];
@@ -317,6 +344,7 @@ export async function checkDataExists(
       case 'rfq_analysis':
       case 'supplier_search':
       case 'customers':
+      case 'supplier_item_status':
         filterColumn = 'rfqId';
         break;
       default:
