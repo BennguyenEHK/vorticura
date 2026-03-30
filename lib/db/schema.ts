@@ -423,7 +423,53 @@ export const supplierSearch = pgTable('supplier_search', {
 });
 
 // ============================================
-// 13. USER_SESSIONS TABLE
+// 13. SUPPLIER_ITEM_STATUS TABLE
+// ============================================
+// Tracks per-item availability from each supplier for procurement optimization
+// Used by supplier_respond flow: when ALL items reach 'available' → trigger quotation
+export const supplierItemStatus = pgTable('supplier_item_status', {
+  // Primary key
+  id: serial('id').primaryKey(),
+
+  // FK → rfq_analysis (groups all items for one RFQ)
+  rfqId: integer('rfq_id').notNull().references(() => rfqAnalysis.rfqId, { onDelete: 'cascade' }),
+
+  // FK → quotation_items (which specific item)
+  itemId: integer('item_id').references(() => quotationItems.itemId),
+
+  // Supplier identification
+  supplierId: integer('supplier_id'),
+  supplierName: varchar('supplier_name', { length: 255 }),
+
+  // Where the supplier was found (search result URL)
+  sourceUrl: text('source_url'),
+
+  // Item status: 'pending' | 'available' | 'unavailable'
+  status: varchar('status', { length: 20 }).default('pending').notNull(),
+
+  // Supplier's quoted price and delivery for this item
+  unitPrice: numeric('unit_price', { precision: 15, scale: 4 }),
+  deliveryTime: varchar('delivery_time', { length: 100 }),
+
+  // Supplier notes/comments about this item
+  notes: text('notes'),
+
+  // When the supplier responded
+  respondedAt: timestamp('responded_at', { withTimezone: false }),
+
+  // Tenant isolation
+  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
+  clientId: integer('client_id'),
+
+  // Timestamps
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false })
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+// ============================================
+// 14. USER_SESSIONS TABLE
 // ============================================
 export const userSessions = pgTable(
   'user_sessions',
@@ -565,6 +611,9 @@ export type NewSseConnection = typeof sseConnections.$inferInsert;
 
 export type SupplierSearch = typeof supplierSearch.$inferSelect;
 export type NewSupplierSearch = typeof supplierSearch.$inferInsert;
+
+export type SupplierItemStatus = typeof supplierItemStatus.$inferSelect;
+export type NewSupplierItemStatus = typeof supplierItemStatus.$inferInsert;
 
 export type UserSession = typeof userSessions.$inferSelect;
 export type NewUserSession = typeof userSessions.$inferInsert;

@@ -5,11 +5,12 @@
 // =============================================
 // Server action entry point for all UI → server communication
 // Input: JSON structured data → Output: JSON structured result
-// Supports: quotation, email, rfq_analysis, supplier_search
+// Supports: quotation, email, rfq_analysis, supplier_search, supplier_respond
 //
 // Architecture:
 //   UI Component → handleHTTPRequest(ProcessorInput)
 //     → Validator → Coordinator (routing) → Action Processor → Response
+//     → If action_type = 'proceed': Pipeline chain → data-loader → next processor
 //     → Action internally: business logic → modifyDatabase() → eventBus.emit()
 //
 // Reference: make_sales_sse_server/api/data-processing.js
@@ -30,12 +31,21 @@ import { processEmail } from './actions/email-actions';
 import { processSupplierSearch } from './actions/supplier-search-actions';
 import { processAnalysis } from './actions/analysis-actions';
 
+// ========== PIPELINE CHAINING ==========
+import { loadProcessorInput } from './data-loader';
+
 // =============================================
 // Types
 // =============================================
 
-/** Processor function signature - takes validated input, returns result */
+/** Processor function signature — takes validated input, returns result */
 type ProcessorFn = (input: ProcessorInput) => Promise<ProcessorResult>;
+
+/** Pipeline chain config — defines what step follows when action_type = 'proceed' */
+interface PipelineStep {
+  nextDataType: DataType;    // Which data_type to chain into
+  nextActionType: ActionType; // Which action_type to use for the next processor
+}
 
 /** Processing statistics for monitoring */
 interface ProcessingStats {
@@ -55,6 +65,26 @@ const DATA_PROCESSORS: Record<string, ProcessorFn> = {
   'email': processEmail,
   'rfq_analysis': processAnalysis,
   'supplier_search': processSupplierSearch,
+  // 'supplier_respond': processSupplierRespond, // TODO: create supplier-respond-actions.ts
+};
+
+// =============================================
+// PIPELINE CHAIN MAP
+// =============================================
+// Defines the "next step" for each data_type when action_type = 'proceed'.
+// data-processor uses data-loader to build the input for the next step,
+// then calls the next processor DIRECTLY (no recursive handleHTTPRequest).
+//
+// Pipeline flow:
+//   rfq_analysis → supplier_search → email (contact suppliers)
+//   supplier_respond (all available) → quotation → email (send quotation)
+
+const PIPELINE_NEXT: Record<string, PipelineStep | null> = {
+  'rfq_analysis':    { nextDataType: 'supplier_search', nextActionType: 'search' },
+  'supplier_search': { nextDataType: 'email',           nextActionType: 'generate' },
+  'quotation':       { nextDataType: 'email',           nextActionType: 'generate' },
+  'email':           null, // Terminal — no automatic next step after email send
+  'supplier_respond': null, // Complex logic — handled inside processor (check all items status)
 };
 
 // =============================================
@@ -78,11 +108,10 @@ const stats: ProcessingStats = {
  *
  * Flow:
  *   1. Validate input structure via Validator
- *   2. Extract data_type and action_type
- *   3. Route to correct processor via DATA_PROCESSORS mapping
+ *   2. If action_type = 'proceed' → execute pipeline chain
+ *   3. Otherwise → route to correct processor via DATA_PROCESSORS
  *   4. Execute processor (which handles DB + SSE internally)
- *   5. Override session_id and processing_time_ms
- *   6. Return standardized JSON result
+ *   5. Return standardized JSON result with session_id + timing
  *
  * @param input - Raw JSON input from UI component
  * @returns ProcessorResult with success/error status and data
@@ -104,27 +133,39 @@ export async function handleHTTPRequest(input: ProcessorInput): Promise<Processo
     dataType = validatedInput.data_type;
     actionType = validatedInput.action_type;
 
-    // Step 3: Normalize quotation data if applicable
+    // Step 3: Handle 'proceed' action — pipeline chain to next step
+    if (actionType === 'proceed') {
+      sessionId = generateSessionId(validatedInput, dataType, 'proceed');
+      const chainResult = await executePipelineChain(validatedInput);
+      updateStats('proceed');
+      return {
+        ...chainResult,
+        session_id: sessionId,
+        processing_time_ms: Date.now() - startTime,
+      };
+    }
+
+    // Step 4: Normalize quotation data if applicable
     const normalizedInput = dataType === 'quotation'
       ? normalizeQuotationData(validatedInput)
       : validatedInput;
 
-    // Step 4: Look up processor from mapping table
+    // Step 5: Look up processor from mapping table
     const processor = DATA_PROCESSORS[dataType];
     if (!processor) {
       throw new Error(`No processor configured for data_type: ${dataType}`);
     }
 
-    // Step 5: Generate session ID for tracking
+    // Step 6: Generate session ID for tracking
     sessionId = generateSessionId(normalizedInput, dataType, actionType);
 
-    // Step 6: Execute the processor (handles DB + SSE internally)
+    // Step 7: Execute the processor (handles DB + SSE internally)
     const result = await processor(normalizedInput);
 
-    // Step 7: Update statistics
+    // Step 8: Update statistics
     updateStats(actionType);
 
-    // Step 8: Override session_id and processing_time_ms from processor result
+    // Step 9: Return result with overridden session_id and timing
     return {
       ...result,
       session_id: sessionId,
@@ -149,6 +190,70 @@ export async function handleHTTPRequest(input: ProcessorInput): Promise<Processo
 }
 
 // =============================================
+// PIPELINE CHAIN EXECUTOR
+// =============================================
+
+/**
+ * Execute pipeline chain: look up the next step for the current data_type,
+ * use data-loader to build input from DB, then call the next processor directly.
+ *
+ * This is called when action_type = 'proceed' (user clicked Accept).
+ * The chain runs ONE step — it does NOT recurse through the entire pipeline.
+ * Each Accept click advances one step.
+ *
+ * @param input - Validated input with action_type = 'proceed'
+ * @returns ProcessorResult from the next processor in the pipeline
+ */
+async function executePipelineChain(input: ProcessorInput): Promise<ProcessorResult> {
+  const { data_type, workspace } = input;
+
+  // Look up what comes next in the pipeline
+  const nextStep = PIPELINE_NEXT[data_type];
+  if (!nextStep) {
+    // No next step defined — this data_type is terminal or handled internally
+    return {
+      success: true,
+      data_type,
+      action_type: 'proceed',
+      status: 'completed',
+      session_id: '',
+      processing_time_ms: 0,
+      data: { message: `Pipeline complete for ${data_type}. No automatic next step.` },
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // Extract rfq_id from input (needed by data-loader to query DB)
+  const rfqId = input.rfq_id || 0;
+
+  if (!rfqId || !workspace) {
+    throw new Error(`Pipeline chain requires rfq_id and workspace. Got rfq_id=${rfqId}`);
+  }
+
+  // Use data-loader to build a complete ProcessorInput for the next step
+  const nextInput = await loadProcessorInput({
+    data_type: nextStep.nextDataType,
+    rfq_id: rfqId,
+    workspace,
+    overrides: { action_type: nextStep.nextActionType },
+  });
+
+  // Look up the processor for the next data_type
+  const nextProcessor = DATA_PROCESSORS[nextStep.nextDataType];
+  if (!nextProcessor) {
+    throw new Error(`No processor configured for pipeline next step: ${nextStep.nextDataType}`);
+  }
+
+  // Normalize if chaining into quotation
+  const finalInput = nextStep.nextDataType === 'quotation'
+    ? normalizeQuotationData(nextInput)
+    : nextInput;
+
+  // Execute the next processor directly (no re-validation, no recursive handleHTTPRequest)
+  return nextProcessor(finalInput);
+}
+
+// =============================================
 // HELPER FUNCTIONS
 // =============================================
 
@@ -169,10 +274,10 @@ function generateSessionId(input: ProcessorInput, dataType: string, actionType: 
  * Update processing statistics based on action type
  */
 function updateStats(actionType: string): void {
-  if (['generate', 'analyze', 'search'].includes(actionType)) {
+  if (['generate', 'analyze', 'search', 'proceed'].includes(actionType)) {
     stats.totalGenerations++;
   }
-  if (['update', 'manual_update', 'send', 're_generate', 'reanalyze', 'research'].includes(actionType)) {
+  if (['update', 'manual_update', 'send', 're_generate', 'reanalyze', 'research', 'available', 'unavailable'].includes(actionType)) {
     stats.totalUpdates++;
   }
   stats.totalProcessed++;

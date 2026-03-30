@@ -33,6 +33,7 @@ import {
   sessions,
   sseConnections,
   supplierSearch,
+  supplierItemStatus,
   userSessions,
   workboardSnapshots,
 } from './schema';
@@ -97,6 +98,7 @@ function getTableByName(tableName: string): PgTable {
     sessions,
     sseConnections,
     supplierSearch,
+    supplierItemStatus,
     userSessions,
     workboardSnapshots,
   };
@@ -611,6 +613,7 @@ export {
   sessions,
   sseConnections,
   supplierSearch,
+  supplierItemStatus,
   userSessions,
   workboardSnapshots,
 };

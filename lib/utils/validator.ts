@@ -12,14 +12,25 @@
 // =============================================
 
 /** Supported data types for processing */
-export type DataType = 'quotation' | 'email' | 'rfq_analysis' | 'supplier_search';
+export type DataType = 'quotation' | 'email' | 'rfq_analysis' | 'supplier_search' | 'supplier_respond';
 
 /** Action types per data_type */
 export type QuotationActionType = 'generate' | 'update' | 'manual_update';
 export type EmailActionType = 'send' | 'generate' | 're_generate';
 export type RfqAnalysisActionType = 'analyze' | 'reanalyze';
 export type SupplierSearchActionType = 'search' | 'research';
-export type ActionType = QuotationActionType | EmailActionType | RfqAnalysisActionType | SupplierSearchActionType;
+export type SupplierRespondActionType = 'available' | 'unavailable';
+
+/** Universal action: 'proceed' = accept current result, move to next pipeline step */
+export type UniversalActionType = 'proceed';
+
+export type ActionType =
+  | QuotationActionType
+  | EmailActionType
+  | RfqAnalysisActionType
+  | SupplierSearchActionType
+  | SupplierRespondActionType
+  | UniversalActionType;
 
 /** Standardized processor output - returned by all action files */
 export interface ProcessorResult {
@@ -49,6 +60,7 @@ export interface ProcessorInput {
   email?: EmailData;                    // For email data_type
   analysis?: AnalysisData;              // For rfq_analysis data_type
   search?: SearchData;                  // For supplier_search data_type
+  supplier_respond?: SupplierRespondData; // For supplier_respond data_type
   workspace?: import('@/lib/middleware/workspace-context').WorkspaceContext; // Workspace for tenant isolation
   [key: string]: unknown;               // Allow additional fields
 }
@@ -140,6 +152,20 @@ interface SearchData {
   [key: string]: unknown;
 }
 
+/** Supplier respond data structure (tracks per-item availability) */
+interface SupplierRespondData {
+  rfq_id: number;
+  supplier_id: number;
+  items: Array<{
+    item_id: number;
+    status: 'available' | 'unavailable';
+    unit_price?: number;
+    delivery_time?: string;
+    notes?: string;
+  }>;
+  [key: string]: unknown;
+}
+
 // =============================================
 // Validator function type
 // =============================================
@@ -171,6 +197,10 @@ const EXTRACTION_VALIDATE: Record<string, Record<string, ValidatorFn>> = {
     search: validateSuppliersSearch,    // Search for new suppliers
     research: validateSuppliersSearch,  // Re-search with updated criteria
   },
+  'supplier_respond': {
+    available: validateSupplierRespond,    // Supplier confirms item availability
+    unavailable: validateSupplierRespond,  // Supplier reports item unavailable
+  },
 };
 
 // =============================================
@@ -196,7 +226,7 @@ export function validateInput(input: ProcessorInput): ProcessorInput {
   }
 
   // Step 3: data_type must be one of the supported types
-  const validDataTypes: DataType[] = ['quotation', 'email', 'rfq_analysis', 'supplier_search'];
+  const validDataTypes: DataType[] = ['quotation', 'email', 'rfq_analysis', 'supplier_search', 'supplier_respond'];
   if (!validDataTypes.includes(input.data_type)) {
     throw new Error(`Invalid data_type: must be one of ${validDataTypes.join(' | ')}`);
   }
@@ -209,6 +239,12 @@ export function validateInput(input: ProcessorInput): ProcessorInput {
   // Step 4: action_type is required
   if (!input.action_type) {
     throw new Error('action_type is required');
+  }
+
+  // Step 4.5: 'proceed' is a universal action handled by data-processor pipeline
+  // Skip type-specific validation — data-processor will chain to the next step
+  if (input.action_type === 'proceed') {
+    return input;
   }
 
   // Step 5: action_type must be valid for this data_type
@@ -555,6 +591,48 @@ function validateSuppliersSearch(input: ProcessorInput): ProcessorInput {
   return input;
 }
 
+// #############################################################################
+// SUPPLIER RESPOND VALIDATORS
+// #############################################################################
+
+/**
+ * Validate supplier_respond data_type (available, unavailable)
+ * Checks: rfq_id required, supplier_respond object with items array
+ * @param input - Raw input
+ * @returns Validated input
+ */
+function validateSupplierRespond(input: ProcessorInput): ProcessorInput {
+  // rfq_id is required (identifies which RFQ this response is for)
+  if (!input.rfq_id) throw new Error('rfq_id is required for supplier_respond data_type');
+  const rId = parseInt(String(input.rfq_id));
+  if (isNaN(rId) || rId <= 0) throw new Error('rfq_id must be a positive integer');
+
+  // supplier_respond object is required
+  if (!input.supplier_respond || typeof input.supplier_respond !== 'object') {
+    throw new Error('supplier_respond object is required for supplier_respond data_type');
+  }
+
+  // supplier_id is required
+  if (!input.supplier_respond.supplier_id) {
+    throw new Error('supplier_respond.supplier_id is required');
+  }
+
+  // items array is required and non-empty
+  if (!Array.isArray(input.supplier_respond.items) || input.supplier_respond.items.length === 0) {
+    throw new Error('supplier_respond.items must be a non-empty array');
+  }
+
+  // Validate each item in the response
+  input.supplier_respond.items.forEach((item, index) => {
+    if (!item.item_id) throw new Error(`supplier_respond.items[${index}].item_id is required`);
+    if (!['available', 'unavailable'].includes(item.status)) {
+      throw new Error(`supplier_respond.items[${index}].status must be 'available' or 'unavailable'`);
+    }
+  });
+
+  return input;
+}
+
 // =============================================
 // MODULE EXPORTS
 // =============================================
@@ -568,4 +646,5 @@ export {
   validateEmail,
   validateRfqAnalysis,
   validateSuppliersSearch,
+  validateSupplierRespond,
 };
