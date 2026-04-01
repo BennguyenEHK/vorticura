@@ -233,19 +233,17 @@ export function validateInput(input: ProcessorInput): ProcessorInput {
     throw new Error(`Invalid data_type: must be one of ${validDataTypes.join(' | ')}`);
   }
 
-  // Step 3.5: workspace context (tenant isolation) is required for all requests
-  if (!input.workspace) {
-    throw new Error('workspace context is required');
-  }
+  // Step 3.5: workspace context — skipped here, DB layer auto-injects clientId/companyId
 
   // Step 4: action_type is required
   if (!input.action_type) {
     throw new Error('action_type is required');
   }
 
-  // Step 4.5: 'proceed' is a universal action handled by data-processor pipeline
-  // Skip type-specific validation — data-processor will chain to the next step
-  if (input.action_type === 'proceed') {
+  // Step 4.5: Skip type-specific validation for lightweight actions
+  // 'proceed' = accept & advance pipeline (only needs data_type + rfq_id)
+  // 'send'    = send approved email (content already validated at generate/re_generate)
+  if (input.action_type === 'proceed' || input.action_type === 'send') {
     return input;
   }
 
