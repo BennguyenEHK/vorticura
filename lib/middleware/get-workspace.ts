@@ -5,7 +5,9 @@
 // Location: lib/middleware/get-workspace.ts
 
 import { NextRequest } from 'next/server';
+import { cookies } from 'next/headers';
 import { WorkspaceContext } from '@/lib/middleware/workspace-context';
+import { getWorkspaceFromToken, AUTH_COOKIE_CONFIG } from '@/lib/middleware/auth-helpers';
 
 /**
  * Get workspace context from middleware-injected headers (RECOMMENDED)
@@ -88,4 +90,31 @@ export function requireWorkspace(request: NextRequest): WorkspaceContext {
   }
 
   return workspace;
+}
+
+// =============================================
+// SERVER ACTION WORKSPACE EXTRACTION
+// =============================================
+
+/**
+ * Extract workspace context from auth cookie in server actions
+ * Uses next/headers cookies() — works ONLY in server components / server actions
+ * No client-side workspace passing needed
+ *
+ * @returns WorkspaceContext or null if not authenticated
+ *
+ * @example
+ * // In a 'use server' action:
+ * const workspace = await getServerActionWorkspace();
+ * if (!workspace) throw new Error('Authentication required');
+ */
+export async function getServerActionWorkspace(): Promise<WorkspaceContext | null> {
+  // Read auth cookie from the incoming request via next/headers
+  const cookieStore = await cookies();
+  const token = cookieStore.get(AUTH_COOKIE_CONFIG.name)?.value;
+
+  if (!token) return null;
+
+  // Verify JWT and build WorkspaceContext (reuses existing auth-helpers logic)
+  return getWorkspaceFromToken(token);
 }

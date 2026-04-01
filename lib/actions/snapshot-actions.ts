@@ -13,6 +13,7 @@ import {
   getSnapshotById as getSnapshotByIdQuery,
 } from '@/lib/db/queries';
 import { WorkspaceContext } from '@/lib/middleware/workspace-context';
+import { getServerActionWorkspace } from '@/lib/middleware/get-workspace';
 import type { PanelsSnapshot } from '@/types/preview';
 import type { WorkflowStep, WorkflowStepId } from '@/types/workflow';
 
@@ -83,18 +84,18 @@ export async function createWorkboardSnapshot(
 
 /**
  * Get all snapshots for an RFQ, newest first
+ * Workspace auto-extracted from auth cookie — no client-side passing needed
  */
 export async function getWorkboardSnapshots(
-  rfqId: number,
-  workspaceInput: {
-    client_id: number;
-    company_id: number;
-    username?: string;
-    role?: string;
-  }
+  rfqId: number
 ): Promise<SnapshotResult> {
   try {
-    const workspace = new WorkspaceContext(workspaceInput);
+    // Auto-extract workspace from auth cookie
+    const workspace = await getServerActionWorkspace();
+    if (!workspace) {
+      return { success: false, error: 'Authentication required' };
+    }
+
     const snapshots = await getSnapshotsByRfq(rfqId, workspace);
 
     return { success: true, data: snapshots };
@@ -109,18 +110,18 @@ export async function getWorkboardSnapshots(
 
 /**
  * Get a single snapshot by ID
+ * Workspace auto-extracted from auth cookie — no client-side passing needed
  */
 export async function getSnapshotById(
-  snapshotId: number,
-  workspaceInput: {
-    client_id: number;
-    company_id: number;
-    username?: string;
-    role?: string;
-  }
+  snapshotId: number
 ): Promise<SnapshotResult> {
   try {
-    const workspace = new WorkspaceContext(workspaceInput);
+    // Auto-extract workspace from auth cookie
+    const workspace = await getServerActionWorkspace();
+    if (!workspace) {
+      return { success: false, error: 'Authentication required' };
+    }
+
     const snapshot = await getSnapshotByIdQuery(snapshotId, workspace);
 
     if (!snapshot) {

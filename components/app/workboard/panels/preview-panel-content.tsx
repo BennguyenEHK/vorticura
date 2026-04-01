@@ -161,17 +161,12 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
     if (opening) {
       setIsHistoryLoading(true);
       try {
-        // TODO: Replace with real rfqId and workspace from context
-        // For now uses placeholder — will be wired when RFQ context is available
-        const rfqId = (state.activeDocument?.type === 'rfq_analysis'
-          ? (state.activeDocument.data as any).rfq_id
-          : null) as number | null;
+        // Extract rfq_id from active document (any type may carry it)
+        const rfqId = (state.activeDocument?.data as any)?.rfq_id as number | null;
 
         if (rfqId) {
-          const result = await getWorkboardSnapshots(rfqId, {
-            client_id: 1,
-            company_id: 1,
-          });
+          // Workspace auto-extracted from auth cookie in server action
+          const result = await getWorkboardSnapshots(rfqId);
           if (result.success && result.data) {
             setSnapshots(result.data as WorkboardSnapshotRecord[]);
           }
@@ -187,11 +182,8 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
   // Revert to a specific snapshot
   const handleRevert = useCallback(async (snapshotId: number) => {
     try {
-      // TODO: Replace with real workspace from context
-      const result = await getSnapshotById(snapshotId, {
-        client_id: 1,
-        company_id: 1,
-      });
+      // Workspace auto-extracted from auth cookie in server action
+      const result = await getSnapshotById(snapshotId);
 
       if (result.success && result.data) {
         const snapshot = result.data;
