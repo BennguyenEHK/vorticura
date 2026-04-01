@@ -236,6 +236,8 @@ const DATA_LOADERS: Record<DataType, LoaderFn> = {
   email: loadEmailInput,
   quotation: loadQuotationInput,
   supplier_respond: loadSupplierRespondInput,
+  // incoming_email is classified internally (no pipeline chain loads into it)
+  incoming_email: async () => ({}),
 };
 
 // =============================================

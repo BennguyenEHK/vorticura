@@ -573,6 +573,50 @@ export const emailConnections = pgTable('email_connections', {
 }));
 
 // ============================================
+// 16. INCOMING_EMAILS TABLE — stores raw inbound emails for classification
+// ============================================
+// Entry point for email-watcher: stores raw email, AI classifies it,
+// then routes to rfq_analysis (new RFQ) or supplier_respond (supplier reply)
+export const incomingEmails = pgTable('incoming_emails', {
+  // Primary key
+  id: serial('id').primaryKey(),
+
+  // Unique message ID for deduplication (from email headers)
+  messageId: varchar('message_id', { length: 255 }).unique(),
+
+  // Sender information
+  fromEmail: varchar('from_email', { length: 255 }),
+  fromName: varchar('from_name', { length: 255 }),
+
+  // Recipients
+  toRecipients: text('to_recipients').array(),   // TO addresses
+  ccRecipients: text('cc_recipients').array(),    // CC addresses
+
+  // Email content
+  subject: text('subject'),
+  emailBodyText: text('email_body_text'),
+
+  // Parsed attachments stored as JSON array [{filename, content_type, extracted_text}]
+  attachmentsParsed: jsonb('attachments_parsed'),
+
+  // AI classification result: 'rfq_analysis' | 'supplier_respond'
+  classificationType: varchar('classification_type', { length: 30 }),
+  classificationConfidence: numeric('classification_confidence', { precision: 4, scale: 3 }),
+
+  // Link to the RFQ created/matched from this email
+  rfqId: integer('rfq_id').references(() => rfqAnalysis.rfqId, { onDelete: 'set null' }),
+
+  // Tenant isolation
+  clientId: integer('client_id'),
+  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
+
+  // Timestamps
+  receivedAt: timestamp('received_at', { withTimezone: false }),
+  processedAt: timestamp('processed_at', { withTimezone: false }),
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+});
+
+// ============================================
 // TYPE EXPORTS
 // ============================================
 // Export inferred types for TypeScript usage
@@ -623,3 +667,6 @@ export type NewWorkboardSnapshot = typeof workboardSnapshots.$inferInsert;
 
 export type EmailConnection = typeof emailConnections.$inferSelect;
 export type NewEmailConnection = typeof emailConnections.$inferInsert;
+
+export type IncomingEmail = typeof incomingEmails.$inferSelect;
+export type NewIncomingEmail = typeof incomingEmails.$inferInsert;

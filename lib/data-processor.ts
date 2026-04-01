@@ -5,7 +5,7 @@
 // =============================================
 // Server action entry point for all UI → server communication
 // Input: JSON structured data → Output: JSON structured result
-// Supports: quotation, email, rfq_analysis, supplier_search, supplier_respond
+// Supports: quotation, email, rfq_analysis, supplier_search, supplier_respond, incoming_email
 //
 // Architecture:
 //   UI Component → handleHTTPRequest(ProcessorInput)
@@ -30,6 +30,7 @@ import { processQuotation } from './actions/quotation-actions';
 import { processEmail } from './actions/email-actions';
 import { processSupplierSearch } from './actions/supplier-search-actions';
 import { processAnalysis } from './actions/analysis-actions';
+import { processIncomingEmail } from './actions/incoming-email-actions';
 
 // ========== PIPELINE CHAINING ==========
 import { loadProcessorInput } from './data-loader';
@@ -81,6 +82,9 @@ const DATA_PROCESSORS: Record<string, Record<string, ProcessorFn>> = {
     search: processSupplierSearch,     // Search for potential suppliers
     research: processSupplierSearch,   // Re-search with user corrections
   },
+  'incoming_email': {
+    classify: processIncomingEmail,    // Classify incoming email → route to rfq_analysis or supplier_respond
+  },
   // 'supplier_respond': {
   //   update: processSupplierRespond,     // TODO: create supplier-respond-actions.ts
   //   available: processSupplierRespond,
@@ -100,6 +104,7 @@ const DATA_PROCESSORS: Record<string, Record<string, ProcessorFn>> = {
 //   supplier_respond (all available) → quotation → email (send quotation)
 
 const PIPELINE_NEXT: Record<string, PipelineStep | null> = {
+  'incoming_email':  null,  // Handled internally — routes to rfq_analysis or supplier_respond
   'rfq_analysis':    { nextDataType: 'supplier_search', nextActionType: 'search' },
   'supplier_search': { nextDataType: 'email',           nextActionType: 'generate' },
   'quotation':       { nextDataType: 'email',           nextActionType: 'generate' },
