@@ -285,15 +285,16 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
     setInlineNotes(prev => prev.filter(n => n.id !== id));
   }, []);
 
-  // Accept: look up action from ACCEPT_REJECT_MAP, call handleHTTPRequest
+  // Accept: always use ACCEPT_REJECT_MAP action (proceed/send) per spec
+  // manual_update is handled separately by handleSave — accept = advance pipeline
   const handleAccept = useCallback(async () => {
     if (!state.activeDocument) return;
     const docType = state.activeDocument.type;
     const mapping = ACCEPT_REJECT_MAP[docType];
     if (!mapping) return;
 
-    // If editing a quotation, override to 'manual_update'
-    const actionType = state.isEditing && docType === 'quotation' ? 'manual_update' : mapping.accept;
+    // Always use the mapped accept action (proceed/send) — never override
+    const actionType = mapping.accept;
 
     try {
       await handleHTTPRequest({
@@ -305,7 +306,7 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
     } catch (err) {
       actions.setError(err instanceof Error ? err.message : 'Action failed');
     }
-  }, [state.activeDocument, state.isEditing, actions]);
+  }, [state.activeDocument, actions]);
 
   // Reject: send feedback + regenerate action
   const handleReject = useCallback(async () => {

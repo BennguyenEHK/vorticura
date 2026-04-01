@@ -15,11 +15,11 @@
 export type DataType = 'quotation' | 'email' | 'rfq_analysis' | 'supplier_search' | 'supplier_respond';
 
 /** Action types per data_type */
-export type QuotationActionType = 'generate' | 'update' | 'manual_update';
+export type QuotationActionType = 'generate' | 'update' | 'manual_update' | 'calculate';
 export type EmailActionType = 'send' | 'generate' | 're_generate';
 export type RfqAnalysisActionType = 'analyze' | 'reanalyze';
 export type SupplierSearchActionType = 'search' | 'research';
-export type SupplierRespondActionType = 'available' | 'unavailable';
+export type SupplierRespondActionType = 'update' | 'available' | 'unavailable';
 
 /** Universal action: 'proceed' = accept current result, move to next pipeline step */
 export type UniversalActionType = 'proceed';
@@ -183,6 +183,7 @@ const EXTRACTION_VALIDATE: Record<string, Record<string, ValidatorFn>> = {
     generate: validateQuotationGenerateUpdate,     // Full quotation generation
     update: validateQuotationGenerateUpdate,        // Full quotation update
     manual_update: validateQuotationManualUpdate,   // User edits from preview panel
+    calculate: validateQuotationManualUpdate,       // Calculate sales prices from pricing variables
   },
   'email': {
     send: validateEmail,          // Send approved email
@@ -198,8 +199,9 @@ const EXTRACTION_VALIDATE: Record<string, Record<string, ValidatorFn>> = {
     research: validateSuppliersSearch,  // Re-search with updated criteria
   },
   'supplier_respond': {
-    available: validateSupplierRespond,    // Supplier confirms item availability
-    unavailable: validateSupplierRespond,  // Supplier reports item unavailable
+    update: validateSupplierRespond,          // Parse supplier response email, update item statuses
+    available: validateSupplierRespond,       // Manual UI override: mark items available
+    unavailable: validateSupplierRespond,     // Manual UI override: mark items unavailable
   },
 };
 

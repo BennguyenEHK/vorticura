@@ -56,16 +56,36 @@ interface ProcessingStats {
 }
 
 // =============================================
-// DATA PROCESSORS MAPPING TABLE
+// DATA PROCESSORS MAPPING TABLE (2-LEVEL)
 // =============================================
-// Routes data_type → processor function (direct references, no delegation)
+// Routes data_type → action_type → processor function
+// Mirrors EXTRACTION_VALIDATE structure in validator.ts for consistency
 
-const DATA_PROCESSORS: Record<string, ProcessorFn> = {
-  'quotation': processQuotation,
-  'email': processEmail,
-  'rfq_analysis': processAnalysis,
-  'supplier_search': processSupplierSearch,
-  // 'supplier_respond': processSupplierRespond, // TODO: create supplier-respond-actions.ts
+const DATA_PROCESSORS: Record<string, Record<string, ProcessorFn>> = {
+  'quotation': {
+    generate: processQuotation,       // Create new quotation shell
+    update: processQuotation,          // Update existing quotation with new values
+    manual_update: processQuotation,   // User edits from preview panel
+    calculate: processQuotation,       // Calculate sales prices from pricing variables
+  },
+  'email': {
+    generate: processEmail,            // Generate email draft (supplier inquiry or quotation)
+    re_generate: processEmail,         // Regenerate email with user feedback
+    send: processEmail,                // Send approved email
+  },
+  'rfq_analysis': {
+    analyze: processAnalysis,          // AI analyzes new RFQ email
+    reanalyze: processAnalysis,        // Re-analyze with user corrections
+  },
+  'supplier_search': {
+    search: processSupplierSearch,     // Search for potential suppliers
+    research: processSupplierSearch,   // Re-search with user corrections
+  },
+  // 'supplier_respond': {
+  //   update: processSupplierRespond,     // TODO: create supplier-respond-actions.ts
+  //   available: processSupplierRespond,
+  //   unavailable: processSupplierRespond,
+  // },
 };
 
 // =============================================
@@ -150,10 +170,17 @@ export async function handleHTTPRequest(input: ProcessorInput): Promise<Processo
       ? normalizeQuotationData(validatedInput)
       : validatedInput;
 
-    // Step 5: Look up processor from mapping table
-    const processor = DATA_PROCESSORS[dataType];
-    if (!processor) {
+    // Step 5: Look up processor from 2-level mapping table (data_type → action_type)
+    const typeProcessors = DATA_PROCESSORS[dataType];
+    if (!typeProcessors) {
       throw new Error(`No processor configured for data_type: ${dataType}`);
+    }
+    const processor = typeProcessors[actionType];
+    if (!processor) {
+      const allowed = Object.keys(typeProcessors).join(' | ');
+      throw new Error(
+        `No processor for data_type="${dataType}", action_type="${actionType}". Allowed: ${allowed}`
+      );
     }
 
     // Step 6: Generate session ID for tracking
@@ -238,10 +265,16 @@ async function executePipelineChain(input: ProcessorInput): Promise<ProcessorRes
     overrides: { action_type: nextStep.nextActionType },
   });
 
-  // Look up the processor for the next data_type
-  const nextProcessor = DATA_PROCESSORS[nextStep.nextDataType];
+  // Look up the processor for the next data_type + action_type (2-level)
+  const nextTypeProcessors = DATA_PROCESSORS[nextStep.nextDataType];
+  if (!nextTypeProcessors) {
+    throw new Error(`No processor group for pipeline next step: ${nextStep.nextDataType}`);
+  }
+  const nextProcessor = nextTypeProcessors[nextStep.nextActionType];
   if (!nextProcessor) {
-    throw new Error(`No processor configured for pipeline next step: ${nextStep.nextDataType}`);
+    throw new Error(
+      `No processor for pipeline step: ${nextStep.nextDataType}:${nextStep.nextActionType}`
+    );
   }
 
   // Normalize if chaining into quotation
