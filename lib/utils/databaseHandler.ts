@@ -1,14 +1,19 @@
 // =============================================
-// DATABASE HANDLER - Unified via queries.ts
+// DATABASE HANDLER - Hybrid Registry Pattern
 // =============================================
-// Unified database operations with typed payload builders
-// - Build payload functions for all table types (only available fields)
-// - Check data existence with flexible key lookup
-// - Unified modifyDatabase function for INSERT/UPDATE
-// - All DB calls routed through queries.ts for workspace isolation
-// - Supports: quotations, quotation_items, customers, quotation_pricing,
-//             email_table, rfq_analysis, supplier_search
-// Reference: make_sales_sse_server/api/quotation/database-handler.js
+// Unified database operations with typed payload builders + registry-driven routing.
+//
+// Architecture:
+//   modifyDatabase(input, workspace)
+//     ├─ data_type === 'quotation'  → handleQuotationWrite()  (dedicated multi-table handler)
+//     └─ all other data_types       → TABLE_REGISTRY lookup   → handleSingleTableWrite()
+//
+// Adding a new single-table data_type:
+//   1. Add a buildXxxPayload() function
+//   2. Add one entry to TABLE_REGISTRY (~10 lines)
+//   Done — no if/else needed.
+//
+// Reference: Documents/json_sample/json_method_plan.md
 
 import { insertData, getData, updateData } from '@/lib/db/queries';
 import { WorkspaceContext } from '@/lib/middleware/workspace-context';
@@ -21,9 +26,23 @@ import { WorkspaceContext } from '@/lib/middleware/workspace-context';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Payload = Record<string, any>;
 
-/** Input shape for modifyDatabase - flexible JSON from processors */
+/** Builder function signature — maps raw data to Drizzle-compatible payload */
+type BuilderFn = (data: Record<string, unknown>, update?: boolean) => Payload;
+
+/** Registry config for single-table data types */
+interface SingleTableConfig {
+  table: string;                                              // camelCase name for queries.ts (e.g., 'emailTable')
+  existsTable: string;                                        // snake_case name for checkDataExists (e.g., 'email_table')
+  builder: BuilderFn;                                         // payload builder function
+  canUpdate: (input: ModifyDatabaseInput) => boolean;         // are required IDs present to attempt update?
+  getExistsId: (input: ModifyDatabaseInput) => number;        // ID value for existence check
+  getUpdateFilter: (input: ModifyDatabaseInput) => Record<string, unknown>; // WHERE clause for UPDATE
+  extractData: (input: ModifyDatabaseInput) => Record<string, unknown>;     // merge input fields into flat data for builder
+}
+
+/** Input shape for modifyDatabase — flexible JSON from processors */
 export interface ModifyDatabaseInput {
-  data_type: string;               // quotation | email | rfq_analysis | supplier_search
+  data_type: string;               // quotation | email | rfq_analysis | supplier_search | incoming_email
   rfq_id?: number;                 // Top-level RFQ ID (for rfq_analysis/supplier_search types)
   quotation_id?: number;           // Top-level quotation ID (for quotation-stage types)
   rfq_reference?: string;          // RFQ reference string
@@ -57,6 +76,9 @@ export interface ModifyDatabaseInput {
   // Supplier Search-specific
   suppliers_search?: Record<string, unknown>;
   search_id?: number;
+  // Incoming Email-specific
+  incoming_email?: Record<string, unknown>;
+  incoming_email_id?: number;
 }
 
 // =============================================
@@ -67,8 +89,6 @@ export interface ModifyDatabaseInput {
 
 /**
  * Build quotation payload for QUOTATIONS table
- * @param data - Input quotation data
- * @param update - Exclude PK/FK for UPDATE operations
  */
 export function buildQuotationPayload(data: Record<string, unknown>, update = false): Payload {
   const payload: Payload = {};
@@ -90,13 +110,11 @@ export function buildQuotationPayload(data: Record<string, unknown>, update = fa
 /**
  * Build quotation items payload for QUOTATION_ITEMS table
  * Supports nested company_requirement/bidder_proposal or flat fields
- * @param data - Input item data
- * @param update - Exclude PK/FK for UPDATE operations
  */
 export function buildQuotationItemsPayload(data: Record<string, unknown>, update = false): Payload {
   const payload: Payload = {};
 
-  // PK/FK - exclude on UPDATE
+  // PK/FK — exclude on UPDATE
   if (!update && data.quotation_id != null) payload.quotationId = data.quotation_id;
   if (!update && data.item_id != null) {
     const itemId = parseInt(String(data.item_id), 10);
@@ -137,8 +155,7 @@ export function buildQuotationItemsPayload(data: Record<string, unknown>, update
 
 /**
  * Build customer payload for CUSTOMERS table
- * @param data - Input data (expects customer_info nested object)
- * @param update - Exclude PK/FK for UPDATE operations
+ * Expects customer_info nested object inside data
  */
 export function buildCustomerPayload(data: Record<string, unknown>, update = false): Payload {
   const payload: Payload = {};
@@ -164,8 +181,7 @@ export function buildCustomerPayload(data: Record<string, unknown>, update = fal
 
 /**
  * Build pricing payload for QUOTATION_PRICING table
- * @param data - Input containing pricingVariables + calculatedPricing
- * @param update - Exclude PK/FK for UPDATE operations
+ * Expects pricingVariables + calculatedPricing nested objects
  */
 export function buildPricingPayload(data: Record<string, unknown>, update = false): Payload {
   const payload: Payload = {};
@@ -202,8 +218,6 @@ export function buildPricingPayload(data: Record<string, unknown>, update = fals
 
 /**
  * Build email payload for EMAIL_TABLE
- * @param data - Input email data (flat, pre-merged with top-level fields)
- * @param update - Exclude PK/FK for UPDATE operations
  */
 export function buildEmailPayload(data: Record<string, unknown>, update = false): Payload {
   const payload: Payload = {};
@@ -223,8 +237,6 @@ export function buildEmailPayload(data: Record<string, unknown>, update = false)
 
 /**
  * Build RFQ analysis payload for RFQ_ANALYSIS table
- * @param data - Input analysis data (flat, pre-merged with top-level fields)
- * @param update - Exclude PK/FK for UPDATE operations
  */
 export function buildRfqAnalysisPayload(data: Record<string, unknown>, update = false): Payload {
   const payload: Payload = {};
@@ -240,8 +252,6 @@ export function buildRfqAnalysisPayload(data: Record<string, unknown>, update = 
 
 /**
  * Build supplier search payload for SUPPLIER_SEARCH table
- * @param data - Input search data (flat, pre-merged with top-level fields)
- * @param update - Exclude PK/FK for UPDATE operations
  */
 export function buildSupplierSearchPayload(data: Record<string, unknown>, update = false): Payload {
   const payload: Payload = {};
@@ -259,8 +269,6 @@ export function buildSupplierSearchPayload(data: Record<string, unknown>, update
 /**
  * Build supplier item status payload for SUPPLIER_ITEM_STATUS table
  * Used by supplier_respond flow to track per-item availability from suppliers
- * @param data - Input supplier item data
- * @param update - Exclude PK/FK for UPDATE operations
  */
 export function buildSupplierItemStatusPayload(data: Record<string, unknown>, update = false): Payload {
   const payload: Payload = {};
@@ -284,7 +292,6 @@ export function buildSupplierItemStatusPayload(data: Record<string, unknown>, up
 
 /**
  * Build client company payload for CLIENT_COMPANY table
- * @param data - Input company data
  */
 export function buildClientCompanyPayload(data: Record<string, unknown>): Payload {
   const payload: Payload = {};
@@ -298,6 +305,118 @@ export function buildClientCompanyPayload(data: Record<string, unknown>): Payloa
   return payload;
 }
 
+/**
+ * Build incoming email payload for INCOMING_EMAILS table
+ * Maps raw email fields from email-watcher to DB columns
+ */
+export function buildIncomingEmailPayload(data: Record<string, unknown>, update = false): Payload {
+  const payload: Payload = {};
+
+  // PK — exclude on UPDATE (with NaN guard)
+  if (!update && data.id != null) {
+    const id = parseInt(String(data.id), 10);
+    if (!isNaN(id)) payload.id = id;
+  }
+  // Dedup key
+  if (data.message_id != null) payload.messageId = String(data.message_id);
+  // Sender info
+  if (data.from_email != null) payload.fromEmail = String(data.from_email);
+  if (data.from_name != null) payload.fromName = String(data.from_name);
+  // Recipients (arrays)
+  if (data.to != null) {
+    payload.toRecipients = Array.isArray(data.to) ? data.to.map(String) : [String(data.to)];
+  }
+  if (data.cc != null) {
+    payload.ccRecipients = Array.isArray(data.cc) ? data.cc.map(String) : [String(data.cc)];
+  }
+  // Email content
+  if (data.subject != null) payload.subject = String(data.subject);
+  if (data.email_body_text != null) payload.emailBodyText = String(data.email_body_text);
+  // Attachments (jsonb — pass through as-is)
+  if (data.attachments_parsed != null) payload.attachmentsParsed = data.attachments_parsed;
+  // Classification (set after AI classify step)
+  if (data.classification_type != null) payload.classificationType = String(data.classification_type);
+  if (data.classification_confidence != null) payload.classificationConfidence = String(data.classification_confidence);
+  // FK link to rfq_analysis (set after routing, with NaN guard)
+  if (data.rfq_id != null) {
+    const rfqId = parseInt(String(data.rfq_id), 10);
+    if (!isNaN(rfqId)) payload.rfqId = rfqId;
+  }
+  // Timestamps
+  if (data.received_at != null) payload.receivedAt = data.received_at;
+  if (data.processed_at != null) payload.processedAt = data.processed_at;
+
+  return payload;
+}
+
+// =============================================
+// TABLE REGISTRY — Single-table data types
+// =============================================
+// Each entry defines how to route a data_type to its table.
+// Adding a new data_type = add one entry here + one builder above.
+
+const TABLE_REGISTRY: Record<string, SingleTableConfig> = {
+  // Email drafts and sent emails
+  email: {
+    table: 'emailTable',
+    existsTable: 'email_table',
+    builder: buildEmailPayload,
+    canUpdate: (input) => !!(input.email_id && input.quotation_id), // need both IDs to find existing
+    getExistsId: (input) => input.quotation_id!,                    // check by quotation_id
+    getUpdateFilter: (input) => ({ emailId: input.email_id }),      // update by email_id
+    extractData: (input) => ({
+      ...input.email,
+      quotation_id: input.quotation_id,
+      rfq_id: input.rfq_id,
+      rfq_reference: input.rfq_reference,
+    }),
+  },
+
+  // RFQ analysis reports
+  rfq_analysis: {
+    table: 'rfqAnalysis',
+    existsTable: 'rfq_analysis',
+    builder: buildRfqAnalysisPayload,
+    canUpdate: (input) => !!input.rfq_id,             // rfq_id is both check and update key
+    getExistsId: (input) => input.rfq_id!,
+    getUpdateFilter: (input) => ({ rfqId: input.rfq_id }),
+    extractData: (input) => ({
+      ...input.rfq_analysis,
+      rfq_id: input.rfq_id,
+      rfq_reference: input.rfq_reference,
+    }),
+  },
+
+  // Supplier search results
+  supplier_search: {
+    table: 'supplierSearch',
+    existsTable: 'supplier_search',
+    builder: buildSupplierSearchPayload,
+    canUpdate: (input) => !!(input.search_id && input.rfq_id), // need both to find existing
+    getExistsId: (input) => input.rfq_id!,                     // check by rfq_id
+    getUpdateFilter: (input) => ({ searchId: input.search_id }),// update by search_id
+    extractData: (input) => ({
+      ...input.suppliers_search,
+      rfq_id: input.rfq_id,
+      rfq_reference: input.rfq_reference,
+    }),
+  },
+
+  // Raw incoming emails from email-watcher
+  incoming_email: {
+    table: 'incomingEmails',
+    existsTable: 'incoming_emails',
+    builder: buildIncomingEmailPayload,
+    canUpdate: (input) => !!input.incoming_email_id,             // update by incoming_email_id
+    getExistsId: (input) => input.incoming_email_id!,
+    getUpdateFilter: (input) => ({ id: input.incoming_email_id }),
+    extractData: (input) => ({
+      ...input.incoming_email,
+      rfq_id: input.rfq_id,
+    }),
+  },
+};
+
 // =============================================
 // CHECK DATA EXISTENCE
 // =============================================
@@ -305,9 +424,6 @@ export function buildClientCompanyPayload(data: Record<string, unknown>): Payloa
 /**
  * Check if data exists in a table by primary/foreign key
  * Uses getData from queries.ts for workspace-isolated lookups
- * @param table - Table name string for routing (snake_case mapped to camelCase)
- * @param keysId - Primary key value to search
- * @param workspace - Workspace context for tenant filtering (required)
  * @returns Array of matching rows (empty if not found)
  */
 export async function checkDataExists(
@@ -327,6 +443,7 @@ export async function checkDataExists(
       'supplier_search': 'supplierSearch',
       'client_company': 'clientCompany',
       'supplier_item_status': 'supplierItemStatus',
+      'incoming_emails': 'incomingEmails',
     };
 
     const tableName = tableNameMap[table];
@@ -341,6 +458,9 @@ export async function checkDataExists(
       case 'client_company':
         filterColumn = 'companyId';
         break;
+      case 'incoming_emails':
+        filterColumn = 'id';             // PK lookup for incoming emails
+        break;
       case 'rfq_analysis':
       case 'supplier_search':
       case 'customers':
@@ -348,7 +468,7 @@ export async function checkDataExists(
         filterColumn = 'rfqId';
         break;
       default:
-        filterColumn = 'quotationId';
+        filterColumn = 'quotationId';    // quotations, quotation_items, quotation_pricing, email_table
         break;
     }
 
@@ -360,16 +480,210 @@ export async function checkDataExists(
 }
 
 // =============================================
-// UNIFIED DATABASE MODIFICATION (INSERT/UPDATE)
+// GENERIC SINGLE-TABLE HANDLER
 // =============================================
 
 /**
- * Unified database modification function
- * Routes by data_type -> checks existence -> INSERT or UPDATE
- * Handles quotation (multi-table) and single-table types
- * All DB operations go through queries.ts (insertData/updateData/getData)
- * @param input - Structured input with data_type and content
- * @param workspace - Workspace context for tenant isolation (required)
+ * Handle insert/update for any single-table data_type using registry config.
+ * Pattern: extract data → check exists → INSERT or UPDATE
+ */
+async function handleSingleTableWrite(
+  config: SingleTableConfig,
+  input: ModifyDatabaseInput,
+  workspace: WorkspaceContext
+): Promise<void> {
+  const data = config.extractData(input);
+
+  // Attempt update if required IDs are present
+  if (config.canUpdate(input)) {
+    const existsId = config.getExistsId(input);
+    const existing = await checkDataExists(config.existsTable, existsId, workspace);
+
+    if (existing.length > 0) {
+      // UPDATE — exclude PK/FK from SET clause
+      const updatePayload = config.builder(data, true);
+      const filter = config.getUpdateFilter(input);
+      await updateData(config.table, filter, updatePayload, workspace);
+      console.log(`[DB] ${config.table} updated`);
+      return;
+    }
+  }
+
+  // INSERT — include all fields
+  const insertPayload = config.builder(data, false);
+  await insertData(config.table, {}, insertPayload, workspace);
+  console.log(`[DB] ${config.table} inserted`);
+}
+
+// =============================================
+// MULTI-TABLE HANDLER: QUOTATION
+// =============================================
+
+/**
+ * Dedicated handler for quotation data_type — writes to multiple tables in order:
+ *   1. quotations (parent row)
+ *   2. customers (linked by rfq_id)
+ *   3. quotation_items (per-item, linked by quotation_id)
+ *   4. quotation_pricing (per-item pricing, linked by quotation_id)
+ *
+ * Which tables are written depends on which input fields are populated.
+ * Action processors control this by choosing what data to include.
+ */
+async function handleQuotationWrite(
+  input: ModifyDatabaseInput,
+  workspace: WorkspaceContext
+): Promise<void> {
+  const qd = input.quotationData!;
+
+  // --- STEP 1: QUOTATIONS table ---
+  if (qd.quotation_id) {
+    const existing = await checkDataExists('quotations', qd.quotation_id, workspace);
+    if (existing.length > 0) {
+      const payload = buildQuotationPayload(qd as unknown as Record<string, unknown>, true);
+      await updateData('quotations', { quotationId: qd.quotation_id }, payload, workspace);
+      console.log(`[DB] Quotation updated: ${qd.quotation_id}`);
+    } else {
+      const payload = buildQuotationPayload(qd as unknown as Record<string, unknown>, false);
+      const result = await insertData('quotations', {}, payload, workspace);
+      qd.quotation_id = result?.quotationId;
+      console.log(`[DB] Quotation inserted: ${qd.quotation_id}`);
+    }
+  } else {
+    // INSERT with auto-generated ID
+    const payload = buildQuotationPayload(qd as unknown as Record<string, unknown>, false);
+    const result = await insertData('quotations', {}, payload, workspace);
+    qd.quotation_id = result?.quotationId;
+    console.log(`[DB] Quotation inserted (auto-ID): ${qd.quotation_id}`);
+  }
+
+  // --- STEP 2: CUSTOMERS table (uses rfqId as FK) ---
+  if (qd.customer_info && qd.rfq_id) {
+    const existingCustomer = await checkDataExists('customers', qd.rfq_id, workspace);
+    if (existingCustomer.length > 0) {
+      const payload = buildCustomerPayload(qd as unknown as Record<string, unknown>, true);
+      await updateData('customers', { rfqId: qd.rfq_id }, payload, workspace);
+      console.log(`[DB] Customer updated for rfq: ${qd.rfq_id}`);
+    } else {
+      const payload = buildCustomerPayload(qd as unknown as Record<string, unknown>, false);
+      await insertData('customers', {}, payload, workspace);
+      console.log(`[DB] Customer inserted for rfq: ${qd.rfq_id}`);
+    }
+  }
+
+  // --- STEP 3: QUOTATION_ITEMS table (iterate each item) ---
+  if (qd.quotation_items && qd.quotation_items.length > 0 && qd.quotation_id) {
+    for (const item of qd.quotation_items) {
+      const itemId = item.item_id ? parseInt(String(item.item_id), 10) : null;
+      let shouldInsert = true;
+
+      // Check existence by composite key: quotation_id + item_id
+      if (itemId) {
+        const existingItem = await getData(
+          'quotationItems',
+          { quotationId: qd.quotation_id!, itemId },
+          workspace
+        );
+
+        if (existingItem.length > 0) {
+          const payload = buildQuotationItemsPayload(
+            { ...item, quotation_id: qd.quotation_id } as Record<string, unknown>,
+            true
+          );
+          await updateData(
+            'quotationItems',
+            { quotationId: qd.quotation_id!, itemId },
+            payload,
+            workspace
+          );
+          console.log(`[DB] Item ${itemId} updated`);
+          shouldInsert = false;
+        }
+      }
+
+      if (shouldInsert) {
+        const itemData: Record<string, unknown> = { ...item, quotation_id: qd.quotation_id };
+        if (itemId) itemData.item_id = itemId;
+        const payload = buildQuotationItemsPayload(itemData, false);
+        await insertData('quotationItems', {}, payload, workspace);
+        console.log(`[DB] Item inserted ${itemId ? `(id: ${itemId})` : '(auto-ID)'}`);
+      }
+    }
+  }
+
+  // --- STEP 4: QUOTATION_PRICING table (per-item pricing) ---
+  if (input.calculatedPricing?.calculated_pricing && input.calculatedPricing.calculated_pricing.length > 0 && qd.quotation_id) {
+    for (const pricingItem of input.calculatedPricing.calculated_pricing) {
+      const itemId = pricingItem.item_id ? parseInt(String(pricingItem.item_id), 10) : null;
+      let shouldInsert = true;
+
+      // Match pricing variables for this item
+      let itemPricingVars: Record<string, unknown> = {};
+      if (Array.isArray(input.pricing_variables) && itemId) {
+        const matched = input.pricing_variables.find((v) => Number(v.item_id) === itemId);
+        itemPricingVars = (matched || {}) as Record<string, unknown>;
+      }
+
+      // Build shared payload data
+      const payloadData: Record<string, unknown> = {
+        quotation_id: qd.quotation_id,
+        pricingVariables: itemPricingVars,
+        calculatedPricing: { calculated_pricing: [pricingItem] },
+        exchange_currency: input.exchange_currency || 'VND',
+      };
+
+      // Check existence (composite key: quotation_id + item_id)
+      if (itemId) {
+        const existingPricing = await getData(
+          'quotationPricing',
+          { quotationId: qd.quotation_id!, itemId },
+          workspace
+        );
+
+        if (existingPricing.length > 0) {
+          const payload = buildPricingPayload(payloadData, true);
+          await updateData(
+            'quotationPricing',
+            { quotationId: qd.quotation_id!, itemId },
+            payload,
+            workspace
+          );
+          console.log(`[DB] Pricing item ${itemId} updated`);
+          shouldInsert = false;
+        }
+      }
+
+      if (shouldInsert) {
+        if (itemId) payloadData.item_id = itemId;
+        const payload = buildPricingPayload(payloadData, false);
+        await insertData('quotationPricing', {}, payload, workspace);
+        console.log(`[DB] Pricing inserted ${itemId ? `(id: ${itemId})` : '(auto-ID)'}`);
+      }
+    }
+
+    // Update total_amount in quotations table
+    if (input.calculatedPricing.total_amount !== undefined && qd.quotation_id) {
+      await updateData(
+        'quotations',
+        { quotationId: qd.quotation_id },
+        { totalAmount: String(input.calculatedPricing.total_amount) },
+        workspace
+      );
+      console.log(`[DB] Total amount updated: ${input.calculatedPricing.total_amount}`);
+    }
+  }
+}
+
+// =============================================
+// MAIN ENTRY POINT — modifyDatabase
+// =============================================
+
+/**
+ * Unified database modification function.
+ * Routes by data_type:
+ *   - 'quotation' → handleQuotationWrite (multi-table, explicit ordering)
+ *   - all others  → TABLE_REGISTRY lookup → handleSingleTableWrite (generic)
+ *
+ * All DB operations go through queries.ts for workspace isolation.
  */
 export async function modifyDatabase(
   input: ModifyDatabaseInput,
@@ -378,229 +692,20 @@ export async function modifyDatabase(
   try {
     console.log(`[DB] Starting modification for data_type: ${input.data_type}`);
 
-    // ========== QUOTATION DATA TYPE ==========
+    // Multi-table type: quotation (dedicated handler with dependency ordering)
     if (input.data_type === 'quotation' && input.quotationData) {
-      const qd = input.quotationData;
-
-      // STEP 1: QUOTATIONS table
-      if (qd.quotation_id) {
-        const existing = await checkDataExists('quotations', qd.quotation_id, workspace);
-        if (existing.length > 0) {
-          // UPDATE - exclude PK
-          const payload = buildQuotationPayload(qd as unknown as Record<string, unknown>, true);
-          await updateData('quotations', { quotationId: qd.quotation_id }, payload, workspace);
-          console.log(`[DB] Quotation updated: ${qd.quotation_id}`);
-        } else {
-          // INSERT with provided ID
-          const payload = buildQuotationPayload(qd as unknown as Record<string, unknown>, false);
-          const result = await insertData('quotations', {}, payload, workspace);
-          qd.quotation_id = result?.quotationId;
-          console.log(`[DB] Quotation inserted: ${qd.quotation_id}`);
-        }
-      } else {
-        // INSERT with auto-generated ID
-        const payload = buildQuotationPayload(qd as unknown as Record<string, unknown>, false);
-        const result = await insertData('quotations', {}, payload, workspace);
-        qd.quotation_id = result?.quotationId;
-        console.log(`[DB] Quotation inserted (auto-ID): ${qd.quotation_id}`);
-      }
-
-      // STEP 2: CUSTOMERS table (uses rfqId as FK — customer known at RFQ stage)
-      if (qd.customer_info && qd.rfq_id) {
-        const existingCustomer = await checkDataExists('customers', qd.rfq_id, workspace);
-        if (existingCustomer.length > 0) {
-          const payload = buildCustomerPayload(qd as unknown as Record<string, unknown>, true);
-          await updateData('customers', { rfqId: qd.rfq_id }, payload, workspace);
-          console.log(`[DB] Customer updated for rfq: ${qd.rfq_id}`);
-        } else {
-          const payload = buildCustomerPayload(qd as unknown as Record<string, unknown>, false);
-          await insertData('customers', {}, payload, workspace);
-          console.log(`[DB] Customer inserted for rfq: ${qd.rfq_id}`);
-        }
-      }
-
-      // STEP 3: QUOTATION_ITEMS table (iterate each item)
-      if (qd.quotation_items && qd.quotation_items.length > 0 && qd.quotation_id) {
-        for (const item of qd.quotation_items) {
-          const itemId = item.item_id ? parseInt(String(item.item_id), 10) : null;
-          let shouldInsert = true;
-
-          // Check existence by item_id + quotation_id (composite key)
-          if (itemId) {
-            const existingItem = await getData(
-              'quotationItems',
-              { quotationId: qd.quotation_id!, itemId },
-              workspace
-            );
-
-            if (existingItem.length > 0) {
-              // UPDATE existing item
-              const payload = buildQuotationItemsPayload(
-                { ...item, quotation_id: qd.quotation_id } as Record<string, unknown>,
-                true
-              );
-              await updateData(
-                'quotationItems',
-                { quotationId: qd.quotation_id!, itemId },
-                payload,
-                workspace
-              );
-              console.log(`[DB] Item ${itemId} updated`);
-              shouldInsert = false;
-            }
-          }
-
-          if (shouldInsert) {
-            // INSERT new item
-            const itemData: Record<string, unknown> = { ...item, quotation_id: qd.quotation_id };
-            if (itemId) itemData.item_id = itemId;
-            const payload = buildQuotationItemsPayload(itemData, false);
-            await insertData('quotationItems', {}, payload, workspace);
-            console.log(`[DB] Item inserted ${itemId ? `(id: ${itemId})` : '(auto-ID)'}`);
-          }
-        }
-      }
-
-      // STEP 4: QUOTATION_PRICING table (per-item pricing)
-      if (input.calculatedPricing?.calculated_pricing && input.calculatedPricing.calculated_pricing.length > 0 && qd.quotation_id) {
-        for (const pricingItem of input.calculatedPricing.calculated_pricing) {
-          const itemId = pricingItem.item_id ? parseInt(String(pricingItem.item_id), 10) : null;
-          let shouldInsert = true;
-
-          // Match pricing variables for this item
-          let itemPricingVars: Record<string, unknown> = {};
-          if (Array.isArray(input.pricing_variables) && itemId) {
-            const matched = input.pricing_variables.find((v) => Number(v.item_id) === itemId);
-            itemPricingVars = (matched || {}) as Record<string, unknown>;
-          }
-
-          // Build shared payload data
-          const payloadData: Record<string, unknown> = {
-            quotation_id: qd.quotation_id,
-            pricingVariables: itemPricingVars,
-            calculatedPricing: { calculated_pricing: [pricingItem] },
-            exchange_currency: input.exchange_currency || 'VND',
-          };
-
-          // Check existence (composite key: quotation_id + item_id)
-          if (itemId) {
-            const existingPricing = await getData(
-              'quotationPricing',
-              { quotationId: qd.quotation_id!, itemId },
-              workspace
-            );
-
-            if (existingPricing.length > 0) {
-              const payload = buildPricingPayload(payloadData, true);
-              await updateData(
-                'quotationPricing',
-                { quotationId: qd.quotation_id!, itemId },
-                payload,
-                workspace
-              );
-              console.log(`[DB] Pricing item ${itemId} updated`);
-              shouldInsert = false;
-            }
-          }
-
-          if (shouldInsert) {
-            if (itemId) payloadData.item_id = itemId;
-            const payload = buildPricingPayload(payloadData, false);
-            await insertData('quotationPricing', {}, payload, workspace);
-            console.log(`[DB] Pricing inserted ${itemId ? `(id: ${itemId})` : '(auto-ID)'}`);
-          }
-        }
-
-        // Update total_amount in quotations table
-        if (input.calculatedPricing.total_amount !== undefined && qd.quotation_id) {
-          await updateData(
-            'quotations',
-            { quotationId: qd.quotation_id },
-            { totalAmount: String(input.calculatedPricing.total_amount) },
-            workspace
-          );
-          console.log(`[DB] Total amount updated: ${input.calculatedPricing.total_amount}`);
-        }
-      }
+      await handleQuotationWrite(input, workspace);
+      console.log('[DB] Database modification completed');
+      return;
     }
 
-    // ========== EMAIL DATA TYPE ==========
-    if (input.data_type === 'email' && input.email) {
-      const emailPayload = buildEmailPayload({
-        ...input.email,
-        quotation_id: input.quotation_id,
-        rfq_id: input.rfq_id,
-        rfq_reference: input.rfq_reference,
-      });
-
-      let shouldInsert = true;
-
-      // Check existence by email_id
-      if (input.email_id && input.quotation_id) {
-        const existing = await checkDataExists('email_table', input.quotation_id, workspace);
-        if (existing.length > 0) {
-          await updateData('emailTable', { emailId: input.email_id }, emailPayload, workspace);
-          console.log(`[DB] Email updated: ${input.email_id}`);
-          shouldInsert = false;
-        }
-      }
-
-      if (shouldInsert) {
-        await insertData('emailTable', {}, emailPayload, workspace);
-        console.log(`[DB] Email inserted`);
-      }
+    // Single-table types: registry-driven generic handler
+    const config = TABLE_REGISTRY[input.data_type];
+    if (!config) {
+      throw new Error(`[DB] Unknown data_type: "${input.data_type}". Available: ${Object.keys(TABLE_REGISTRY).join(', ')}, quotation`);
     }
 
-    // ========== RFQ ANALYSIS DATA TYPE ==========
-    if (input.data_type === 'rfq_analysis' && input.rfq_analysis) {
-      const analysisPayload = buildRfqAnalysisPayload({
-        ...input.rfq_analysis,
-        rfq_id: input.rfq_id,
-        rfq_reference: input.rfq_reference,
-      });
-
-      let shouldInsert = true;
-
-      if (input.rfq_id) {
-        const existing = await checkDataExists('rfq_analysis', input.rfq_id, workspace);
-        if (existing.length > 0) {
-          await updateData('rfqAnalysis', { rfqId: input.rfq_id }, analysisPayload, workspace);
-          console.log(`[DB] RFQ analysis updated: ${input.rfq_id}`);
-          shouldInsert = false;
-        }
-      }
-
-      if (shouldInsert) {
-        await insertData('rfqAnalysis', {}, analysisPayload, workspace);
-        console.log(`[DB] RFQ analysis inserted`);
-      }
-    }
-
-    // ========== SUPPLIER SEARCH DATA TYPE ==========
-    if (input.data_type === 'supplier_search' && input.suppliers_search) {
-      const searchPayload = buildSupplierSearchPayload({
-        ...input.suppliers_search,
-        rfq_id: input.rfq_id,
-        rfq_reference: input.rfq_reference,
-      });
-
-      let shouldInsert = true;
-
-      if (input.search_id && input.rfq_id) {
-        const existing = await checkDataExists('supplier_search', input.rfq_id, workspace);
-        if (existing.length > 0) {
-          await updateData('supplierSearch', { searchId: input.search_id }, searchPayload, workspace);
-          console.log(`[DB] Supplier search updated: ${input.search_id}`);
-          shouldInsert = false;
-        }
-      }
-
-      if (shouldInsert) {
-        await insertData('supplierSearch', {}, searchPayload, workspace);
-        console.log(`[DB] Supplier search inserted`);
-      }
-    }
-
+    await handleSingleTableWrite(config, input, workspace);
     console.log('[DB] Database modification completed');
   } catch (error) {
     console.error('[DB] Error in modifyDatabase:', error);

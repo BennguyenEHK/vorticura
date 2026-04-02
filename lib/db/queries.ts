@@ -36,6 +36,7 @@ import {
   supplierItemStatus,
   userSessions,
   workboardSnapshots,
+  incomingEmails,
 } from './schema';
 
 // =============================================
@@ -101,6 +102,7 @@ function getTableByName(tableName: string): PgTable {
     supplierItemStatus,
     userSessions,
     workboardSnapshots,
+    incomingEmails,
   };
 
   const table = tableMap[tableName];
