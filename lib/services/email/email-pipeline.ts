@@ -15,6 +15,7 @@ import sharp from 'sharp';
 
 import { handleHTTPRequest } from '@/lib/data-processor';
 import type { ProcessorInput, DataType, ActionType } from '@/lib/utils/validator';
+import { modifyDatabase } from '@/lib/utils/databaseHandler';
 import { eventBus } from '@/lib/event-bus';
 import { getCount } from '@/lib/db/queries';
 import { WorkspaceContext } from '@/lib/middleware/workspace-context';
@@ -54,10 +55,9 @@ export interface ProcessedAttachment {
   thumbnailBase64: string | null;
 }
 
-/** Result of email classification */
-export interface ClassificationResult {
-  dataType: DataType;
-  actionType: ActionType;
+/** Classification result for incoming_email routing — determines action_type */
+export interface IncomingEmailClassification {
+  actionType: 'handleRFQ' | 'handleSupplierRespond' | 'handleUnknown'; // maps to incoming_email action_type
   confidence: 'high' | 'medium' | 'low';
   reason: string;
 }
@@ -84,7 +84,7 @@ export interface EmailJSONInput {
 /** Pipeline result returned by processEmailMessage / processEmailFromJSON */
 export interface PipelineResult {
   success: boolean;
-  classification: ClassificationResult;
+  classification: IncomingEmailClassification;
   skipped?: boolean; // true if duplicate
   error?: string;
 }
@@ -268,20 +268,42 @@ const RFQ_ATTACHMENT_PATTERNS = [
   /bid/i,
 ];
 
+/** Supplier response patterns for subject lines (typically replies to our inquiries) */
+const SUPPLIER_RESPONSE_SUBJECT_PATTERNS = [
+  /^(?:RE|FW|FWD):\s*.*/i,  // Reply/forward prefix (combined with body keywords)
+];
+
+/** Supplier response keywords in email body */
+const SUPPLIER_RESPONSE_BODY_KEYWORDS = [
+  /\bwe\s+(?:can|are\s+able\s+to)\s+(?:supply|provide|offer)\b/i,
+  /\bunit\s+price\s*[:=]/i,
+  /\blead\s+time\s*[:=]/i,
+  /\bdelivery\s+(?:within|in)\s+\d+/i,
+  /\bplease\s+find\s+(?:our|the|attached)\s+quotation\b/i,
+  /\bin\s+stock\b/i,
+  /\bout\s+of\s+stock\b/i,
+  /\bavailab(?:le|ility)\b/i,
+  /\bMOQ\b/i,
+  /\bminimum\s+order\b/i,
+];
+
 /**
  * Rule-based email classifier.
- * Priority: subject patterns → body keywords → attachment filenames → default 'email'
+ * Priority: RFQ patterns → supplier response patterns → default unknown
+ *
+ * Returns an IncomingEmailClassification with actionType for incoming_email routing.
  */
 export function classifyEmailType(
   email: ExtractedEmail,
   attachments: ProcessedAttachment[]
-): ClassificationResult {
+): IncomingEmailClassification {
+  // --- RFQ Detection ---
+
   // Check subject lines for RFQ patterns (highest confidence)
   for (const pattern of RFQ_SUBJECT_PATTERNS) {
     if (pattern.test(email.subject)) {
       return {
-        dataType: 'rfq_analysis',
-        actionType: 'analyze',
+        actionType: 'handleRFQ',
         confidence: 'high',
         reason: `Subject matches RFQ pattern: ${pattern.source}`,
       };
@@ -289,18 +311,17 @@ export function classifyEmailType(
   }
 
   // Check body content for RFQ keywords (need 2+ matches for medium confidence)
-  let bodyMatchCount = 0;
+  let rfqBodyMatchCount = 0;
   for (const keyword of RFQ_BODY_KEYWORDS) {
     if (keyword.test(email.textBody) || keyword.test(email.htmlBody)) {
-      bodyMatchCount++;
+      rfqBodyMatchCount++;
     }
   }
-  if (bodyMatchCount >= 2) {
+  if (rfqBodyMatchCount >= 2) {
     return {
-      dataType: 'rfq_analysis',
-      actionType: 'analyze',
+      actionType: 'handleRFQ',
       confidence: 'medium',
-      reason: `Body contains ${bodyMatchCount} RFQ keywords`,
+      reason: `Body contains ${rfqBodyMatchCount} RFQ keywords`,
     };
   }
 
@@ -309,8 +330,7 @@ export function classifyEmailType(
   for (const pattern of RFQ_ATTACHMENT_PATTERNS) {
     if (pattern.test(allFilenames)) {
       return {
-        dataType: 'rfq_analysis',
-        actionType: 'analyze',
+        actionType: 'handleRFQ',
         confidence: 'medium',
         reason: `Attachment filename matches RFQ pattern: ${pattern.source}`,
       };
@@ -327,19 +347,46 @@ export function classifyEmailType(
   }
   if (attachmentMatchCount >= 3) {
     return {
-      dataType: 'rfq_analysis',
-      actionType: 'analyze',
+      actionType: 'handleRFQ',
       confidence: 'low',
       reason: `Attachment content contains ${attachmentMatchCount} RFQ keywords`,
     };
   }
 
-  // Default: classify as general email
+  // --- Supplier Response Detection ---
+
+  // Count supplier response keyword matches in body
+  let supplierBodyMatchCount = 0;
+  for (const keyword of SUPPLIER_RESPONSE_BODY_KEYWORDS) {
+    if (keyword.test(email.textBody) || keyword.test(email.htmlBody)) {
+      supplierBodyMatchCount++;
+    }
+  }
+
+  // Subject has RE:/FW: prefix AND body has 2+ supplier keywords → high confidence
+  const hasReplyPrefix = SUPPLIER_RESPONSE_SUBJECT_PATTERNS.some((p) => p.test(email.subject));
+  if (hasReplyPrefix && supplierBodyMatchCount >= 2) {
+    return {
+      actionType: 'handleSupplierRespond',
+      confidence: 'high',
+      reason: `Reply/forward subject with ${supplierBodyMatchCount} supplier response keywords in body`,
+    };
+  }
+
+  // Body alone has 3+ supplier keywords → medium confidence
+  if (supplierBodyMatchCount >= 3) {
+    return {
+      actionType: 'handleSupplierRespond',
+      confidence: 'medium',
+      reason: `Body contains ${supplierBodyMatchCount} supplier response keywords (no reply prefix)`,
+    };
+  }
+
+  // --- Default: Unknown ---
   return {
-    dataType: 'email',
-    actionType: 'generate',
+    actionType: 'handleUnknown',
     confidence: 'low',
-    reason: 'No RFQ indicators found, classified as general email',
+    reason: 'No RFQ or supplier response indicators found',
   };
 }
 
@@ -371,67 +418,42 @@ export async function checkDuplicateInDB(
 }
 
 // =============================================
-// buildProcessorPayload()
+// buildIncomingEmailPayload()
 // =============================================
 
 /**
- * Assemble a ProcessorInput payload from extracted email data.
- * Routes to either 'rfq_analysis' or 'email' processor pipeline.
+ * Build incoming_email ProcessorInput from extracted email data.
+ * Always routes through incoming_email data_type — the processor handles downstream routing.
+ * Follows JSON spec: value present → use value, absent → null
  */
-export function buildProcessorPayload(
+export function buildIncomingEmailPayload(
   email: ExtractedEmail,
   attachments: ProcessedAttachment[],
-  classification: ClassificationResult,
+  classification: IncomingEmailClassification,
   workspace: WorkspaceContext
 ): ProcessorInput {
-  const basePayload = {
-    data_type: classification.dataType,
+  return {
+    data_type: 'incoming_email',
     action_type: classification.actionType,
     workspace,
-    // Email metadata carried as extra fields (index signature allows this)
-    email_message_id: email.messageId,
-    email_from: email.from,
-    email_from_name: email.fromName,
-    email_to: email.to,
-    email_cc: email.cc,
-    email_date: email.date.toISOString(),
-    email_subject: email.subject,
+    incoming_email: {
+      message_id: email.messageId,
+      from_email: email.from || null,
+      from_name: email.fromName || null,
+      to: email.to.length > 0 ? email.to : [],
+      cc: email.cc.length > 0 ? email.cc : [],
+      subject: email.subject,
+      email_body_text: email.textBody || email.htmlBody || '',
+      attachments_parsed: attachments.map((a) => ({
+        filename: a.filename,
+        content_type: a.contentType,
+        extracted_text: a.extractedText || '',
+      })),
+      received_at: email.date.toISOString(),
+    },
+    // Classification metadata (index signature allows extra fields)
     classification_confidence: classification.confidence,
     classification_reason: classification.reason,
-    attachment_count: attachments.length,
-    attachments: attachments.map((a) => ({
-      filename: a.filename,
-      contentType: a.contentType,
-      size: a.size,
-      extractedText: a.extractedText,
-      hasThumbnail: !!a.thumbnailBase64,
-    })),
-  };
-
-  if (classification.dataType === 'rfq_analysis') {
-    return {
-      ...basePayload,
-      // rfq_analysis processor expects analysis object with content
-      analysis: {
-        subject: email.subject,
-        analysis_content: buildAnalysisContent(email, attachments),
-      },
-      // Use subject as rfq_reference placeholder until analysis extracts the real one
-      rfq_reference: extractRfqReference(email.subject) || `EMAIL-${Date.now()}`,
-      quotation_id: 0, // Will be created by the analysis processor
-    } as ProcessorInput;
-  }
-
-  // Default: email data_type
-  return {
-    ...basePayload,
-    email: {
-      recipient_email: email.from,
-      subject: `RE: ${email.subject}`,
-      email_content: email.textBody || email.htmlBody,
-    },
-    rfq_reference: extractRfqReference(email.subject) || `EMAIL-${Date.now()}`,
-    quotation_id: 0,
   } as ProcessorInput;
 }
 
@@ -485,8 +507,9 @@ async function dispatchToProcessor(
       eventBus.emit('comms-update', {
         type: 'new-email-processed',
         dataType: payload.data_type,
-        subject: (payload as any).email_subject,
-        from: (payload as any).email_from,
+        actionType: payload.action_type,
+        subject: (payload.incoming_email as any)?.subject ?? (payload as any).email_subject,
+        from: (payload.incoming_email as any)?.from_email ?? (payload as any).email_from,
         timestamp: new Date().toISOString(),
         processorResult: {
           success: result.success,
@@ -533,19 +556,35 @@ export async function processEmailMessage(
       return {
         success: true,
         skipped: true,
-        classification: { dataType: 'email', actionType: 'generate', confidence: 'low', reason: 'duplicate' },
+        classification: { actionType: 'handleUnknown', confidence: 'low', reason: 'duplicate' },
       };
     }
 
     // Step 3: Extract attachment content (PDF text, image thumbnails)
     const processedAttachments = await extractAttachmentContent(email.rawAttachments);
 
-    // Step 4: Classify email type (RFQ vs general)
+    // Step 4: Classify email type
     const classification = classifyEmailType(email, processedAttachments);
-    console.log(`[email-pipeline] Classified: ${classification.dataType}/${classification.actionType} (${classification.confidence})`);
+    console.log(`[email-pipeline] Classified: ${classification.actionType} (${classification.confidence})`);
 
     // Step 5: Build processor payload
-    const payload = buildProcessorPayload(email, processedAttachments, classification, workspace);
+    const payload = buildIncomingEmailPayload(email, processedAttachments, classification, workspace);
+
+    // Step 5.5: Persist raw email to incoming_emails table (before dispatch)
+    try {
+      await modifyDatabase({
+        data_type: 'incoming_email',
+        incoming_email: {
+          ...(payload.incoming_email as unknown as Record<string, unknown>),
+          classification_type: classification.actionType,
+          classification_confidence: classification.confidence,
+          processed_at: new Date().toISOString(),
+        },
+      }, workspace);
+    } catch (dbError) {
+      // Log but continue — email data is still in the payload for processing
+      console.error('[email-pipeline] Failed to persist incoming email:', dbError);
+    }
 
     // Step 6: Dispatch to data processor (handleHTTPRequest)
     const success = await dispatchToProcessor(payload);
@@ -561,7 +600,7 @@ export async function processEmailMessage(
     console.error(`[email-pipeline] processEmailMessage failed:`, message);
     return {
       success: false,
-      classification: { dataType: 'email', actionType: 'generate', confidence: 'low', reason: 'pipeline_error' },
+      classification: { actionType: 'handleUnknown', confidence: 'low', reason: 'pipeline_error' },
       error: message,
     };
   }
@@ -608,7 +647,7 @@ export async function processEmailFromJSON(
       return {
         success: true,
         skipped: true,
-        classification: { dataType: 'email', actionType: 'generate', confidence: 'low', reason: 'duplicate' },
+        classification: { actionType: 'handleUnknown', confidence: 'low', reason: 'duplicate' },
       };
     }
 
@@ -617,10 +656,26 @@ export async function processEmailFromJSON(
 
     // Step 4: Classify email type
     const classification = classifyEmailType(email, processedAttachments);
-    console.log(`[email-pipeline] Classified (JSON): ${classification.dataType}/${classification.actionType} (${classification.confidence})`);
+    console.log(`[email-pipeline] Classified (JSON): ${classification.actionType} (${classification.confidence})`);
 
     // Step 5: Build processor payload
-    const payload = buildProcessorPayload(email, processedAttachments, classification, workspace);
+    const payload = buildIncomingEmailPayload(email, processedAttachments, classification, workspace);
+
+    // Step 5.5: Persist raw email to incoming_emails table (before dispatch)
+    try {
+      await modifyDatabase({
+        data_type: 'incoming_email',
+        incoming_email: {
+          ...(payload.incoming_email as unknown as Record<string, unknown>),
+          classification_type: classification.actionType,
+          classification_confidence: classification.confidence,
+          processed_at: new Date().toISOString(),
+        },
+      }, workspace);
+    } catch (dbError) {
+      // Log but continue — email data is still in the payload for processing
+      console.error('[email-pipeline] Failed to persist incoming email:', dbError);
+    }
 
     // Step 6: Dispatch to data processor
     const success = await dispatchToProcessor(payload);
@@ -636,7 +691,7 @@ export async function processEmailFromJSON(
     console.error(`[email-pipeline] processEmailFromJSON failed:`, message);
     return {
       success: false,
-      classification: { dataType: 'email', actionType: 'generate', confidence: 'low', reason: 'pipeline_error' },
+      classification: { actionType: 'handleUnknown', confidence: 'low', reason: 'pipeline_error' },
       error: message,
     };
   }

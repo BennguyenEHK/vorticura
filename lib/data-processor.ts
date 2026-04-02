@@ -83,7 +83,9 @@ const DATA_PROCESSORS: Record<string, Record<string, ProcessorFn>> = {
     research: processSupplierSearch,   // Re-search with user corrections
   },
   'incoming_email': {
-    classify: processIncomingEmail,    // Classify incoming email → route to rfq_analysis or supplier_respond
+    handleRFQ: processIncomingEmail,              // RFQ detected → routes to processAnalysis
+    handleSupplierRespond: processIncomingEmail,  // Supplier response → routes internally (stub)
+    handleUnknown: processIncomingEmail,          // Unknown email → log only
   },
   // 'supplier_respond': {
   //   update: processSupplierRespond,     // TODO: create supplier-respond-actions.ts
@@ -312,10 +314,10 @@ function generateSessionId(input: ProcessorInput, dataType: string, actionType: 
  * Update processing statistics based on action type
  */
 function updateStats(actionType: string): void {
-  if (['generate', 'analyze', 'search', 'proceed'].includes(actionType)) {
+  if (['generate', 'analyze', 'search', 'proceed', 'handleRFQ'].includes(actionType)) {
     stats.totalGenerations++;
   }
-  if (['update', 'manual_update', 'send', 're_generate', 'reanalyze', 'research', 'available', 'unavailable'].includes(actionType)) {
+  if (['update', 'manual_update', 'send', 're_generate', 'reanalyze', 'research', 'available', 'unavailable', 'handleSupplierRespond', 'handleUnknown'].includes(actionType)) {
     stats.totalUpdates++;
   }
   stats.totalProcessed++;

@@ -296,12 +296,12 @@ const TEST_CASES: TestCase[] = [
   },
 
   // --------------------------------------------------
-  // 8. incoming_email:classify — INSERT raw incoming email
+  // 8. incoming_email:handleRFQ — INSERT raw incoming email
   // --------------------------------------------------
   {
     label: 'Insert raw incoming email (RFQ classification)',
     data_type: 'incoming_email',
-    action_type: 'classify',
+    action_type: 'handleRFQ',
     buildInput: () => ({
       data_type: 'incoming_email',
       incoming_email: {

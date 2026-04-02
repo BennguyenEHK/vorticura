@@ -285,7 +285,7 @@ async function processNotification(notification: GraphNotification): Promise<voi
 
     if (result.success) {
       console.log(
-        `[microsoft-webhook] Processed message ${messageId} as ${result.classification.dataType} (${result.classification.confidence})`
+        `[microsoft-webhook] Processed message ${messageId} as ${result.classification.actionType} (${result.classification.confidence})`
       );
     } else {
       console.warn(
