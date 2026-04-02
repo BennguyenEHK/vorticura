@@ -20,7 +20,7 @@ export type EmailActionType = 'send' | 'generate' | 're_generate';
 export type RfqAnalysisActionType = 'analyze' | 'reanalyze';
 export type SupplierSearchActionType = 'search' | 'research';
 export type SupplierRespondActionType = 'update' | 'available' | 'unavailable';
-export type IncomingEmailActionType = 'handleRFQ' | 'handleSupplierRespond' | 'handleUnknown';
+export type IncomingEmailActionType = 'handleRFQ' | 'handleSuppliersRespond' | 'handleUnknown';
 
 /** Universal action: 'proceed' = accept current result, move to next pipeline step */
 export type UniversalActionType = 'proceed';
@@ -238,7 +238,7 @@ const EXTRACTION_VALIDATE: Record<string, Record<string, ValidatorFn>> = {
   },
   'incoming_email': {
     handleRFQ: validateIncomingEmail,              // RFQ detected → route to rfq_analysis
-    handleSupplierRespond: validateIncomingEmail,  // Supplier response → route to supplier_respond
+    handleSuppliersRespond: validateIncomingEmail,  // Supplier response → route to supplier_respond
     handleUnknown: validateIncomingEmail,          // No pattern matched → log only
   },
 };
@@ -676,7 +676,7 @@ function validateSupplierRespond(input: ProcessorInput): ProcessorInput {
 // #############################################################################
 
 /**
- * Validate incoming_email data_type (handleRFQ, handleSupplierRespond, handleUnknown)
+ * Validate incoming_email data_type (handleRFQ, handleSuppliersRespond, handleUnknown)
  * Checks: incoming_email object with message_id, from_email, subject, email_body_text
  * @param input - Raw input
  * @returns Validated input

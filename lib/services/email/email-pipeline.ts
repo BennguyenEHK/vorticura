@@ -57,7 +57,7 @@ export interface ProcessedAttachment {
 
 /** Classification result for incoming_email routing — determines action_type */
 export interface IncomingEmailClassification {
-  actionType: 'handleRFQ' | 'handleSupplierRespond' | 'handleUnknown'; // maps to incoming_email action_type
+  actionType: 'handleRFQ' | 'handleSuppliersRespond' | 'handleUnknown'; // maps to incoming_email action_type
   confidence: 'high' | 'medium' | 'low';
   reason: string;
 }
@@ -367,7 +367,7 @@ export function classifyEmailType(
   const hasReplyPrefix = SUPPLIER_RESPONSE_SUBJECT_PATTERNS.some((p) => p.test(email.subject));
   if (hasReplyPrefix && supplierBodyMatchCount >= 2) {
     return {
-      actionType: 'handleSupplierRespond',
+      actionType: 'handleSuppliersRespond',
       confidence: 'high',
       reason: `Reply/forward subject with ${supplierBodyMatchCount} supplier response keywords in body`,
     };
@@ -376,7 +376,7 @@ export function classifyEmailType(
   // Body alone has 3+ supplier keywords → medium confidence
   if (supplierBodyMatchCount >= 3) {
     return {
-      actionType: 'handleSupplierRespond',
+      actionType: 'handleSuppliersRespond',
       confidence: 'medium',
       reason: `Body contains ${supplierBodyMatchCount} supplier response keywords (no reply prefix)`,
     };
