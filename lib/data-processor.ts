@@ -30,6 +30,7 @@ import { processQuotation } from './actions/quotation-actions';
 import { processEmail } from './actions/email-actions';
 import { processSupplierSearch } from './actions/supplier-search-actions';
 import { processAnalysis } from './actions/analysis-actions';
+import { processSupplierRespond } from './actions/supplier-respond-actions';
 import { eventBus } from './event-bus';
 
 // ========== PIPELINE CHAINING ==========
@@ -87,11 +88,11 @@ const DATA_PROCESSORS: Record<string, Record<string, ProcessorFn>> = {
     handleSuppliersRespond: processSuppliersRespond, // Supplier response → stub (future processor)
     handleUnknown: processUnknownEmail,           // Fallback → maps input → processEmail for UI report
   },
-  // 'supplier_respond': {
-  //   update: processSupplierRespond,     // TODO: create supplier-respond-actions.ts
-  //   available: processSupplierRespond,
-  //   unavailable: processSupplierRespond,
-  // },
+  'supplier_respond': {
+    update: processSupplierRespond,       // AI parses supplier email → update item statuses + bidder_proposal
+    available: processSupplierRespond,    // Manual UI override: mark items as available
+    unavailable: processSupplierRespond,  // Manual UI override: mark items as unavailable
+  },
 };
 
 // =============================================
@@ -339,32 +340,32 @@ async function processRFQ(input: ProcessorInput): Promise<ProcessorResult> {
 }
 
 /**
- * Process supplier response email — stub pending supplier_respond processor.
- * Future: match sender → known supplier → update supplier_item_status → check all_items_available
+ * Process supplier response email: map incoming_email → supplier_respond:update → delegate.
+ * Builds a supplier_respond input from the incoming email data and calls processSupplierRespond
+ * which handles AI extraction, DB updates, and all_items_available check.
  */
 async function processSuppliersRespond(input: ProcessorInput): Promise<ProcessorResult> {
   const ie = input.incoming_email;
+  if (!ie) return incomingEmailError(input, 'incoming_email data required for handleSuppliersRespond');
 
   // Emit SSE so UI knows a supplier response was received
   eventBus.emit('comms-update', {
     type: 'incoming-email-routed',
     routedTo: 'supplier_respond',
-    from: ie?.from_email,
-    subject: ie?.subject,
+    from: ie.from_email,
+    subject: ie.subject,
     timestamp: new Date().toISOString(),
   });
 
-  // TODO: Implement when processSupplierRespond() is available
-  return {
-    success: true,
-    data_type: 'incoming_email',
-    action_type: 'handleSuppliersRespond',
-    status: 'completed',
-    session_id: '',
-    processing_time_ms: 0,
-    data: { routed_to: 'supplier_respond', status: 'pending_implementation' },
-    timestamp: new Date().toISOString(),
+  // Map incoming_email → supplier_respond:update input and delegate to processor
+  const supplierRespondInput: ProcessorInput = {
+    data_type: 'supplier_respond',
+    action_type: 'update',
+    workspace: input.workspace,
+    incoming_email: ie, // Pass email data for AI extraction inside the processor
   };
+
+  return processSupplierRespond(supplierRespondInput);
 }
 
 /**
