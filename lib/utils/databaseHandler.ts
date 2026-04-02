@@ -342,9 +342,9 @@ export function buildIncomingEmailPayload(data: Record<string, unknown>, update 
     const rfqId = parseInt(String(data.rfq_id), 10);
     if (!isNaN(rfqId)) payload.rfqId = rfqId;
   }
-  // Timestamps
-  if (data.received_at != null) payload.receivedAt = data.received_at;
-  if (data.processed_at != null) payload.processedAt = data.processed_at;
+  // Timestamps — convert to Date objects for Drizzle timestamp columns
+  if (data.received_at != null) payload.receivedAt = new Date(String(data.received_at));
+  if (data.processed_at != null) payload.processedAt = new Date(String(data.processed_at));
 
   return payload;
 }

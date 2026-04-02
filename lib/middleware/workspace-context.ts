@@ -64,15 +64,15 @@ export class WorkspaceContext {
 
   /**
    * Inject workspace context into data for INSERT operations
-   * Always adds both company_id and client_id to ensure proper tenant tracking
+   * Uses camelCase keys (companyId, clientId) to match Drizzle column definitions
    * @param data - Data object to inject context into
    * @returns Data object with workspace context injected
    */
-  injectWorkspaceContext<T extends Record<string, unknown>>(data: T): T & { company_id: number; client_id: number } {
+  injectWorkspaceContext<T extends Record<string, unknown>>(data: T): T & { companyId: number; clientId: number } {
     return {
       ...data,
-      company_id: this.company_id,
-      client_id: this.client_id,
+      companyId: this.company_id,   // camelCase to match Drizzle schema column keys
+      clientId: this.client_id,     // camelCase to match Drizzle schema column keys
     };
   }
 
@@ -166,31 +166,29 @@ export class WorkspaceContext {
     const filters: SQL[] = [];
     const baseFilter = this.getDatabaseFilter(); // Get workspace filter { company_id, client_id? }
 
-    // Validate that tenant columns exist on the provided table
-    if (baseFilter.company_id !== undefined && !('company_id' in table)) {
+    // Validate that tenant columns exist on the provided table (camelCase = Drizzle column keys)
+    if (baseFilter.company_id !== undefined && !('companyId' in table)) {
       console.warn(
-        `buildWhereClause: table is missing 'company_id' column required by workspace filter. ` +
-        `Table must include company_id for proper tenant isolation. ` +
-        `Check getDatabaseFilter() and ensure the table schema defines company_id.`
-      );
-    }
-    
-    if (baseFilter.client_id !== undefined && !('client_id' in table)) {
-      console.warn(
-        `buildWhereClause: table is missing 'client_id' column required by workspace filter. ` +
-        `Table must include client_id for client-level tenant isolation. ` +
-        `Check getDatabaseFilter() and ensure the table schema defines client_id.`
+        `buildWhereClause: table is missing 'companyId' column required by workspace filter. ` +
+        `Table must include companyId for proper tenant isolation.`
       );
     }
 
-    // Add company_id filter (required for all tenant tables)
-    if ('company_id' in table) {
-      filters.push(eq((table as Record<string, unknown>).company_id as Parameters<typeof eq>[0], baseFilter.company_id));
+    if (baseFilter.client_id !== undefined && !('clientId' in table)) {
+      console.warn(
+        `buildWhereClause: table is missing 'clientId' column required by workspace filter. ` +
+        `Table must include clientId for client-level tenant isolation.`
+      );
     }
 
-    // Add client_id filter if isolation is enabled (Phase 2)
-    if (baseFilter.client_id !== undefined && 'client_id' in table) {
-      filters.push(eq((table as Record<string, unknown>).client_id as Parameters<typeof eq>[0], baseFilter.client_id));
+    // Add companyId filter (required for all tenant tables — camelCase matches Drizzle column key)
+    if ('companyId' in table) {
+      filters.push(eq((table as Record<string, unknown>).companyId as Parameters<typeof eq>[0], baseFilter.company_id));
+    }
+
+    // Add clientId filter if isolation is enabled (Phase 2)
+    if (baseFilter.client_id !== undefined && 'clientId' in table) {
+      filters.push(eq((table as Record<string, unknown>).clientId as Parameters<typeof eq>[0], baseFilter.client_id));
     }
 
     // Add user-provided additional filters
