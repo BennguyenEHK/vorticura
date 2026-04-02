@@ -18,6 +18,7 @@ import { eventBus } from '@/lib/event-bus';
 import { getData, updateData, insertData } from '@/lib/db/queries';
 import { buildSupplierItemStatusPayload, buildQuotationItemsPayload } from '@/lib/utils/databaseHandler';
 import { getLocalModel } from '@/lib/ai-agent/local-model';
+import { hfChatCompletion, SUPPLIER_RESPOND_SYSTEM_PROMPT } from '@/lib/ai-agent/hf-client';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
 import type { WorkspaceContext } from '@/lib/middleware/workspace-context';
 
@@ -361,14 +362,31 @@ async function extractSupplierResponseFromEmail(
     }
   }
 
-  // Remote mode: future API integration
-  // For now, use mock data in development
-  if (process.env.NODE_ENV === 'development') {
-    console.warn('[Supplier Respond] Remote AI not configured, using mock extraction');
-    return generateMockExtraction(supplierMatch, emailData);
+  // Route: remote API call via HuggingFace Inference SDK
+  try {
+    console.log('[Supplier Respond] Using HF Inference API for extraction');
+    // Build user message with full email context
+    const userMessage = `From: ${emailData.from_name} <${emailData.from_email}>\nSubject: ${emailData.subject}\n\nEmail Body:\n${fullContent}${supplierMatch ? `\n\nContext: Supplier ID ${supplierMatch.supplierId}, RFQ ID ${supplierMatch.rfqId}` : ''}`;
+    // Call HuggingFace chatCompletion — returns parsed extraction JSON
+    const extracted = await hfChatCompletion<{ supplier_name: string; items: ExtractedItem[]; confidence: number }>(
+      SUPPLIER_RESPOND_SYSTEM_PROMPT,
+      userMessage
+    );
+    return {
+      supplier_id: supplierMatch?.supplierId || 0,
+      supplier_name: extracted.supplier_name || emailData.from_name,
+      rfq_id: supplierMatch?.rfqId || 0,
+      items: extracted.items || [],
+      confidence: extracted.confidence || 0.8,
+    };
+  } catch (error) {
+    console.error('[Supplier Respond] HF Inference API failed:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[Supplier Respond] Using mock extraction data');
+      return generateMockExtraction(supplierMatch, emailData);
+    }
+    throw error;
   }
-
-  throw new Error('AI extraction not available: configure AI_MODE=local or implement remote API');
 }
 
 /**

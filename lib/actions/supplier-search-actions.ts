@@ -5,7 +5,7 @@
 // Flow: ProcessorInput → route by action_type → AI API call → save to DB → emit SSE → return ProcessorResult
 // Supports: search | research
 
-import ky from 'ky';
+import { hfChatCompletion, SUPPLIER_SEARCH_SYSTEM_PROMPT } from '@/lib/ai-agent/hf-client';
 import { eventBus } from '@/lib/event-bus';
 import { modifyDatabase } from '@/lib/utils/databaseHandler';
 import { getLocalModel } from '@/lib/ai-agent/local-model';
@@ -19,8 +19,6 @@ import type { SearchAPIInput, SupplierResult } from '@/types/ai-agent';
 /** AI inference mode: 'local' = run model locally, anything else = call remote API */
 const AI_MODE = process.env.AI_MODE || 'remote';
 
-/** AI Supplier Search API endpoint (used when AI_MODE !== 'local') */
-const SUPPLIER_API_URL = process.env.SUPPLIER_API_URL || 'https://api.example.com/suppliers/search';
 
 // ---------------------------------------------
 // Main Processor: Process Supplier Search
@@ -108,31 +106,12 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
 // AI API Call
 // ---------------------------------------------
 
-/** AI API response shape (remote API only) */
-interface AISupplierResponse {
-  suppliers: Array<{
-    id: string;
-    name: string;
-    email: string;
-    rating?: number;
-    specialties: string[];
-    estimated_lead_time?: number;
-    match_score: number;
-    location?: string;
-    contact_person?: string;
-  }>;
-  search_metadata: {
-    total_found: number;
-    search_time_ms: number;
-  };
-}
-
 // SupplierResult and SearchAPIInput types imported from '@/types/ai-agent'
 
 /**
  * Call AI for supplier search — routes to local model or remote API based on AI_MODE.
  * Local mode: runs model in-process via @xenova/transformers
- * Remote mode: calls external API via ky with retries
+ * Remote mode: calls HuggingFace Inference API via hfChatCompletion
  */
 async function callSupplierSearchAPI(input: SearchAPIInput): Promise<SupplierResult[]> {
   // Route: local model inference (no network required)
@@ -150,40 +129,16 @@ async function callSupplierSearchAPI(input: SearchAPIInput): Promise<SupplierRes
     }
   }
 
-  // Route: remote API call
+  // Route: remote API call via HuggingFace Inference SDK
   try {
-    const response = await ky.post(SUPPLIER_API_URL, {
-      json: {
-        subject: input.subject,
-        search_content: input.searchContent,
-        action_type: input.actionType,
-      },
-      timeout: 45000,
-      retry: {
-        limit: 2,
-        methods: ['post'],
-        statusCodes: [408, 429, 500, 502, 503, 504],
-      },
-      headers: {
-        'Authorization': `Bearer ${process.env.AI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-    }).json<AISupplierResponse>();
-
-    // Transform response to our schema
-    return response.suppliers.map((supplier) => ({
-      id: supplier.id,
-      name: supplier.name,
-      email: supplier.email,
-      rating: supplier.rating,
-      specialties: supplier.specialties,
-      estimatedLeadTime: supplier.estimated_lead_time,
-      matchScore: supplier.match_score,
-    }));
+    // Build user message from input fields
+    const userMessage = `Subject: ${input.subject}\n\nRequirements:\n${input.searchContent}`;
+    // Call HuggingFace chatCompletion — returns parsed SupplierResult[] JSON
+    return await hfChatCompletion<SupplierResult[]>(SUPPLIER_SEARCH_SYSTEM_PROMPT, userMessage);
   } catch (error) {
     // If AI API fails, return mock data for development
     if (process.env.NODE_ENV === 'development') {
-      console.warn('[Supplier Search] API failed, using mock data');
+      console.warn('[Supplier Search] HF Inference API failed, using mock data');
       return generateMockSuppliers();
     }
     throw error;

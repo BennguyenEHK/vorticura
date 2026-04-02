@@ -5,7 +5,7 @@
 // Flow: ProcessorInput → route by action_type → AI API call → save to DB → emit SSE → return ProcessorResult
 // Supports: analyze | reanalyze
 
-import ky from 'ky';
+import { hfChatCompletion, ANALYSIS_SYSTEM_PROMPT } from '@/lib/ai-agent/hf-client';
 import { eventBus } from '@/lib/event-bus';
 import { modifyDatabase } from '@/lib/utils/databaseHandler';
 import { getLocalModel } from '@/lib/ai-agent/local-model';
@@ -18,9 +18,6 @@ import type { AICallInput, AnalysisData } from '@/types/ai-agent';
 
 /** AI inference mode: 'local' = run model locally, anything else = call remote API */
 const AI_MODE = process.env.AI_MODE || 'remote';
-
-/** AI API endpoint for RFQ analysis (used when AI_MODE !== 'local') */
-const AI_API_URL = process.env.AI_API_URL || 'https://api.example.com/analyze';
 
 // ---------------------------------------------
 // Main Processor: Process Analysis 
@@ -104,30 +101,10 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
 // AI API Call
 // ---------------------------------------------
 
-/** AI API response shape (remote API only) */
-interface AIAnalysisResponse {
-  summary: string;
-  extracted_items: Array<{
-    description: string;
-    quantity?: number;
-    unit?: string;
-    specs?: string;
-  }>;
-  customer: {
-    name: string;
-    email: string;
-    company?: string;
-    phone?: string;
-  };
-  deadlines?: string[];
-  special_requirements?: string[];
-  confidence_score: number;
-}
-
 /**
  * Call AI for RFQ analysis — routes to local model or remote API based on AI_MODE.
  * Local mode: runs model in-process via @xenova/transformers
- * Remote mode: calls external API via ky with retries
+ * Remote mode: calls HuggingFace Inference API via hfChatCompletion
  */
 async function callAIAnalysis(input: AICallInput): Promise<AnalysisData> {
   // Route: local model inference (no network required)
@@ -146,66 +123,20 @@ async function callAIAnalysis(input: AICallInput): Promise<AnalysisData> {
     }
   }
 
-  // Route: remote API call
+  // Route: remote API call via HuggingFace Inference SDK
   try {
-    const response = await ky.post(AI_API_URL, {
-      json: {
-        subject: input.subject,
-        analysis_content: input.analysisContent,
-        action_type: input.actionType,
-      },
-      timeout: 30000,
-      retry: {
-        limit: 2,
-        methods: ['post'],
-        statusCodes: [408, 429, 500, 502, 503, 504],
-      },
-      headers: {
-        'Authorization': `Bearer ${process.env.AI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-    }).json<AIAnalysisResponse>();
-
-    // Transform AI response to our format
-    return transformAIResponse(response);
+    // Build user message from input fields
+    const userMessage = `Subject: ${input.subject}\n\nContent:\n${input.analysisContent}`;
+    // Call HuggingFace chatCompletion — returns parsed AnalysisData JSON
+    return await hfChatCompletion<AnalysisData>(ANALYSIS_SYSTEM_PROMPT, userMessage);
   } catch (error) {
     // If AI API fails, return mock analysis for development
     if (process.env.NODE_ENV === 'development') {
-      console.warn('[Analysis] AI API failed, using mock data');
+      console.warn('[Analysis] HF Inference API failed, using mock data');
       return generateMockAnalysis(input);
     }
     throw error;
   }
-}
-
-// ---------------------------------------------
-// Response Transformation
-// ---------------------------------------------
-
-// AnalysisData type imported from '@/types/ai-agent' (shared with local-model.ts)
-
-/**
- * Transform AI API response to our schema
- */
-function transformAIResponse(response: AIAnalysisResponse): AnalysisData {
-  return {
-    summary: response.summary,
-    items: response.extracted_items.map((item) => ({
-      description: item.description,
-      quantity: item.quantity,
-      unit: item.unit,
-      specifications: item.specs,
-    })),
-    customerInfo: {
-      name: response.customer.name,
-      email: response.customer.email,
-      company: response.customer.company,
-      phone: response.customer.phone,
-    },
-    deadlines: response.deadlines,
-    specialRequirements: response.special_requirements,
-    confidence: response.confidence_score,
-  };
 }
 
 // ---------------------------------------------
