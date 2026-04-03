@@ -8,10 +8,20 @@
 //   getHFClient()      → singleton InferenceClient instance
 //   hfChatCompletion() → send system+user prompt, parse JSON response
 //
+// Prompts are imported from ./prompt/ modules and re-exported
+// under their legacy names for backward compatibility.
+//
 // Usage: import { hfChatCompletion } from '@/lib/ai-agent/hf-client';
 //        const data = await hfChatCompletion<AnalysisData>(SYSTEM_PROMPT, userMsg);
 
 import { InferenceClient } from '@huggingface/inference';
+
+// Re-export prompts from centralized modules for backward compatibility
+export {
+  ANALYZE_RFQ_PROMPT as ANALYSIS_SYSTEM_PROMPT,
+  SEARCH_SUPPLIERS_PROMPT as SUPPLIER_SEARCH_SYSTEM_PROMPT,
+  EXTRACT_SUPPLIER_RESPONSE_PROMPT as SUPPLIER_RESPOND_SYSTEM_PROMPT,
+} from './prompt';
 
 // =============================================
 // Configuration
@@ -41,96 +51,6 @@ export function getHFClient(): InferenceClient {
   }
   return globalForHF.hfClient;
 }
-
-// =============================================
-// System Prompts (shared with local-model.ts)
-// =============================================
-
-/** System prompt for RFQ analysis — outputs strict JSON matching AnalysisData */
-export const ANALYSIS_SYSTEM_PROMPT = `You are an RFQ (Request for Quotation) analysis assistant.
-Analyze the provided email/document and extract structured information.
-
-You MUST return ONLY valid JSON (no markdown, no explanation) with this exact schema:
-{
-  "summary": "brief summary of the RFQ content",
-  "items": [
-    {
-      "description": "item description",
-      "quantity": 100,
-      "unit": "pcs",
-      "specifications": "technical specs if any"
-    }
-  ],
-  "customerInfo": {
-    "name": "contact person name",
-    "email": "email@example.com",
-    "company": "company name",
-    "phone": "phone number"
-  },
-  "deadlines": ["2026-04-01"],
-  "specialRequirements": ["any special conditions"],
-  "confidence": 0.85
-}
-
-Rules:
-- Extract ALL items mentioned in the document
-- Set confidence between 0.0 and 1.0 based on how clear the RFQ is
-- If a field is not found, use empty string or empty array
-- Return ONLY the JSON object, nothing else`;
-
-/** System prompt for supplier search — outputs strict JSON array matching SupplierResult[] */
-export const SUPPLIER_SEARCH_SYSTEM_PROMPT = `You are a supplier discovery assistant.
-Based on the provided item requirements, suggest matching suppliers.
-
-You MUST return ONLY a valid JSON array (no markdown, no explanation) with this schema:
-[
-  {
-    "id": "SUP-001",
-    "name": "Supplier Company Name",
-    "email": "contact@supplier.com",
-    "rating": 4.5,
-    "specialties": ["Category1", "Category2"],
-    "estimatedLeadTime": 14,
-    "matchScore": 0.92
-  }
-]
-
-Rules:
-- Suggest 2-5 realistic suppliers based on the item categories
-- matchScore should be between 0.0 and 1.0
-- estimatedLeadTime is in days
-- rating is between 0 and 5
-- Return ONLY the JSON array, nothing else`;
-
-/** System prompt for supplier response extraction — outputs strict JSON matching AIExtractionResult */
-export const SUPPLIER_RESPOND_SYSTEM_PROMPT = `You are a supplier response extraction assistant.
-Analyze the supplier's email reply and extract per-item pricing and delivery information.
-
-You MUST return ONLY valid JSON (no markdown, no explanation) with this exact schema:
-{
-  "supplier_name": "Supplier Company Name",
-  "items": [
-    {
-      "item_id": 1,
-      "status": "available",
-      "currency_code": "USD",
-      "bidder_proposal": {
-        "bidder_description": "supplier's product description",
-        "bidder_unit_price": 25.50,
-        "delivery_time": "4 weeks ARO",
-        "compliance_deviation": "Meets all specifications"
-      }
-    }
-  ],
-  "confidence": 0.85
-}
-
-Rules:
-- Extract ALL items mentioned in the supplier's response
-- status must be "available" or "unavailable"
-- If price is not mentioned, set bidder_unit_price to 0
-- confidence between 0.0 and 1.0 based on clarity of the response
-- Return ONLY the JSON object, nothing else`;
 
 // =============================================
 // Chat Completion Helper

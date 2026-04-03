@@ -18,6 +18,11 @@ import type {
   SearchAPIInput,
   SupplierResult,
 } from '@/types/ai-agent';
+import {
+  ANALYZE_RFQ_PROMPT,
+  buildAnalyzeUserMessage,
+  SEARCH_SUPPLIERS_PROMPT,
+} from './prompt';
 
 // =============================================
 // Configuration
@@ -34,65 +39,8 @@ const MODEL_CACHE_DIR = path.join(process.cwd(), 'lib', 'ai-agent', 'ai-model');
 /** Max tokens for model generation output */
 const MAX_NEW_TOKENS = 1024;
 
-// =============================================
-// System Prompts
-// =============================================
-
-/** System prompt for RFQ analysis — instructs model to output strict JSON */
-const ANALYSIS_SYSTEM_PROMPT = `You are an RFQ (Request for Quotation) analysis assistant.
-Analyze the provided email/document and extract structured information.
-
-You MUST return ONLY valid JSON (no markdown, no explanation) with this exact schema:
-{
-  "summary": "brief summary of the RFQ content",
-  "items": [
-    {
-      "description": "item description",
-      "quantity": 100,
-      "unit": "pcs",
-      "specifications": "technical specs if any"
-    }
-  ],
-  "customerInfo": {
-    "name": "contact person name",
-    "email": "email@example.com",
-    "company": "company name",
-    "phone": "phone number"
-  },
-  "deadlines": ["2026-04-01"],
-  "specialRequirements": ["any special conditions"],
-  "confidence": 0.85
-}
-
-Rules:
-- Extract ALL items mentioned in the document
-- Set confidence between 0.0 and 1.0 based on how clear the RFQ is
-- If a field is not found, use empty string or empty array
-- Return ONLY the JSON object, nothing else`;
-
-/** System prompt for supplier search — instructs model to output strict JSON array */
-const SUPPLIER_SEARCH_SYSTEM_PROMPT = `You are a supplier discovery assistant.
-Based on the provided item requirements, suggest matching suppliers.
-
-You MUST return ONLY a valid JSON array (no markdown, no explanation) with this schema:
-[
-  {
-    "id": "SUP-001",
-    "name": "Supplier Company Name",
-    "email": "contact@supplier.com",
-    "rating": 4.5,
-    "specialties": ["Category1", "Category2"],
-    "estimatedLeadTime": 14,
-    "matchScore": 0.92
-  }
-]
-
-Rules:
-- Suggest 2-5 realistic suppliers based on the item categories
-- matchScore should be between 0.0 and 1.0
-- estimatedLeadTime is in days
-- rating is between 0 and 5
-- Return ONLY the JSON array, nothing else`;
+// System prompts are now centralized in ./prompt/ modules
+// (ANALYZE_RFQ_PROMPT, SEARCH_SUPPLIERS_PROMPT, etc.)
 
 // =============================================
 // LocalAIModel Class
@@ -173,11 +121,16 @@ export class LocalAIModel {
     await this.ensureLoaded();
     console.log(`[local-model] analyzeRFQ: "${input.subject}" (${input.actionType})`);
 
-    // Build chat-style prompt for the model
-    const prompt = this.buildChatPrompt(
-      ANALYSIS_SYSTEM_PROMPT,
-      `Subject: ${input.subject}\n\nContent:\n${input.analysisContent}`
-    );
+    // Build chat-style prompt using centralized prompt templates
+    const userMsg = buildAnalyzeUserMessage({
+      subject: input.subject,
+      emailBodyText: input.analysisContent,
+      fromEmail: '',
+      fromName: '',
+      cc: [],
+      attachmentsText: '',
+    });
+    const prompt = this.buildChatPrompt(ANALYZE_RFQ_PROMPT, userMsg);
 
     // Run inference
     const rawOutput = await this.generate(prompt);
@@ -195,11 +148,8 @@ export class LocalAIModel {
     await this.ensureLoaded();
     console.log(`[local-model] searchSuppliers: "${input.subject}" (${input.actionType})`);
 
-    // Build chat-style prompt for the model
-    const prompt = this.buildChatPrompt(
-      SUPPLIER_SEARCH_SYSTEM_PROMPT,
-      `Subject: ${input.subject}\n\nRequirements:\n${input.searchContent}`
-    );
+    // Build chat-style prompt using centralized prompt templates
+    const prompt = this.buildChatPrompt(SEARCH_SUPPLIERS_PROMPT, input.searchContent);
 
     // Run inference
     const rawOutput = await this.generate(prompt);
