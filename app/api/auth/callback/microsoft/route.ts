@@ -158,6 +158,29 @@ async function handleSignup(
   }
 
   // Create company and user in a transaction to ensure atomicity
+  const tokenExpiresAt = new Date(Date.now() + tokens.expires_in * 1000);
+
+  // Create webhook subscription for real-time email notifications
+  const webhookUrl = `${APP_URL}/api/webhooks/microsoft`;
+  let subscriptionId: string | null = null;
+  let subscriptionExpires: Date | null = null;
+
+  try {
+    const subscription = await createOutlookSubscription(
+      tokens.access_token,
+      webhookUrl
+    );
+    subscriptionId = subscription.id;
+    subscriptionExpires = new Date(subscription.expirationDateTime);
+  } catch (subError) {
+    // Subscription creation is non-fatal — user can still use the app,
+    // and we can retry subscription creation later
+    console.error(
+      '[microsoft-callback] Subscription creation failed (non-fatal):',
+      subError
+    );
+  }
+
   const result = await db.transaction(async (tx) => {
     // Create the company
     const [company] = await tx
@@ -188,49 +211,26 @@ async function handleSignup(
         clientRole: clientInfo.clientRole,
       });
 
+    // Insert email connection in the same transaction for atomicity
+    await tx.insert(emailConnections).values({
+      companyId: company.companyId,
+      clientId: user.clientId,
+      provider: 'outlook',
+      providerAccountId: profile.oid,
+      emailAddress: profile.email,
+      accessToken: encryptToken(tokens.access_token),
+      refreshToken: encryptToken(tokens.refresh_token),
+      tokenExpiresAt,
+      scopes: tokens.scope,
+      subscriptionId,
+      subscriptionExpires,
+      status: 'active',
+    });
+
     return { company, user };
   });
 
   const { user } = result;
-
-  // Save encrypted OAuth tokens to emailConnections
-  const tokenExpiresAt = new Date(Date.now() + tokens.expires_in * 1000);
-
-  // Create webhook subscription for real-time email notifications
-  const webhookUrl = `${APP_URL}/api/webhooks/microsoft`;
-  let subscriptionId: string | null = null;
-  let subscriptionExpires: Date | null = null;
-
-  try {
-    const subscription = await createOutlookSubscription(
-      tokens.access_token,
-      webhookUrl
-    );
-    subscriptionId = subscription.id;
-    subscriptionExpires = new Date(subscription.expirationDateTime);
-  } catch (subError) {
-    // Subscription creation is non-fatal — user can still use the app,
-    // and we can retry subscription creation later
-    console.error(
-      '[microsoft-callback] Subscription creation failed (non-fatal):',
-      subError
-    );
-  }
-
-  await db.insert(emailConnections).values({
-    companyId: user.companyId!,
-    clientId: user.clientId,
-    provider: 'outlook',
-    providerAccountId: profile.oid,
-    emailAddress: profile.email,
-    accessToken: encryptToken(tokens.access_token),
-    refreshToken: encryptToken(tokens.refresh_token),
-    tokenExpiresAt,
-    scopes: tokens.scope,
-    subscriptionId,
-    subscriptionExpires,
-    status: 'active',
-  });
 
   // Generate JWT for session
   const token = await generateJWT({
@@ -276,7 +276,13 @@ async function handleLogin(
 
   // Look up existing user by Microsoft oid
   const [user] = await db
-    .select()
+    .select({
+      clientId: clientInfo.clientId,
+      companyId: clientInfo.companyId,
+      username: clientInfo.username,
+      clientRole: clientInfo.clientRole,
+      clientStatus: clientInfo.clientStatus,
+    })
     .from(clientInfo)
     .where(
       and(
@@ -290,6 +296,15 @@ async function handleLogin(
     return NextResponse.redirect(
       `${APP_URL}/signup?error=${encodeURIComponent(
         'No account found with this Microsoft ID. Please sign up first.'
+      )}`
+    );
+  }
+
+  // Check if account is active
+  if (user.clientStatus !== 'active') {
+    return NextResponse.redirect(
+      `${APP_URL}/login?error=${encodeURIComponent(
+        'Account suspended or deactivated. Please contact support.'
       )}`
     );
   }

@@ -1,0 +1,23 @@
+{
+  "action_type": "calculate",
+  "data_type": "quotation",
+  "quotation_id": 12345,
+  "pricing_variables": [
+    {
+      "item_id": 1,
+      "shipping_cost": 0,
+      "tax_rate": 1.1,
+      "exchange_rate": 1.0,
+      "profit_rate": 1.25,
+      "discount_rate": 0
+    },
+    {
+      "item_id": 2,
+      "shipping_cost": 50,
+      "tax_rate": 1.08,
+      "exchange_rate": 1.0,
+      "profit_rate": 1.2,
+      "discount_rate": 0.05
+    }
+  ]
+}

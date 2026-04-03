@@ -317,10 +317,19 @@ async function extractSupplierResponseFromEmail(
     extracted = await hfChatCompletion<typeof extracted>(SUPPLIER_RESPOND_SYSTEM_PROMPT, userMessage);
   }
 
+  // Fail fast if supplier could not be matched — prevent orphaned records with id=0
+  if (!supplierMatch) {
+    console.warn(`[Supplier Respond] Unmatched supplier from ${emailData.from_email}, skipping database updates`);
+    throw new Error(
+      `Could not match supplier for email from ${emailData.from_email}. ` +
+      `Ensure the sender domain or company name exists in your supplier database.`
+    );
+  }
+
   return {
-    supplier_id: supplierMatch?.supplierId || 0,
+    supplier_id: supplierMatch.supplierId,
     supplier_name: extracted.supplier_name || emailData.from_name,
-    rfq_id: supplierMatch?.rfqId || 0,
+    rfq_id: supplierMatch.rfqId,
     items: extracted.items || [],
     confidence: extracted.confidence || 0.8,
   };

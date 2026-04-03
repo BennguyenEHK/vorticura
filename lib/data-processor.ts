@@ -166,11 +166,17 @@ export async function handleHTTPRequest(input: ProcessorInput): Promise<Processo
       sessionId = generateSessionId(validatedInput, dataType, 'proceed');
       const chainResult = await executePipelineChain(validatedInput);
       updateStats('proceed');
-      return {
+
+      const finalResult = {
         ...chainResult,
         session_id: sessionId,
         processing_time_ms: Date.now() - startTime,
       };
+
+      // Emit SSE for pipeline-chain result (use chainResult's data_type as it's what was actually processed)
+      emitProcessorResult(finalResult, chainResult.data_type as DataType, validatedInput);
+
+      return finalResult;
     }
 
     // Step 4: Normalize quotation data if applicable

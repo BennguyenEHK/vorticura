@@ -1,0 +1,67 @@
+ {
+  "data_type" : "quotation",
+  "action_type": "manual_update",
+  "quotation_data": {
+    "quotation_id": 12345,
+    "quotation_name": "Quotation for CNC Parts",
+    "rfq_reference": "RFQ-2026-001",
+    "total_amount": 12500.75,
+    "quotation_date": "2026-03-31",
+    "page_number": "1",
+    "commercial_terms": "<p>Net 30 days</p>",
+    "seller_info": {
+      "company_name": "ABC Manufacturing Co.",
+      "address": "123 Industrial Ave, Chicago, IL",
+      "tel": "+1-312-555-0100",
+      "phone": "+1-312-555-0101",
+      "fax_number": "+1-312-555-0102",
+      "email": "sales@abcmfg.com"
+    },
+    "customer_info": {
+      "company_name": "XYZ Engineering Ltd.",
+      "customer_name": "XYZ Engineering Ltd.",
+      "attention_person": "John Smith",
+      "carbon_copy_person": [
+        "Mary Lee",
+        "David Kim"
+      ],
+      "email": "procurement@xyzeng.com",
+      "tel": "+1-847-555-0200",
+      "phone": "+1-847-555-0201",
+      "fax_number": "+1-847-555-0202",
+      "address": "456 Business Rd, Evanston, IL"
+    },
+    "quotation_items": [
+      {
+        "item_id": 1,
+        "sales_unit_price": 250.5,
+        "ext_price": 1002.0,
+        "company_requirement": {
+          "company_description": "CNC machined aluminum bracket",
+          "qty": 4,
+          "uom": "PCS"
+        },
+        "bidder_proposal": {
+          "bidder_description": "Can supply within 10 days",
+          "delivery_time": "10 days",
+          "compliance_deviation": "None"
+        }
+      },
+      {
+        "item_id": 2,
+        "sales_unit_price": 175.0,
+        "ext_price": 1750.0,
+        "company_requirement": {
+          "company_description": "Steel connector plate",
+          "qty": 10,
+          "uom": "PCS"
+        },
+        "bidder_proposal": {
+          "bidder_description": "Lead time 2 weeks",
+          "delivery_time": "14 days",
+          "compliance_deviation": "Minor thickness deviation"
+        }
+      }
+    ]
+  }
+}

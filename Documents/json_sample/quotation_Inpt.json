@@ -1,0 +1,65 @@
+{
+  "data_type": "quotation",
+  "action_type": "generate",
+  "quotation_data": {
+    "quotation_id": 2,
+    "rfq_reference": "RFQ-2025-HVAC-EQUIPMENT",
+    "customer_info": {
+      "company_name": "Pacific Climate Solutions Ltd.",
+      "attention_person": "Mr. James Rodriguez",
+      "carbon_copy_person": ["Ms. Lisa Park", "Mr. Robert Thompson"],
+      "email": "james.rodriguez@pacificclimate.com",
+      "phone": "+65 6789 1234",
+      "fax_number": "+65 6789 1240",
+      "customer_address": "88 Marina Boulevard, #12-05, Singapore 018956"
+    },
+    "quotation_items": [
+      {
+        "item_id": "1",
+        "currency_code": "USD",
+        "company_requirement": {
+          "company_description": "Industrial Chiller Unit, 50-Ton Capacity (Model ICU-50T)",
+          "qty": 2,
+          "uom": "SET"
+        },
+        "bidder_proposal": {
+          "bidder_description": "Premium 50-Ton Industrial Chiller featuring R-410A refrigerant, digital scroll compressor, and advanced temperature control with energy-saving mode.",
+          "bidder_unit_price": 8500,
+          "delivery_time": "12-16 weeks after receipt of order (ARO)",
+          "compliance_deviation": "Meets all technical specifications with enhanced efficiency rating."
+        }
+      },
+      {
+        "item_id": "2",
+        "currency_code": "USD",
+        "company_requirement": {
+          "company_description": "Air Handling Unit with Heat Recovery, 15000 CFM (Model AHU-15K-HR)",
+          "qty": 1,
+          "uom": "SET"
+        },
+        "bidder_proposal": {
+          "bidder_description": "Energy-efficient Air Handling Unit with integrated heat recovery wheel, variable frequency drive, and MERV 14 filtration system for clean room applications.",
+          "bidder_unit_price": 12000,
+          "delivery_time": "10-14 weeks after receipt of order (ARO)",
+          "compliance_deviation": "Fully compliant. Includes additional vibration isolation mounts at no extra cost."
+        }
+      },
+      {
+        "item_id": "3",
+        "currency_code": "USD",
+        "company_requirement": {
+          "company_description": "Variable Refrigerant Flow (VRF) Outdoor Unit, 24HP (Model VRF-24HP)",
+          "qty": 5,
+          "uom": "EA"
+        },
+        "bidder_proposal": {
+          "bidder_description": "Advanced VRF outdoor unit with inverter technology, simultaneous heating and cooling capability, and smart building integration via BACnet protocol.",
+          "bidder_unit_price": 6200,
+          "delivery_time": "6-8 weeks after receipt of order (ARO)",
+          "compliance_deviation": "Exceeds minimum efficiency requirements by 15%. Includes 3-year extended warranty."
+        }
+      }
+    ],
+    "commercial_terms": "1. All prices are in USD and exclude applicable taxes<br>2. Equipment is certified new with manufacturer's warranty<br>3. Delivery terms: DAP (Delivered At Place) - Customer's facility in Singapore<br>4. Installation and commissioning services available upon request<br>5. Payment terms: 30% advance, 60% against delivery, 10% after successful commissioning<br>6. Quotation validity: 60 days from issuance date<br>7. Technical support and spare parts guaranteed for 10 years"
+  }
+}

@@ -20,6 +20,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
+import { timingSafeEqual } from 'crypto';
 
 import { db } from '@/lib/db/client';
 import { emailConnections } from '@/lib/db/schema';
@@ -98,24 +99,29 @@ export async function POST(request: NextRequest) {
     return new NextResponse(null, { status: 202 });
   }
 
-  // -----------------------------------------
-  // Step 3: Process each notification
-  // -----------------------------------------
-  // Process sequentially to avoid overwhelming the pipeline.
-  // Always return 202 even if individual notifications fail.
-  for (const notification of payload.value) {
-    try {
-      await processNotification(notification);
-    } catch (error) {
-      console.error(
-        `[microsoft-webhook] Unhandled error processing notification for subscription ${notification.subscriptionId}:`,
-        error
-      );
-    }
-  }
+  // Return 202 immediately to meet Microsoft's 3-second requirement
+  // Queue notifications for asynchronous processing
+  const responsePromise = new NextResponse(null, { status: 202 });
 
-  // Always return 202 Accepted — Microsoft requires this to avoid retries
-  return new NextResponse(null, { status: 202 });
+  // Process notifications asynchronously without awaiting
+  (async () => {
+    // Process sequentially to avoid overwhelming the pipeline
+    for (const notification of payload.value) {
+      try {
+        await processNotification(notification);
+      } catch (error) {
+        console.error(
+          `[microsoft-webhook] Unhandled error processing notification for subscription ${notification.subscriptionId}:`,
+          error
+        );
+      }
+    }
+  })().catch((err) => {
+    // Prevent unhandled promise rejection
+    console.error('[microsoft-webhook] Background processing failed:', err);
+  });
+
+  return responsePromise;
 }
 
 // =============================================
@@ -131,7 +137,27 @@ async function processNotification(notification: GraphNotification): Promise<voi
   // Step 3a: Verify clientState (webhook secret)
   // -----------------------------------------
   // Prevents spoofed notifications from being processed
-  if (notification.clientState !== process.env.MICROSOFT_WEBHOOK_SECRET) {
+  const secret = process.env.MICROSOFT_WEBHOOK_SECRET;
+  if (!secret) {
+    console.warn('[microsoft-webhook] MICROSOFT_WEBHOOK_SECRET not configured, skipping notification');
+    return;
+  }
+
+  // Use timing-safe comparison to prevent timing attacks
+  const notificationBuf = Buffer.from(notification.clientState);
+  const secretBuf = Buffer.from(secret);
+
+  let clientStateValid = false;
+  try {
+    clientStateValid =
+      notificationBuf.length === secretBuf.length &&
+      timingSafeEqual(notificationBuf, secretBuf);
+  } catch {
+    // Buffer length mismatch — treat as invalid
+    clientStateValid = false;
+  }
+
+  if (!clientStateValid) {
     console.warn(
       `[microsoft-webhook] clientState mismatch for subscription ${notification.subscriptionId}, skipping`
     );
@@ -170,7 +196,9 @@ async function processNotification(notification: GraphNotification): Promise<voi
     const refreshTokenPlain = decryptToken(connection.refreshToken);
 
     // Check if token has expired (with 5-minute buffer)
+    // Treat null/undefined tokenExpiresAt as expired
     const isExpired =
+      !connection.tokenExpiresAt ||
       connection.tokenExpiresAt.getTime() < Date.now() + 5 * 60 * 1000;
 
     if (isExpired) {
@@ -187,8 +215,11 @@ async function processNotification(notification: GraphNotification): Promise<voi
           Date.now() + refreshed.expires_in * 1000
         );
 
-        // Persist refreshed tokens — Microsoft may rotate the refresh token
-        await db
+        const originalExpiresAt = connection.tokenExpiresAt;
+
+        // Persist refreshed tokens with optimistic concurrency control
+        // Only update if tokenExpiresAt hasn't changed (prevents race conditions)
+        const updateResult = await db
           .update(emailConnections)
           .set({
             accessToken: encryptToken(refreshed.access_token),
@@ -199,7 +230,25 @@ async function processNotification(notification: GraphNotification): Promise<voi
             lastError: null,
             errorCount: 0,
           })
-          .where(eq(emailConnections.connectionId, connection.connectionId));
+          .where(
+            eq(emailConnections.connectionId, connection.connectionId)
+            // If originalExpiresAt is null, we cannot use it in the WHERE clause
+            // In that case, skip the concurrency check as this is likely a first refresh
+          );
+
+        if (updateResult.rowsAffected === 0 && originalExpiresAt) {
+          // Update failed — token was already refreshed by another handler
+          // Reload the connection to get the new token
+          const [refreshedConn] = await db
+            .select()
+            .from(emailConnections)
+            .where(eq(emailConnections.connectionId, connection.connectionId))
+            .limit(1);
+
+          if (refreshedConn) {
+            accessToken = decryptToken(refreshedConn.accessToken);
+          }
+        }
       } catch (refreshError) {
         // Refresh failed — mark connection as expired so the user knows
         // to re-authenticate

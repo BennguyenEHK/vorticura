@@ -1,0 +1,47 @@
+{
+  "report": {
+    "subject": "RFQ Analysis - HVAC Equipment for Marina Boulevard Project",
+    "analysis_content": "Summary: Pacific Climate Solutions Ltd. requires a quotation for HVAC equipment for their Marina Boulevard project (5000 sqm). Key items include an Industrial Chiller Unit (60-Ton, Model ICU-60T), Air Handling Unit with Heat Recovery (15000 CFM, Model AHU-15K-HR), and Variable Refrigerant Flow (VRF) Outdoor Units (24HP, Model VRF-24HP). Requirements: Energy efficiency ratings, Singapore-compliant refrigerants (R-410A or R-32), BACnet integration, quotation within 14 business days, and delivery by December 15, 2023. Clarification needed on specific energy-saving features, filtration details, and voltage requirements (380V or 415V)."
+  },
+  "customer_info": {
+    "company_name": "Pacific Climate Solutions Ltd.",
+    "attention_person": "Mr. James Rodriguez",
+    "carbon_copy_person": [
+      "lisa.park@pacificclimate.com",
+      "robert.thompson@pacificclimate.com"
+    ],
+    "email": "james.rodriguez@pacificclimate.com",
+    "phone": "+65 6789 1234",
+    "fax_number": "+65 6789 1240",
+    "customer_address": "88 Marina Boulevard, #12-05, Singapore 018956"
+  },
+  "rfq_items": [
+    {
+      "item_id": 1,
+      "currency_code": "USD",
+      "company_requirement": {
+        "company_description": "Industrial Chiller Unit, 60-Ton Capacity (Model ICU-60T), R-410A refrigerant, digital scroll compressor, energy-saving mode required",
+        "qty": 2,
+        "uom": "SET"
+      }
+    },
+    {
+      "item_id": 2,
+      "currency_code": "USD",
+      "company_requirement": {
+        "company_description": "Air Handling Unit with Heat Recovery, 15000 CFM (Model AHU-15K-HR), MERV 14 filtration, VFD included",
+        "qty": 1,
+        "uom": "SET"
+      }
+    },
+    {
+      "item_id": 3,
+      "currency_code": "USD",
+      "company_requirement": {
+        "company_description": "Variable Refrigerant Flow (VRF) Outdoor Unit, 24HP (Model VRF-24HP), Inverter technology, BACnet protocol, simultaneous heating/cooling",
+        "qty": 5,
+        "uom": "EA"
+      }
+    }
+  ]
+}

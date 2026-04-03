@@ -40,7 +40,13 @@ export function encodeOAuthState(state: OAuthState): string {
 
 /** Decode OAuth state from base64 string */
 export function decodeOAuthState(encoded: string): OAuthState {
-  return JSON.parse(Buffer.from(encoded, 'base64url').toString('utf-8'));
+  try {
+    return JSON.parse(Buffer.from(encoded, 'base64url').toString('utf-8'));
+  } catch (error) {
+    throw new Error(
+      `Invalid OAuth state: base64 decode or JSON parse failed. ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
 }
 
 /** Generate a random nonce for CSRF protection */
@@ -318,9 +324,35 @@ export function decodeMicrosoftIdToken(idToken: string): MicrosoftIdTokenPayload
  * @returns Encrypted string in format "iv:authTag:ciphertext" (all hex)
  */
 export function encryptToken(plaintext: string): string {
-  // Use dev fallback key if not set (32 zero bytes)
-  const keyHex = TOKEN_ENCRYPTION_KEY || '0'.repeat(64);
-  const key = Buffer.from(keyHex, 'hex');
+  // Validate TOKEN_ENCRYPTION_KEY exists and is exactly 64 hex characters (32 bytes)
+  if (!TOKEN_ENCRYPTION_KEY) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(
+        'WARNING: TOKEN_ENCRYPTION_KEY is not set in development mode. Using insecure zero-byte fallback. ' +
+        'Set TOKEN_ENCRYPTION_KEY=<64-hex-chars> in .env.local for secure token encryption.'
+      );
+      const keyHex = '0'.repeat(64);
+      const key = Buffer.from(keyHex, 'hex');
+      const iv = crypto.randomBytes(12);
+      const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+      const encrypted = Buffer.concat([
+        cipher.update(plaintext, 'utf-8'),
+        cipher.final(),
+      ]);
+      const authTag = cipher.getAuthTag();
+      return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted.toString('hex')}`;
+    } else {
+      throw new Error('TOKEN_ENCRYPTION_KEY is required (must be 64 hex characters for AES-256-GCM)');
+    }
+  }
+
+  if (TOKEN_ENCRYPTION_KEY.length !== 64) {
+    throw new Error(
+      `TOKEN_ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes), got ${TOKEN_ENCRYPTION_KEY.length} characters`
+    );
+  }
+
+  const key = Buffer.from(TOKEN_ENCRYPTION_KEY, 'hex');
 
   // Generate random 12-byte IV (recommended size for GCM)
   const iv = crypto.randomBytes(12);
@@ -347,8 +379,18 @@ export function encryptToken(plaintext: string): string {
  * @returns Original plaintext token
  */
 export function decryptToken(encryptedStr: string): string {
-  const keyHex = TOKEN_ENCRYPTION_KEY || '0'.repeat(64);
-  const key = Buffer.from(keyHex, 'hex');
+  // Validate TOKEN_ENCRYPTION_KEY exists and is exactly 64 hex characters (32 bytes)
+  if (!TOKEN_ENCRYPTION_KEY) {
+    throw new Error('TOKEN_ENCRYPTION_KEY is required for token decryption (must be 64 hex characters for AES-256-GCM)');
+  }
+
+  if (TOKEN_ENCRYPTION_KEY.length !== 64) {
+    throw new Error(
+      `TOKEN_ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes), got ${TOKEN_ENCRYPTION_KEY.length} characters`
+    );
+  }
+
+  const key = Buffer.from(TOKEN_ENCRYPTION_KEY, 'hex');
 
   // Split the stored format into components
   const [ivHex, authTagHex, ciphertextHex] = encryptedStr.split(':');

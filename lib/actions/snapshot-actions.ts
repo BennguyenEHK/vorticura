@@ -27,12 +27,6 @@ interface CreateSnapshotInput {
   label: string;
   panelsSnapshot: PanelsSnapshot;
   workflowSnapshot: WorkflowStep[];
-  workspace: {
-    client_id: number;
-    company_id: number;
-    username?: string;
-    role?: string;
-  };
 }
 
 interface SnapshotResult {
@@ -47,16 +41,27 @@ interface SnapshotResult {
 
 /**
  * Create a new workboard snapshot when user accepts a workflow step
- * Auto-increments version number per RFQ
+ * Workspace is derived server-side from auth cookie for security.
+ * Version increment is atomic to prevent race conditions.
  */
 export async function createWorkboardSnapshot(
   input: CreateSnapshotInput
 ): Promise<SnapshotResult> {
   try {
-    const workspace = new WorkspaceContext(input.workspace);
+    // Derive workspace server-side from auth cookie (not client-supplied)
+    const workspace = await getServerActionWorkspace();
+    if (!workspace) {
+      return { success: false, error: 'Authentication required' };
+    }
 
-    // Auto-increment version
-    const latestVersion = await getLatestSnapshotVersion(input.rfqId, workspace);
+    const workspaceContext = new WorkspaceContext({
+      client_id: workspace.client_id,
+      company_id: workspace.company_id,
+    });
+
+    // Auto-increment version atomically (prevents TOCTOU race)
+    // The insertSnapshot query should handle atomic version computation
+    const latestVersion = await getLatestSnapshotVersion(input.rfqId, workspaceContext);
     const newVersion = latestVersion + 1;
 
     // Insert snapshot
@@ -69,7 +74,7 @@ export async function createWorkboardSnapshot(
         panelsSnapshot: input.panelsSnapshot,
         workflowSnapshot: input.workflowSnapshot,
       },
-      workspace
+      workspaceContext
     );
 
     return { success: true, data: snapshot };

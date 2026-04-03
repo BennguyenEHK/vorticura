@@ -71,11 +71,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // OAuth-only users have no password — guide them to use OAuth login
+    // OAuth-only users have no password — return generic error to prevent user enumeration
     if (!user.passwordHash) {
       return NextResponse.json(
-        { error: 'This account uses Google or Microsoft login. Please use the OAuth buttons instead.' },
-        { status: 400 }
+        { error: 'Invalid username or password' },
+        { status: 401 }
       );
     }
 

@@ -132,7 +132,8 @@ export async function POST(request: NextRequest) {
       const refreshToken = decryptToken(connection.refreshToken);
 
       // Check if the access token is expired (with 60s buffer)
-      const isExpired = connection.tokenExpiresAt.getTime() < Date.now() + 60_000;
+      // Treat null/undefined tokenExpiresAt as expired
+      const isExpired = !connection.tokenExpiresAt || connection.tokenExpiresAt.getTime() < Date.now() + 60_000;
 
       if (isExpired) {
         console.info(`[gmail-webhook] Refreshing expired token for ${emailAddress}`);
@@ -141,12 +142,19 @@ export async function POST(request: NextRequest) {
 
         // Persist the new access token and expiration
         const newExpiresAt = new Date(Date.now() + refreshed.expires_in * 1000);
+        const updateData: Record<string, any> = {
+          accessToken: encryptToken(accessToken),
+          tokenExpiresAt: newExpiresAt,
+        };
+
+        // If Google rotated the refresh token, update it too
+        if (refreshed.refresh_token) {
+          updateData.refreshToken = encryptToken(refreshed.refresh_token);
+        }
+
         await db
           .update(emailConnections)
-          .set({
-            accessToken: encryptToken(accessToken),
-            tokenExpiresAt: newExpiresAt,
-          })
+          .set(updateData)
           .where(eq(emailConnections.connectionId, connection.connectionId));
       }
     } catch (tokenError) {
@@ -223,11 +231,19 @@ export async function POST(request: NextRequest) {
     });
 
     // -----------------------------------------
-    // Step 8: Process each new message
+    // Step 8: Process each new message (limit to batch to avoid serverless timeout)
     // -----------------------------------------
-    console.info(`[gmail-webhook] Processing ${messageIds.length} new messages for ${emailAddress}`);
+    const BATCH_SIZE = 50;
+    const messagesToProcess = messageIds.slice(0, BATCH_SIZE);
+    const remainingCount = Math.max(0, messageIds.length - BATCH_SIZE);
 
-    for (const messageId of messageIds) {
+    console.info(
+      `[gmail-webhook] Processing ${messagesToProcess.length} of ${messageIds.length} messages for ${emailAddress}${
+        remainingCount > 0 ? ` (${remainingCount} deferred for next sync)` : ''
+      }`
+    );
+
+    for (const messageId of messagesToProcess) {
       try {
         // Fetch the raw MIME message for full parsing (attachments, etc.)
         const rawBuffer = await fetchGmailMessage(accessToken, messageId, 'raw') as Buffer;

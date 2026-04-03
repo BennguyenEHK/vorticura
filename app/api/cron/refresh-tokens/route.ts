@@ -113,37 +113,43 @@ export async function GET(request: NextRequest) {
 
   // ---- Step 2: Renew Gmail watches expiring within 24 hours ----
   try {
-    const twentyFourHoursFromNow = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const expiringGmailWatches = await db
-      .select()
-      .from(emailConnections)
-      .where(
-        and(
-          eq(emailConnections.provider, 'gmail'),
-          eq(emailConnections.status, 'active'),
-          lt(emailConnections.subscriptionExpires, twentyFourHoursFromNow)
-        )
-      );
+    const topicName = process.env.GOOGLE_PUBSUB_TOPIC;
 
-    const topicName = process.env.GOOGLE_PUBSUB_TOPIC || '';
+    // Skip Gmail watch renewal if GOOGLE_PUBSUB_TOPIC is not configured
+    if (!topicName || topicName.trim() === '') {
+      console.warn('[cron] GOOGLE_PUBSUB_TOPIC not configured, skipping Gmail watch renewal');
+      summary.errors.push('GOOGLE_PUBSUB_TOPIC not configured - Gmail watches cannot be renewed');
+    } else {
+      const twentyFourHoursFromNow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const expiringGmailWatches = await db
+        .select()
+        .from(emailConnections)
+        .where(
+          and(
+            eq(emailConnections.provider, 'gmail'),
+            eq(emailConnections.status, 'active'),
+            lt(emailConnections.subscriptionExpires, twentyFourHoursFromNow)
+          )
+        );
 
-    for (const conn of expiringGmailWatches) {
-      try {
-        const accessToken = decryptToken(conn.accessToken);
-        // setupGmailWatch is idempotent — safe to call again
-        const watch = await setupGmailWatch(accessToken, topicName);
+      for (const conn of expiringGmailWatches) {
+        try {
+          const accessToken = decryptToken(conn.accessToken);
+          // setupGmailWatch is idempotent — safe to call again
+          const watch = await setupGmailWatch(accessToken, topicName);
 
-        await db
-          .update(emailConnections)
-          .set({
-            historyId: watch.historyId,
-            subscriptionExpires: new Date(Number(watch.expiration)),
-          })
-          .where(eq(emailConnections.connectionId, conn.connectionId));
+          await db
+            .update(emailConnections)
+            .set({
+              historyId: watch.historyId,
+              subscriptionExpires: new Date(Number(watch.expiration)),
+            })
+            .where(eq(emailConnections.connectionId, conn.connectionId));
 
-        summary.gmailRenewed++;
-      } catch (error) {
-        summary.errors.push(`Gmail watch renewal ${conn.connectionId}: ${error}`);
+          summary.gmailRenewed++;
+        } catch (error) {
+          summary.errors.push(`Gmail watch renewal ${conn.connectionId}: ${error}`);
+        }
       }
     }
   } catch (error) {

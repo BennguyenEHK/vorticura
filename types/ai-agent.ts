@@ -4,6 +4,10 @@
 // Used by: lib/ai-agent/local-model.ts, lib/actions/analysis-actions.ts,
 //          lib/actions/supplier-search-actions.ts
 
+// Action type unions
+type AnalysisActionType = 'analyze' | 'reanalyze';
+type SearchActionType = 'search' | 'research';
+
 // ---------------------------------------------
 // Analysis Types
 // ---------------------------------------------
@@ -12,7 +16,7 @@
 export interface AICallInput {
   subject: string;        // RFQ email subject line
   analysisContent: string; // Full email body + attachment text
-  actionType: string;      // 'analyze' | 'reanalyze'
+  actionType: AnalysisActionType;      // 'analyze' | 'reanalyze'
 }
 
 /** Structured analysis output returned by AI model */
@@ -43,7 +47,7 @@ export interface AnalysisData {
 export interface SearchAPIInput {
   subject: string;        // Search subject / RFQ title
   searchContent: string;  // Item descriptions + requirements
-  actionType: string;     // 'search' | 'research'
+  actionType: SearchActionType;     // 'search' | 'research'
 }
 
 /** Single supplier result returned by AI model */

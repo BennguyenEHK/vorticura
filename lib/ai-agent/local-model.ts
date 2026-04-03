@@ -107,7 +107,12 @@ export class LocalAIModel {
    */
   async chatCompletion<T>(systemPrompt: string, userMessage: string): Promise<T> {
     await this.ensureLoaded();
-    console.log(`[local-model] chatCompletion: ${userMessage.slice(0, 80)}...`);
+    // Only log non-sensitive metadata to avoid PII leakage
+    if (process.env.DEBUG_LOCAL_MODEL) {
+      console.log(`[local-model] chatCompletion: message length=${userMessage.length} chars`);
+    } else {
+      console.log(`[local-model] chatCompletion: processing message...`);
+    }
 
     // Build chat-style prompt using Chatml format
     const prompt = this.buildChatPrompt(systemPrompt, userMessage);

@@ -174,17 +174,17 @@ interface SupplierRespondData {
 export interface IncomingEmailData {
   message_id: string;              // Unique message ID for dedup
   from_email: string;
-  from_name: string;
+  from_name?: string;              // Optional sender name
   to: string[];                    // TO recipients
-  cc: string[];                    // CC recipients
+  cc?: string[];                   // Optional CC recipients
   subject: string;
   email_body_text: string;         // Plain-text email body
-  attachments_parsed: Array<{      // Parsed attachment contents
+  attachments_parsed?: Array<{     // Optional parsed attachment contents
     filename: string;
     content_type: string;
     extracted_text: string;
   }>;
-  received_at: string;             // ISO 8601 timestamp
+  received_at?: string;            // Optional ISO 8601 timestamp
 }
 
 /** AI feedback comments (used in all reject/regenerate actions) */
@@ -279,9 +279,21 @@ export function validateInput(input: ProcessorInput): ProcessorInput {
   }
 
   // Step 4.5: Skip type-specific validation for lightweight actions
-  // 'proceed' = accept & advance pipeline (only needs data_type + rfq_id)
+  // 'proceed' = accept & advance pipeline (requires data_type + rfq_id)
   // 'send'    = send approved email (content already validated at generate/re_generate)
-  if (input.action_type === 'proceed' || input.action_type === 'send') {
+  if (input.action_type === 'proceed') {
+    // Validate rfq_id exists and is a valid positive integer
+    if (!input.rfq_id) {
+      throw new Error('rfq_id is required for proceed action');
+    }
+    const rId = parseInt(String(input.rfq_id));
+    if (isNaN(rId) || rId <= 0) {
+      throw new Error('rfq_id must be a positive integer for proceed action');
+    }
+    return input;
+  }
+
+  if (input.action_type === 'send') {
     return input;
   }
 
@@ -693,9 +705,13 @@ function validateSupplierRespond(input: ProcessorInput): ProcessorInput {
     throw new Error('supplier_respond object is required for supplier_respond data_type');
   }
 
-  // supplier_id is required
+  // supplier_id is required and must be a positive integer
   if (!input.supplier_respond.supplier_id) {
     throw new Error('supplier_respond.supplier_id is required');
+  }
+  const supplierId = parseInt(String(input.supplier_respond.supplier_id), 10);
+  if (isNaN(supplierId) || supplierId <= 0) {
+    throw new Error('supplier_respond.supplier_id must be a positive integer');
   }
 
   // items array is required and non-empty
@@ -705,7 +721,14 @@ function validateSupplierRespond(input: ProcessorInput): ProcessorInput {
 
   // Validate each item in the response
   input.supplier_respond.items.forEach((item, index) => {
-    if (!item.item_id) throw new Error(`supplier_respond.items[${index}].item_id is required`);
+    // item_id is required and must be a positive integer
+    if (!item.item_id) {
+      throw new Error(`supplier_respond.items[${index}].item_id is required`);
+    }
+    const itemId = parseInt(String(item.item_id), 10);
+    if (isNaN(itemId) || itemId <= 0) {
+      throw new Error(`supplier_respond.items[${index}].item_id must be a positive integer`);
+    }
     if (!['available', 'unavailable'].includes(item.status)) {
       throw new Error(`supplier_respond.items[${index}].status must be 'available' or 'unavailable'`);
     }

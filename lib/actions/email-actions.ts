@@ -65,10 +65,18 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
         break;
       }
       case 'send': {
+        // Validate recipient field is present and non-empty
+        if (!effectiveEmail?.recipient_email || effectiveEmail.recipient_email.trim() === '') {
+          throw new Error(
+            'Cannot send email: no recipient address provided. ' +
+            'Please specify a valid recipient email or ensure the draft contains a "to" field.'
+          );
+        }
+
         // Send email via user's OAuth provider, fallback to generic API
         const sendResult = await sendEmailViaProvider(
           {
-            to: effectiveEmail?.recipient_email || '',
+            to: effectiveEmail.recipient_email,
             subject: effectiveEmail?.subject || '',
             body: effectiveEmail?.email_content || '',
           },
