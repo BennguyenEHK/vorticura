@@ -28,7 +28,7 @@ export {
 // =============================================
 
 /** HuggingFace model ID — override via env or use default */
-const HF_MODEL = process.env.HF_MODEL_ID || 'mistralai/Mistral-7B-Instruct-v0.3';
+const HF_MODEL = process.env.HF_MODEL_ID || 'Qwen/Qwen2.5-72B-Instruct';
 
 // =============================================
 // Singleton Client (survives HMR in dev)
