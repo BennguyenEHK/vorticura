@@ -170,8 +170,8 @@ interface SupplierRespondData {
   [key: string]: unknown;
 }
 
-/** Incoming email data (from email-watcher) */
-interface IncomingEmailData {
+/** Incoming email data (from email-watcher) — matches Json_method_plan.md §1.1 */
+export interface IncomingEmailData {
   message_id: string;              // Unique message ID for dedup
   from_email: string;
   from_name: string;
@@ -564,10 +564,13 @@ function validateEmail(input: ProcessorInput): ProcessorInput {
  * @returns Validated input
  */
 function validateRfqAnalysis(input: ProcessorInput): ProcessorInput {
-  // rfq_id is optional (auto-generated on first insert), but must be valid if provided
+  // rfq_id is optional for 'analyze', required for 'reanalyze'
   if (input.rfq_id != null) {
     const rId = parseInt(String(input.rfq_id));
     if (isNaN(rId) || rId <= 0) throw new Error('rfq_id must be a positive integer');
+  }
+  if (input.action_type === 'reanalyze' && !input.rfq_id) {
+    throw new Error('rfq_id is required for reanalyze action');
   }
 
   // rfq_reference is required
@@ -586,6 +589,19 @@ function validateRfqAnalysis(input: ProcessorInput): ProcessorInput {
   // analysis.analysis_content is required
   if (!input.analysis.analysis_content || input.analysis.analysis_content.trim().length === 0) {
     throw new Error('analysis.analysis_content is required and cannot be empty');
+  }
+
+  // ai_comments validation for reanalyze (feedback from user)
+  if (input.action_type === 'reanalyze') {
+    if (!input.ai_comments || typeof input.ai_comments !== 'object') {
+      throw new Error('ai_comments is required for reanalyze action');
+    }
+    if (typeof input.ai_comments.general_feedback !== 'string') {
+      throw new Error('ai_comments.general_feedback must be a string');
+    }
+    if (!Array.isArray(input.ai_comments.inline_notes)) {
+      throw new Error('ai_comments.inline_notes must be an array');
+    }
   }
 
   return input;
@@ -626,6 +642,19 @@ function validateSuppliersSearch(input: ProcessorInput): ProcessorInput {
     throw new Error('search.search_content is required and cannot be empty');
   }
 
+  // ai_comments validation for research (feedback from user)
+  if (input.action_type === 'research' && input.ai_comments) {
+    if (typeof input.ai_comments !== 'object') {
+      throw new Error('ai_comments must be an object');
+    }
+    if (typeof input.ai_comments.general_feedback !== 'string') {
+      throw new Error('ai_comments.general_feedback must be a string');
+    }
+    if (!Array.isArray(input.ai_comments.inline_notes)) {
+      throw new Error('ai_comments.inline_notes must be an array');
+    }
+  }
+
   return input;
 }
 
@@ -640,12 +669,26 @@ function validateSuppliersSearch(input: ProcessorInput): ProcessorInput {
  * @returns Validated input
  */
 function validateSupplierRespond(input: ProcessorInput): ProcessorInput {
-  // rfq_id is required (identifies which RFQ this response is for)
+  const { action_type } = input;
+
+  // 'update' action: AI parses incoming supplier email — requires incoming_email data
+  if (action_type === 'update') {
+    // incoming_email object carries the raw email for AI extraction
+    if (!input.incoming_email || typeof input.incoming_email !== 'object') {
+      throw new Error('incoming_email object is required for supplier_respond:update');
+    }
+    const ie = input.incoming_email;
+    if (!ie.from_email) throw new Error('incoming_email.from_email is required for supplier_respond:update');
+    if (!ie.email_body_text) throw new Error('incoming_email.email_body_text is required for supplier_respond:update');
+    return input;
+  }
+
+  // 'available' / 'unavailable' actions: manual UI override — requires supplier_respond data
   if (!input.rfq_id) throw new Error('rfq_id is required for supplier_respond data_type');
   const rId = parseInt(String(input.rfq_id));
   if (isNaN(rId) || rId <= 0) throw new Error('rfq_id must be a positive integer');
 
-  // supplier_respond object is required
+  // supplier_respond object is required for manual overrides
   if (!input.supplier_respond || typeof input.supplier_respond !== 'object') {
     throw new Error('supplier_respond object is required for supplier_respond data_type');
   }
@@ -701,6 +744,21 @@ function validateIncomingEmail(input: ProcessorInput): ProcessorInput {
     throw new Error('incoming_email.from_email must be a valid email address');
   }
 
+  // from_name is optional but must be string if provided
+  if (ie.from_name !== undefined && typeof ie.from_name !== 'string') {
+    throw new Error('incoming_email.from_name must be a string');
+  }
+
+  // to is required (array of recipient addresses)
+  if (!Array.isArray(ie.to) || ie.to.length === 0) {
+    throw new Error('incoming_email.to must be a non-empty array of recipient addresses');
+  }
+
+  // cc is optional but must be array if provided
+  if (ie.cc !== undefined && !Array.isArray(ie.cc)) {
+    throw new Error('incoming_email.cc must be an array');
+  }
+
   // subject is required
   if (!ie.subject || ie.subject.trim().length === 0) {
     throw new Error('incoming_email.subject is required and cannot be empty');
@@ -714,6 +772,11 @@ function validateIncomingEmail(input: ProcessorInput): ProcessorInput {
   // attachments_parsed is optional but must be array if provided
   if (ie.attachments_parsed !== undefined && !Array.isArray(ie.attachments_parsed)) {
     throw new Error('incoming_email.attachments_parsed must be an array');
+  }
+
+  // received_at is optional but must be valid ISO string if provided
+  if (ie.received_at !== undefined && typeof ie.received_at !== 'string') {
+    throw new Error('incoming_email.received_at must be an ISO 8601 string');
   }
 
   return input;

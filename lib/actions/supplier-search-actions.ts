@@ -2,11 +2,10 @@
 // SUPPLIER SEARCH ACTIONS - Supplier Discovery Processor
 // =============================================
 // Internal server module (called by data-processor, NOT a server action)
-// Flow: ProcessorInput → route by action_type → AI API call → save to DB → emit SSE → return ProcessorResult
+// Flow: ProcessorInput → route by action_type → AI API call → save to DB → return ProcessorResult
 // Supports: search | research
 
 import { hfChatCompletion, SUPPLIER_SEARCH_SYSTEM_PROMPT } from '@/lib/ai-agent/hf-client';
-import { eventBus } from '@/lib/event-bus';
 import { modifyDatabase } from '@/lib/utils/databaseHandler';
 import { getLocalModel } from '@/lib/ai-agent/local-model';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
@@ -79,9 +78,6 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
       console.error('[Supplier Search] DB save failed (non-blocking):', dbError);
     }
 
-    // Emit SSE for real-time preview update
-    eventBus.emit('preview-update', result);
-
     return result;
   } catch (error) {
     console.error('[Supplier Search] Error:', error);
@@ -97,7 +93,6 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
       timestamp,
     };
 
-    eventBus.emit('preview-update', errorResult);
     return errorResult;
   }
 }
@@ -112,74 +107,19 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
  * Call AI for supplier search — routes to local model or remote API based on AI_MODE.
  * Local mode: runs model in-process via @xenova/transformers
  * Remote mode: calls HuggingFace Inference API via hfChatCompletion
+ * Errors propagate to the caller (no mock fallback).
  */
 async function callSupplierSearchAPI(input: SearchAPIInput): Promise<SupplierResult[]> {
+  // Build user message from input fields
+  const userMessage = `Subject: ${input.subject}\n\nRequirements:\n${input.searchContent}`;
+
   // Route: local model inference (no network required)
   if (AI_MODE === 'local') {
     console.log('[Supplier Search] Using local AI model');
-    try {
-      return await getLocalModel().searchSuppliers(input);
-    } catch (error) {
-      console.error('[Supplier Search] Local model failed:', error);
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('[Supplier Search] Local model failed, using mock data');
-        return generateMockSuppliers();
-      }
-      throw error;
-    }
+    // Generic chatCompletion<T> matches hf-client pattern
+    return await getLocalModel().chatCompletion<SupplierResult[]>(SUPPLIER_SEARCH_SYSTEM_PROMPT, userMessage);
   }
 
   // Route: remote API call via HuggingFace Inference SDK
-  try {
-    // Build user message from input fields
-    const userMessage = `Subject: ${input.subject}\n\nRequirements:\n${input.searchContent}`;
-    // Call HuggingFace chatCompletion — returns parsed SupplierResult[] JSON
-    return await hfChatCompletion<SupplierResult[]>(SUPPLIER_SEARCH_SYSTEM_PROMPT, userMessage);
-  } catch (error) {
-    // If AI API fails, return mock data for development
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('[Supplier Search] HF Inference API failed, using mock data');
-      return generateMockSuppliers();
-    }
-    throw error;
-  }
-}
-
-// ---------------------------------------------
-// Mock Data (Development)
-// ---------------------------------------------
-
-/**
- * Generate mock supplier results for development
- */
-function generateMockSuppliers(): SupplierResult[] {
-  return [
-    {
-      id: 'SUP-001',
-      name: 'Global Industrial Parts Co.',
-      email: 'sales@globalparts.com',
-      rating: 4.8,
-      specialties: ['Bearings', 'Mechanical Parts', 'Industrial Components'],
-      estimatedLeadTime: 14,
-      matchScore: 0.95,
-    },
-    {
-      id: 'SUP-002',
-      name: 'Asia Pacific Supplies Ltd.',
-      email: 'orders@apac-supplies.com',
-      rating: 4.5,
-      specialties: ['Hydraulic Parts', 'Seals', 'Valves'],
-      estimatedLeadTime: 21,
-      matchScore: 0.88,
-    },
-    {
-      id: 'SUP-003',
-      name: 'TechMaterials Inc.',
-      email: 'procurement@techmaterials.com',
-      rating: 4.2,
-      specialties: ['Electronic Components', 'Industrial Materials'],
-      estimatedLeadTime: 10,
-      matchScore: 0.75,
-    },
-  ].sort((a, b) => b.matchScore - a.matchScore);
+  return await hfChatCompletion<SupplierResult[]>(SUPPLIER_SEARCH_SYSTEM_PROMPT, userMessage);
 }

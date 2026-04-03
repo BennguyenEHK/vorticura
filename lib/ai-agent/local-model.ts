@@ -4,25 +4,13 @@
 // Singleton model that runs locally using ONNX runtime.
 // Downloads model from HuggingFace on first use, caches to lib/ai-agent/ai-model/.
 //
-// Provides two inference methods matching remote API contracts:
-//   analyzeRFQ()      → AnalysisData   (used by analysis-actions.ts)
-//   searchSuppliers() → SupplierResult[] (used by supplier-search-actions.ts)
+// Provides a single generic inference method matching the remote hf-client API:
+//   chatCompletion<T>(systemPrompt, userMessage) → T
 //
 // Usage: import { getLocalModel } from '@/lib/ai-agent/local-model';
-//        const result = await getLocalModel().analyzeRFQ(input);
+//        const result = await getLocalModel().chatCompletion<T>(systemPrompt, userMsg);
 
 import path from 'path';
-import type {
-  AICallInput,
-  AnalysisData,
-  SearchAPIInput,
-  SupplierResult,
-} from '@/types/ai-agent';
-import {
-  ANALYZE_RFQ_PROMPT,
-  buildAnalyzeUserMessage,
-  SEARCH_SUPPLIERS_PROMPT,
-} from './prompt';
 
 // =============================================
 // Configuration
@@ -38,9 +26,6 @@ const MODEL_CACHE_DIR = path.join(process.cwd(), 'lib', 'ai-agent', 'ai-model');
 
 /** Max tokens for model generation output */
 const MAX_NEW_TOKENS = 1024;
-
-// System prompts are now centralized in ./prompt/ modules
-// (ANALYZE_RFQ_PROMPT, SEARCH_SUPPLIERS_PROMPT, etc.)
 
 // =============================================
 // LocalAIModel Class
@@ -109,53 +94,27 @@ export class LocalAIModel {
   }
 
   // =============================================
-  // Inference Methods
+  // Chat Completion (mirrors hfChatCompletion<T>)
   // =============================================
 
   /**
-   * Analyze an RFQ email/document and extract structured data.
-   * @param input - Subject, content, and action type
-   * @returns Parsed AnalysisData JSON
+   * Generic chat completion — mirrors hfChatCompletion<T>(systemPrompt, userMessage).
+   * Builds a chat prompt, runs local inference, parses JSON response.
+   * @param systemPrompt - System instruction (defines output schema)
+   * @param userMessage  - User content (email text, search query, etc.)
+   * @returns Parsed JSON of type T
+   * @throws Error if inference fails or JSON parsing fails
    */
-  async analyzeRFQ(input: AICallInput): Promise<AnalysisData> {
+  async chatCompletion<T>(systemPrompt: string, userMessage: string): Promise<T> {
     await this.ensureLoaded();
-    console.log(`[local-model] analyzeRFQ: "${input.subject}" (${input.actionType})`);
+    console.log(`[local-model] chatCompletion: ${userMessage.slice(0, 80)}...`);
 
-    // Build chat-style prompt using centralized prompt templates
-    const userMsg = buildAnalyzeUserMessage({
-      subject: input.subject,
-      emailBodyText: input.analysisContent,
-      fromEmail: '',
-      fromName: '',
-      cc: [],
-      attachmentsText: '',
-    });
-    const prompt = this.buildChatPrompt(ANALYZE_RFQ_PROMPT, userMsg);
-
+    // Build chat-style prompt using Chatml format
+    const prompt = this.buildChatPrompt(systemPrompt, userMessage);
     // Run inference
     const rawOutput = await this.generate(prompt);
-
-    // Parse JSON from model output, fallback to mock if parsing fails
-    return this.parseJSON<AnalysisData>(rawOutput, () => this.fallbackAnalysis(input));
-  }
-
-  /**
-   * Search for suppliers matching given requirements.
-   * @param input - Subject, search content, and action type
-   * @returns Parsed SupplierResult array
-   */
-  async searchSuppliers(input: SearchAPIInput): Promise<SupplierResult[]> {
-    await this.ensureLoaded();
-    console.log(`[local-model] searchSuppliers: "${input.subject}" (${input.actionType})`);
-
-    // Build chat-style prompt using centralized prompt templates
-    const prompt = this.buildChatPrompt(SEARCH_SUPPLIERS_PROMPT, input.searchContent);
-
-    // Run inference
-    const rawOutput = await this.generate(prompt);
-
-    // Parse JSON array from model output, fallback to mock if parsing fails
-    return this.parseJSON<SupplierResult[]>(rawOutput, () => this.fallbackSuppliers());
+    // Parse JSON from model output (throws on failure)
+    return this.parseJSON<T>(rawOutput);
   }
 
   // =============================================
@@ -201,64 +160,37 @@ export class LocalAIModel {
   /**
    * Extract and parse JSON from model output.
    * Handles common model quirks: markdown code fences, trailing text after JSON.
-   * Falls back to provided fallback function if parsing fails.
+   * Throws on failure — no fallback, matching hf-client behavior.
    *
    * @param raw - Raw model output string
-   * @param fallbackFn - Function returning fallback data if parsing fails
    * @returns Parsed JSON of type T
+   * @throws Error if no JSON structure found or JSON is malformed
    */
-  private parseJSON<T>(raw: string, fallbackFn: () => T): T {
-    try {
-      // Strip markdown code fences if present (```json ... ```)
-      let cleaned = raw.trim();
-      cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+  private parseJSON<T>(raw: string): T {
+    // Strip markdown code fences if present (```json ... ```)
+    let cleaned = raw.trim();
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
 
-      // Find the first { or [ and last matching } or ]
-      const startObj = cleaned.indexOf('{');
-      const startArr = cleaned.indexOf('[');
-      let start: number;
-      let end: number;
+    // Find the first { or [ and last matching } or ]
+    const startObj = cleaned.indexOf('{');
+    const startArr = cleaned.indexOf('[');
+    let start: number;
+    let end: number;
 
-      if (startArr >= 0 && (startObj < 0 || startArr < startObj)) {
-        // JSON array
-        start = startArr;
-        end = cleaned.lastIndexOf(']') + 1;
-      } else if (startObj >= 0) {
-        // JSON object
-        start = startObj;
-        end = cleaned.lastIndexOf('}') + 1;
-      } else {
-        throw new Error('No JSON structure found in model output');
-      }
-
-      const jsonStr = cleaned.slice(start, end);
-      return JSON.parse(jsonStr) as T;
-    } catch (parseError) {
-      console.warn('[local-model] JSON parse failed, using fallback:', parseError);
-      console.warn('[local-model] Raw output was:', raw.slice(0, 500));
-      return fallbackFn();
+    if (startArr >= 0 && (startObj < 0 || startArr < startObj)) {
+      // JSON array
+      start = startArr;
+      end = cleaned.lastIndexOf(']') + 1;
+    } else if (startObj >= 0) {
+      // JSON object
+      start = startObj;
+      end = cleaned.lastIndexOf('}') + 1;
+    } else {
+      throw new Error('[local-model] No JSON structure found in model output');
     }
-  }
 
-  // =============================================
-  // Fallback Data (when model output fails to parse)
-  // =============================================
-
-  /** Fallback analysis data when JSON parsing fails */
-  private fallbackAnalysis(input: AICallInput): AnalysisData {
-    return {
-      summary: `Analysis of: ${input.subject} (local model parse fallback)`,
-      items: [],
-      customerInfo: { name: '', email: '' },
-      deadlines: [],
-      specialRequirements: [],
-      confidence: 0.3, // Low confidence since we couldn't parse
-    };
-  }
-
-  /** Fallback supplier list when JSON parsing fails */
-  private fallbackSuppliers(): SupplierResult[] {
-    return [];
+    const jsonStr = cleaned.slice(start, end);
+    return JSON.parse(jsonStr) as T;
   }
 }
 

@@ -2,7 +2,8 @@
 // SUPPLIER RESPOND ACTIONS - Supplier Response Processor
 // =============================================
 // Internal server module (called by data-processor, NOT a server action)
-// Flow: ProcessorInput → route by action_type → AI extraction / manual override → DB update → SSE → ProcessorResult
+// Flow: ProcessorInput → route by action_type → AI extraction / manual override → DB update → ProcessorResult
+// SSE emission is handled centrally by data-processor.ts (reads result.data.all_items_available)
 //
 // Supports:
 //   update       — AI parses incoming supplier email, extracts per-item data, updates DB
@@ -14,7 +15,6 @@
 //   quotation_items       — bidder_proposal fields (bidder_description, bidder_unit_price, delivery_time, compliance_deviation)
 //   incoming_emails       — link rfq_id after matching
 
-import { eventBus } from '@/lib/event-bus';
 import { getData, updateData, insertData } from '@/lib/db/queries';
 import { buildSupplierItemStatusPayload, buildQuotationItemsPayload } from '@/lib/utils/databaseHandler';
 import { getLocalModel } from '@/lib/ai-agent/local-model';
@@ -101,8 +101,7 @@ export async function processSupplierRespond(input: ProcessorInput): Promise<Pro
       timestamp,
     };
 
-    // Emit SSE so UI shows error state
-    eventBus.emit('preview-update', errorResult);
+    // SSE emission handled centrally by data-processor
     return errorResult;
   }
 }
@@ -189,18 +188,8 @@ async function handleSupplierEmailResponse(
     timestamp,
   };
 
-  // Emit SSE for real-time UI update
-  eventBus.emit('preview-update', result);
-
-  // Step 6: If all items available → emit auto-chain event for quotation flow
-  if (allAvailable) {
-    eventBus.emit('comms-update', {
-      type: 'all-items-available',
-      rfq_id: extraction.rfq_id,
-      message: 'All supplier items are now available. Ready for quotation pricing.',
-      timestamp,
-    });
-  }
+  // SSE emission (preview-update + comms-update) handled centrally by data-processor
+  // data-processor reads result.data.all_items_available to decide comms-update
 
   return result;
 }
@@ -286,18 +275,8 @@ async function handleManualStatusUpdate(
     timestamp,
   };
 
-  // Emit SSE for real-time UI update
-  eventBus.emit('preview-update', result);
-
-  // Emit auto-chain event if all items now available
-  if (allAvailable) {
-    eventBus.emit('comms-update', {
-      type: 'all-items-available',
-      rfq_id,
-      message: 'All supplier items are now available. Ready for quotation pricing.',
-      timestamp,
-    });
-  }
+  // SSE emission (preview-update + comms-update) handled centrally by data-processor
+  // data-processor reads result.data.all_items_available to decide comms-update
 
   return result;
 }
@@ -312,8 +291,7 @@ async function handleManualStatusUpdate(
  * Returns per-item pricing, delivery, compliance info.
  *
  * Local mode: runs model in-process via local-model
- * Remote mode: calls external API (future implementation)
- * Development fallback: returns mock data
+ * Remote mode: calls HuggingFace Inference API
  */
 async function extractSupplierResponseFromEmail(
   emailData: { from_email: string; from_name: string; subject: string; email_body_text: string; attachments_parsed?: Array<{ filename: string; content_type: string; extracted_text: string }> },
@@ -325,68 +303,27 @@ async function extractSupplierResponseFromEmail(
   // Try to match sender to an existing supplier via DB lookup
   const supplierMatch = await matchSenderToSupplier(emailData.from_email, workspace);
 
+  // Build user message with full email context for AI extraction
+  const userMessage = `From: ${emailData.from_name} <${emailData.from_email}>\nSubject: ${emailData.subject}\n\nEmail Body:\n${fullContent}${supplierMatch ? `\n\nContext: Supplier ID ${supplierMatch.supplierId}, RFQ ID ${supplierMatch.rfqId}` : ''}`;
+
+  // Call AI (local or remote) — both use the same prompt + message pattern
+  let extracted: { supplier_name: string; items: ExtractedItem[]; confidence: number };
   if (AI_MODE === 'local') {
     console.log('[Supplier Respond] Using local AI model for extraction');
-    try {
-      const localModel = getLocalModel();
-      // Guard: extractSupplierResponse may not be implemented yet on local model
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const model = localModel as any;
-      if (typeof model.extractSupplierResponse !== 'function') {
-        throw new Error('extractSupplierResponse not implemented on local model');
-      }
-      // Call local model to extract supplier response items
-      const extracted = await model.extractSupplierResponse({
-        emailContent: fullContent,
-        senderEmail: emailData.from_email,
-        senderName: emailData.from_name,
-        subject: emailData.subject,
-        supplierId: supplierMatch?.supplierId,
-        rfqId: supplierMatch?.rfqId,
-      });
-      return {
-        supplier_id: extracted.supplierId || supplierMatch?.supplierId || 0,
-        supplier_name: extracted.supplierName || emailData.from_name,
-        rfq_id: extracted.rfqId || supplierMatch?.rfqId || 0,
-        items: extracted.items || [],
-        confidence: extracted.confidence || 0.8,
-      };
-    } catch (error) {
-      console.error('[Supplier Respond] Local model extraction failed:', error);
-      // Fall through to mock in development
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('[Supplier Respond] Using mock extraction data');
-        return generateMockExtraction(supplierMatch, emailData);
-      }
-      throw error;
-    }
+    // Generic chatCompletion<T> matches hf-client pattern
+    extracted = await getLocalModel().chatCompletion<typeof extracted>(SUPPLIER_RESPOND_SYSTEM_PROMPT, userMessage);
+  } else {
+    console.log('[Supplier Respond] Using HF Inference API for extraction');
+    extracted = await hfChatCompletion<typeof extracted>(SUPPLIER_RESPOND_SYSTEM_PROMPT, userMessage);
   }
 
-  // Route: remote API call via HuggingFace Inference SDK
-  try {
-    console.log('[Supplier Respond] Using HF Inference API for extraction');
-    // Build user message with full email context
-    const userMessage = `From: ${emailData.from_name} <${emailData.from_email}>\nSubject: ${emailData.subject}\n\nEmail Body:\n${fullContent}${supplierMatch ? `\n\nContext: Supplier ID ${supplierMatch.supplierId}, RFQ ID ${supplierMatch.rfqId}` : ''}`;
-    // Call HuggingFace chatCompletion — returns parsed extraction JSON
-    const extracted = await hfChatCompletion<{ supplier_name: string; items: ExtractedItem[]; confidence: number }>(
-      SUPPLIER_RESPOND_SYSTEM_PROMPT,
-      userMessage
-    );
-    return {
-      supplier_id: supplierMatch?.supplierId || 0,
-      supplier_name: extracted.supplier_name || emailData.from_name,
-      rfq_id: supplierMatch?.rfqId || 0,
-      items: extracted.items || [],
-      confidence: extracted.confidence || 0.8,
-    };
-  } catch (error) {
-    console.error('[Supplier Respond] HF Inference API failed:', error);
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('[Supplier Respond] Using mock extraction data');
-      return generateMockExtraction(supplierMatch, emailData);
-    }
-    throw error;
-  }
+  return {
+    supplier_id: supplierMatch?.supplierId || 0,
+    supplier_name: extracted.supplier_name || emailData.from_name,
+    rfq_id: supplierMatch?.rfqId || 0,
+    items: extracted.items || [],
+    confidence: extracted.confidence || 0.8,
+  };
 }
 
 /**
@@ -663,46 +600,3 @@ async function checkAllItemsAvailable(
   }
 }
 
-// ---------------------------------------------
-// Mock Data (Development)
-// ---------------------------------------------
-
-/**
- * Generate mock AI extraction result for development.
- * Simulates AI parsing a supplier email with realistic data.
- */
-function generateMockExtraction(
-  supplierMatch: { rfqId: number; supplierId: number; supplierName: string } | null,
-  emailData: { from_email: string; from_name: string }
-): AIExtractionResult {
-  return {
-    supplier_id: supplierMatch?.supplierId || 1,
-    supplier_name: supplierMatch?.supplierName || emailData.from_name || 'Mock Supplier',
-    rfq_id: supplierMatch?.rfqId || 1,
-    confidence: 0.93,
-    items: [
-      {
-        item_id: 1,
-        status: 'available',
-        currency_code: 'USD',
-        bidder_proposal: {
-          bidder_description: 'Premium 50-Ton Industrial Chiller (ICU-50T), R-410A refrigerant, digital scroll compressor',
-          bidder_unit_price: 7500,
-          delivery_time: '8 weeks ARO',
-          compliance_deviation: 'Meets all technical specifications with enhanced efficiency rating',
-        },
-      },
-      {
-        item_id: 3,
-        status: 'available',
-        currency_code: 'USD',
-        bidder_proposal: {
-          bidder_description: 'Advanced VRF outdoor unit (VRF-24HP), inverter technology, BACnet protocol',
-          bidder_unit_price: 5900,
-          delivery_time: '6 weeks ARO',
-          compliance_deviation: 'Exceeds minimum efficiency requirements by 15%. Includes 3-year extended warranty.',
-        },
-      },
-    ],
-  };
-}

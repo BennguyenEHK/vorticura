@@ -74,14 +74,27 @@ ${attachmentsText || 'No attachments or no text extracted.'}`;
 // --- Input shape for the reanalyze user message builder ---
 interface ReanalyzeInput {
   subject: string;
-  previousAnalysis: string; // JSON string of previous analysis result
+  previousAnalysis: string;       // JSON string of previous analysis result
   generalFeedback: string;
   inlineNotes: Array<{ selectedText: string; comment: string }>;
+  customerInfo?: {                // Full customer info from DB (customers table)
+    companyName?: string;
+    attentionPerson?: string;
+    email?: string;
+    phone?: string;
+    customerAddress?: string;
+  };
+  rfqItems?: Array<{             // All RFQ items from DB (quotation_items table)
+    itemId: number;
+    description: string;
+    qty: number;
+    uom: string;
+  }>;
 }
 
-// --- Builds the user message for reanalysis with feedback ---
+// --- Builds the user message for reanalysis with feedback + DB context ---
 export function buildReanalyzeUserMessage(input: ReanalyzeInput): string {
-  const { subject, previousAnalysis, generalFeedback, inlineNotes } = input;
+  const { subject, previousAnalysis, generalFeedback, inlineNotes, customerInfo, rfqItems } = input;
 
   // Format inline notes as numbered list
   const notesSection = inlineNotes.length
@@ -90,7 +103,23 @@ export function buildReanalyzeUserMessage(input: ReanalyzeInput): string {
         .join('\n')
     : 'None';
 
+  // Format customer info section if available
+  const customerSection = customerInfo
+    ? `Company: ${customerInfo.companyName || 'N/A'}\nContact: ${customerInfo.attentionPerson || 'N/A'}\nEmail: ${customerInfo.email || 'N/A'}\nPhone: ${customerInfo.phone || 'N/A'}\nAddress: ${customerInfo.customerAddress || 'N/A'}`
+    : 'Not available';
+
+  // Format RFQ items section if available
+  const itemsSection = rfqItems?.length
+    ? rfqItems.map((i) => `- #${i.itemId}: ${i.description} | Qty: ${i.qty} ${i.uom}`).join('\n')
+    : 'Not available';
+
   return `Subject: ${subject}
+
+--- Customer Info ---
+${customerSection}
+
+--- Current RFQ Items ---
+${itemsSection}
 
 --- Previous Analysis ---
 ${previousAnalysis}

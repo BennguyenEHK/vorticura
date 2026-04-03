@@ -11,7 +11,7 @@
 //   UI Component → handleHTTPRequest(ProcessorInput)
 //     → Validator → Coordinator (routing) → Action Processor → Response
 //     → If action_type = 'proceed': Pipeline chain → data-loader → next processor
-//     → Action internally: business logic → modifyDatabase() → eventBus.emit()
+//     → Action returns result → data-processor emits SSE centrally
 //
 // Reference: make_sales_sse_server/api/data-processing.js
 
@@ -84,9 +84,9 @@ const DATA_PROCESSORS: Record<string, Record<string, ProcessorFn>> = {
     research: processSupplierSearch,   // Re-search with user corrections
   },
   'incoming_email': {
-    handleRFQ: processRFQ,                        // RFQ detected → maps input → processAnalysis
-    handleSuppliersRespond: processSuppliersRespond, // Supplier response → stub (future processor)
-    handleUnknown: processUnknownEmail,           // Fallback → maps input → processEmail for UI report
+    handleRFQ: processAnalysis,                    // RFQ detected → processAnalysis handles incoming_email input
+    handleSuppliersRespond: processSupplierRespond, // Supplier response → processSupplierRespond handles incoming_email input
+    handleUnknown: processEmail,                   // Fallback → processEmail handles incoming_email input for UI report
   },
   'supplier_respond': {
     update: processSupplierRespond,       // AI parses supplier email → update item statuses + bidder_proposal
@@ -138,8 +138,8 @@ const stats: ProcessingStats = {
  *   1. Validate input structure via Validator
  *   2. If action_type = 'proceed' → execute pipeline chain
  *   3. Otherwise → route to correct processor via DATA_PROCESSORS
- *   4. Execute processor (which handles DB + SSE internally)
- *   5. Return standardized JSON result with session_id + timing
+ *   4. Execute processor (handles DB internally, returns result)
+ *   5. Centralized SSE emit → Return standardized JSON result with session_id + timing
  *
  * @param input - Raw JSON input from UI component
  * @returns ProcessorResult with success/error status and data
@@ -194,18 +194,21 @@ export async function handleHTTPRequest(input: ProcessorInput): Promise<Processo
     // Step 6: Generate session ID for tracking
     sessionId = generateSessionId(normalizedInput, dataType, actionType);
 
-    // Step 7: Execute the processor (handles DB + SSE internally)
+    // Step 7: Execute the processor (handles DB internally, returns result)
     const result = await processor(normalizedInput);
 
     // Step 8: Update statistics
     updateStats(actionType);
 
-    // Step 9: Return result with overridden session_id and timing
-    return {
+    // Step 9: Centralized SSE emission — all processors return data, emit happens here
+    const finalResult = {
       ...result,
       session_id: sessionId,
       processing_time_ms: Date.now() - startTime,
     };
+    emitProcessorResult(finalResult, dataType, normalizedInput);
+
+    return finalResult;
   } catch (error) {
     // Track error in statistics
     stats.errors++;
@@ -295,163 +298,45 @@ async function executePipelineChain(input: ProcessorInput): Promise<ProcessorRes
 }
 
 // =============================================
-// INCOMING EMAIL — Centralized Processor Functions
+// CENTRALIZED SSE EMISSION
 // =============================================
-// Transform incoming_email payloads to downstream processor formats.
-// Each function maps incoming_email fields → target input shape → calls target processor.
-// No separate actions file needed — routing is dictionary-driven via DATA_PROCESSORS above.
+// All action processors return results without emitting SSE.
+// data-processor handles all SSE emission centrally after receiving the result.
 
 /**
- * Process RFQ email: map incoming_email → rfq_analysis input → processAnalysis
- * Builds analysis content from email body + parsed attachments for AI processing.
+ * Emit SSE events based on processor result and input context.
+ * Handles: preview-update for all results, comms-update for incoming_email routing
+ * and supplier_respond all-items-available notifications.
  */
-async function processRFQ(input: ProcessorInput): Promise<ProcessorResult> {
-  const ie = input.incoming_email;
-  if (!ie) return incomingEmailError(input, 'incoming_email data required for handleRFQ');
+function emitProcessorResult(result: ProcessorResult, dataType: DataType, input: ProcessorInput): void {
+  // Always emit preview-update for UI real-time rendering
+  eventBus.emit('preview-update', result);
 
-  // Combine body + attachment text into analysis content for AI
-  const analysisContent = buildIncomingAnalysisContent(ie);
-  // Extract RFQ reference from subject (e.g., "RFQ-2026-001") or generate fallback
-  const rfqReference = extractIncomingRfqReference(ie.subject) || `EMAIL-${Date.now()}`;
-
-  // Map to rfq_analysis input and delegate to processAnalysis
-  const rfqInput: ProcessorInput = {
-    data_type: 'rfq_analysis',
-    action_type: 'analyze',
-    workspace: input.workspace,
-    rfq_reference: rfqReference,
-    analysis: {
-      subject: ie.subject || '(no subject)',
-      analysis_content: analysisContent,
-    },
-  };
-
-  // Emit SSE so UI knows an RFQ was routed
-  eventBus.emit('comms-update', {
-    type: 'incoming-email-routed',
-    routedTo: 'rfq_analysis',
-    from: ie.from_email,
-    subject: ie.subject,
-    rfqReference,
-    timestamp: new Date().toISOString(),
-  });
-
-  return processAnalysis(rfqInput);
-}
-
-/**
- * Process supplier response email: map incoming_email → supplier_respond:update → delegate.
- * Builds a supplier_respond input from the incoming email data and calls processSupplierRespond
- * which handles AI extraction, DB updates, and all_items_available check.
- */
-async function processSuppliersRespond(input: ProcessorInput): Promise<ProcessorResult> {
-  const ie = input.incoming_email;
-  if (!ie) return incomingEmailError(input, 'incoming_email data required for handleSuppliersRespond');
-
-  // Emit SSE so UI knows a supplier response was received
-  eventBus.emit('comms-update', {
-    type: 'incoming-email-routed',
-    routedTo: 'supplier_respond',
-    from: ie.from_email,
-    subject: ie.subject,
-    timestamp: new Date().toISOString(),
-  });
-
-  // Map incoming_email → supplier_respond:update input and delegate to processor
-  const supplierRespondInput: ProcessorInput = {
-    data_type: 'supplier_respond',
-    action_type: 'update',
-    workspace: input.workspace,
-    incoming_email: ie, // Pass email data for AI extraction inside the processor
-  };
-
-  return processSupplierRespond(supplierRespondInput);
-}
-
-/**
- * Process unknown/unclassified email: map to email input → processEmail for UI report.
- * Generates an email report so the user can review and validate in the UI panel.
- */
-async function processUnknownEmail(input: ProcessorInput): Promise<ProcessorResult> {
-  const ie = input.incoming_email;
-  if (!ie) return incomingEmailError(input, 'incoming_email data required for handleUnknown');
-
-  // Map to email input shape and delegate to processEmail for UI report generation
-  const emailInput: ProcessorInput = {
-    data_type: 'email',
-    action_type: 'generate',
-    workspace: input.workspace,
-    quotation_id: 0,
-    rfq_reference: extractIncomingRfqReference(ie.subject) || `UNCLASSIFIED-${Date.now()}`,
-    email: {
-      recipient_email: ie.from_email,
-      subject: `RE: ${ie.subject || '(no subject)'}`,
-      email_content: ie.email_body_text || '',
-    },
-  };
-
-  // Emit SSE so UI can show unclassified email in inbox
-  eventBus.emit('comms-update', {
-    type: 'incoming-email-unclassified',
-    from: ie.from_email,
-    subject: ie.subject,
-    timestamp: new Date().toISOString(),
-  });
-
-  return processEmail(emailInput);
-}
-
-// =============================================
-// INCOMING EMAIL — Helpers (inlined to avoid circular imports with email-pipeline)
-// =============================================
-
-/**
- * Build analysis content from incoming_email body + parsed attachment text.
- * Mirrors email-pipeline's buildAnalysisContent but works with flat IncomingEmailData shape.
- */
-function buildIncomingAnalysisContent(ie: { email_body_text: string; attachments_parsed?: Array<{ filename: string; content_type: string; extracted_text: string }> }): string {
-  const parts: string[] = [];
-
-  // Add email body
-  if (ie.email_body_text) {
-    parts.push('--- EMAIL BODY ---');
-    parts.push(ie.email_body_text);
+  // Emit comms-update for incoming_email routing notifications
+  if (dataType === 'incoming_email' && input.incoming_email) {
+    const ie = input.incoming_email;
+    const routeType = input.action_type === 'handleUnknown'
+      ? 'incoming-email-unclassified'
+      : 'incoming-email-routed';
+    eventBus.emit('comms-update', {
+      type: routeType,
+      routedTo: result.data_type, // effective data_type after routing
+      from: ie.from_email,
+      subject: ie.subject,
+      timestamp: new Date().toISOString(),
+    });
   }
 
-  // Add extracted attachment text (skip failed extractions)
-  for (const att of ie.attachments_parsed || []) {
-    if (att.extracted_text && att.extracted_text !== '[extraction_failed]') {
-      parts.push(`--- ATTACHMENT: ${att.filename} ---`);
-      parts.push(att.extracted_text);
-    }
+  // Emit all-items-available when supplier_respond indicates readiness for quotation
+  const resultData = result.data as Record<string, unknown> | undefined;
+  if (resultData?.all_items_available === true) {
+    eventBus.emit('comms-update', {
+      type: 'all-items-available',
+      rfq_id: resultData.rfq_id,
+      message: 'All supplier items are now available. Ready for quotation pricing.',
+      timestamp: new Date().toISOString(),
+    });
   }
-
-  return parts.join('\n\n');
-}
-
-/**
- * Extract RFQ reference from subject line (e.g., "RFQ-2026-001", "Q#456")
- * Returns null if no reference pattern found.
- */
-function extractIncomingRfqReference(subject: string): string | null {
-  const match = subject.match(/(?:RFQ|Q|REF|PO|PR)[- #]?\d{1,}[-\d]*/i);
-  return match ? match[0].toUpperCase() : null;
-}
-
-/**
- * Build standardized error result for incoming_email processors
- */
-function incomingEmailError(input: ProcessorInput, message: string): ProcessorResult {
-  return {
-    success: false,
-    data_type: input.data_type,
-    action_type: input.action_type,
-    status: 'error',
-    session_id: '',
-    processing_time_ms: 0,
-    error: message,
-    timestamp: new Date().toISOString(),
-  };
 }
 
 // =============================================

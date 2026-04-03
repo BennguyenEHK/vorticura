@@ -6,7 +6,6 @@
 // Supports: generate | re_generate | send
 
 import ky from 'ky';
-import { eventBus } from '@/lib/event-bus';
 import { modifyDatabase } from '@/lib/utils/databaseHandler';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
 import { db } from '@/lib/db/client';
@@ -38,11 +37,25 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
 
   try {
     const { action_type, quotation_id, rfq_reference, email, workspace } = input;
+
+    // Handle incoming_email routing (handleUnknown → processEmail)
+    // Map incoming_email fields to email fields for processing
+    const isFromIncomingEmail = input.data_type === 'incoming_email';
+    const effectiveEmail = isFromIncomingEmail && input.incoming_email
+      ? {
+          recipient_email: input.incoming_email.from_email,
+          subject: `RE: ${input.incoming_email.subject || '(no subject)'}`,
+          email_content: input.incoming_email.email_body_text || '',
+        }
+      : email;
+
     let resultData: unknown;
     let emailStatus: string;
 
-    // Route by action_type
-    switch (action_type) {
+    // Route by action_type (use 'generate' for incoming_email routed input)
+    const effectiveActionType = isFromIncomingEmail ? 'generate' : action_type;
+
+    switch (effectiveActionType) {
       case 'generate':
       case 're_generate': {
         // Generate email draft from template
@@ -55,9 +68,9 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
         // Send email via user's OAuth provider, fallback to generic API
         const sendResult = await sendEmailViaProvider(
           {
-            to: email?.recipient_email || '',
-            subject: email?.subject || '',
-            body: email?.email_content || '',
+            to: effectiveEmail?.recipient_email || '',
+            subject: effectiveEmail?.subject || '',
+            body: effectiveEmail?.email_content || '',
           },
           workspace?.client_id,
           workspace?.company_id,
@@ -67,14 +80,14 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
         break;
       }
       default:
-        throw new Error(`Unsupported email action_type: ${action_type}`);
+        throw new Error(`Unsupported email action_type: ${effectiveActionType}`);
     }
 
-    // Build result
+    // Build result — always report as data_type 'email' regardless of input source
     const result: ProcessorResult = {
       success: true,
       data_type: 'email',
-      action_type,
+      action_type: isFromIncomingEmail ? 'generate' : action_type,
       status: 'completed',
       session_id: '',
       processing_time_ms: Date.now() - startTime,
@@ -82,7 +95,7 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
       timestamp,
     };
 
-    // Save to database (non-blocking)
+    // Save to database (non-blocking), use effectiveEmail for field values
     try {
       if (workspace) {
         await modifyDatabase({
@@ -90,9 +103,9 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
           quotation_id,
           rfq_reference,
           email: {
-            subject: email?.subject || '',
-            email_content: email?.email_content || '',
-            recipient_email: email?.recipient_email || '',
+            subject: effectiveEmail?.subject || '',
+            email_content: effectiveEmail?.email_content || '',
+            recipient_email: effectiveEmail?.recipient_email || '',
             email_status: emailStatus,
           },
         }, workspace);
@@ -103,17 +116,15 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
       console.error('[Email] DB save failed (non-blocking):', dbError);
     }
 
-    // Emit SSE for real-time preview update
-    eventBus.emit('preview-update', result);
-
     return result;
   } catch (error) {
     console.error('[Email] Error:', error);
 
+    const isFromIncomingEmailErr = input.data_type === 'incoming_email';
     const errorResult: ProcessorResult = {
       success: false,
-      data_type: 'email',
-      action_type: input.action_type,
+      data_type: 'email',  // Always report as email regardless of input source
+      action_type: isFromIncomingEmailErr ? 'generate' : input.action_type,
       status: 'error',
       session_id: '',
       processing_time_ms: Date.now() - startTime,
@@ -121,7 +132,6 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
       timestamp,
     };
 
-    eventBus.emit('preview-update', errorResult);
     return errorResult;
   }
 }
@@ -134,9 +144,17 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
  * Generate email draft from template using ProcessorInput data
  */
 function generateDraftFromTemplate(input: ProcessorInput): EmailDraftData {
-  const email = input.email;
+  // Handle incoming_email routing — use incoming_email fields as draft source
+  if (input.data_type === 'incoming_email' && input.incoming_email) {
+    return {
+      to: input.incoming_email.from_email,
+      subject: `RE: ${input.incoming_email.subject || '(no subject)'}`,
+      body: input.incoming_email.email_body_text || '',
+    };
+  }
 
-  // Use provided content as the draft (already validated by validator)
+  // Standard email input — use provided content as the draft
+  const email = input.email;
   return {
     to: email?.recipient_email || '',
     subject: email?.subject || '',
@@ -215,7 +233,8 @@ export function populateTemplate(
   for (const [key, value] of Object.entries(context)) {
     const placeholder = `{{${key}}}`;
     const replacement = String(value ?? '');
-    result = result.replace(new RegExp(placeholder, 'g'), replacement);
+    // Use replaceAll (no regex) to avoid ReDoS from user-controlled keys
+    result = result.replaceAll(placeholder, replacement);
   }
   return result;
 }
