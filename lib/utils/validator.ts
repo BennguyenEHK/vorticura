@@ -585,6 +585,23 @@ function validateRfqAnalysis(input: ProcessorInput): ProcessorInput {
     throw new Error('rfq_id is required for reanalyze action');
   }
 
+  // For reanalyze: analysis + rfq_reference loaded from DB; only require rfq_id + ai_comments
+  if (input.action_type === 'reanalyze') {
+    // ai_comments is required for reanalyze (user feedback)
+    if (!input.ai_comments || typeof input.ai_comments !== 'object') {
+      throw new Error('ai_comments is required for reanalyze action');
+    }
+    if (typeof input.ai_comments.general_feedback !== 'string') {
+      throw new Error('ai_comments.general_feedback must be a string');
+    }
+    if (!Array.isArray(input.ai_comments.inline_notes)) {
+      throw new Error('ai_comments.inline_notes must be an array');
+    }
+    // rfq_reference and analysis are optional for reanalyze — loaded from DB if missing
+    return input;
+  }
+
+  // For analyze: full validation required
   // rfq_reference is required
   if (!input.rfq_reference) throw new Error('rfq_reference is required for rfq_analysis data_type');
 
@@ -601,19 +618,6 @@ function validateRfqAnalysis(input: ProcessorInput): ProcessorInput {
   // analysis.analysis_content is required
   if (!input.analysis.analysis_content || input.analysis.analysis_content.trim().length === 0) {
     throw new Error('analysis.analysis_content is required and cannot be empty');
-  }
-
-  // ai_comments validation for reanalyze (feedback from user)
-  if (input.action_type === 'reanalyze') {
-    if (!input.ai_comments || typeof input.ai_comments !== 'object') {
-      throw new Error('ai_comments is required for reanalyze action');
-    }
-    if (typeof input.ai_comments.general_feedback !== 'string') {
-      throw new Error('ai_comments.general_feedback must be a string');
-    }
-    if (!Array.isArray(input.ai_comments.inline_notes)) {
-      throw new Error('ai_comments.inline_notes must be an array');
-    }
   }
 
   return input;

@@ -308,13 +308,26 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
     if (!mapping) return;
 
     try {
+      // Build ai_comments payload from UI feedback state
+      const aiComments = {
+        general_feedback: generalFeedback || '',
+        inline_notes: inlineNotes.map((n) => ({
+          id: n.id,
+          selected_text: n.selectedText,   // camelCase → snake_case for backend
+          comment: n.note,                 // UI 'note' → backend 'comment'
+          position: { start: 0, end: 0 },  // placeholder — positional data not tracked in UI
+          timestamp: n.timestamp.toISOString(),
+        })),
+      };
+
       await handleHTTPRequest({
         data_type: docType,
         action_type: mapping.reject as any,
-        comments: generalFeedback || undefined,
         quotation_id: 'quotation_id' in (state.activeDocument.data as any) ? (state.activeDocument.data as any).quotation_id : undefined,
         rfq_id: 'rfq_id' in (state.activeDocument.data as any) ? (state.activeDocument.data as any).rfq_id : undefined,
+        ai_comments: aiComments,           // structured feedback for backend
       });
+
       // Clear feedback after submission
       setInlineNotes([]);
       setGeneralFeedback('');
@@ -322,7 +335,7 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
     } catch (err) {
       actions.setError(err instanceof Error ? err.message : 'Regenerate failed');
     }
-  }, [state.activeDocument, generalFeedback, actions]);
+  }, [state.activeDocument, generalFeedback, inlineNotes, actions]);
 
   // Determine active tab from current document type
   const activeType = state.activeDocument?.type || null;

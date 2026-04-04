@@ -12,6 +12,7 @@ import { getData } from '@/lib/db/queries';
 import { getLocalModel } from '@/lib/ai-agent/local-model';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
 import type { AnalysisData } from '@/types/ai-agent';
+import { getServerActionWorkspace } from '@/lib/middleware/get-workspace';
 
 // ---------------------------------------------
 // Configuration
@@ -44,10 +45,26 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
   const timestamp = new Date().toISOString();
 
   try {
-    const { action_type, rfq_id, rfq_reference, analysis, workspace } = input;
-    // workspace should be provided by validator, but guard defensively
+    const { action_type, rfq_id, rfq_reference, analysis } = input;
+    // SECURITY: Prefer cookie-based workspace; fallback to input.workspace only in non-production
+    const cookieWs = await getServerActionWorkspace();
+    const workspace = cookieWs ?? input.workspace;
     if (!workspace) {
-      throw new Error('Missing workspace context');
+      throw new Error('Missing workspace context — not authenticated');
+    }
+
+    // For reanalyze: load previous analysis from DB if not provided in input
+    // (UI sends minimal payload with only rfq_id + ai_comments)
+    let rfqRef = rfq_reference || '';
+    let subjectOverride = '';
+    let analysisContentOverride = '';
+    if (action_type === 'reanalyze' && rfq_id && (!analysis || !analysis.analysis_content)) {
+      const rows = await getData('rfqAnalysis', { rfqId: rfq_id }, workspace) as Array<Record<string, unknown>>;
+      if (rows.length) {
+        rfqRef = String(rows[0].rfqReference || rfqRef);
+        subjectOverride = String(rows[0].subject || '');
+        analysisContentOverride = String(rows[0].analysisContent || '');
+      }
     }
 
     // Detect if input is incoming_email (routed from handleRFQ) vs direct rfq_analysis
@@ -57,13 +74,13 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
     // Build subject and analysis content based on input source
     const subject = isFromIncomingEmail
       ? (ie?.subject || '(no subject)')
-      : (analysis?.subject || '');
+      : (subjectOverride || analysis?.subject || '');
     const analysisContent = isFromIncomingEmail
       ? buildIncomingAnalysisContent(ie!)
-      : (analysis?.analysis_content || '');
+      : (analysisContentOverride || analysis?.analysis_content || '');
 
     // Route by action_type: analyze | reanalyze | handleRFQ → all call AI API
-    const aiResponse = await callAIAnalysis(input, subject, analysisContent);
+    const aiResponse = await callAIAnalysis(input, subject, analysisContent, workspace);
 
     // Build result — always report as rfq_analysis/analyze for downstream consumers
     const result: ProcessorResult = {
@@ -82,7 +99,7 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
       await modifyDatabase({
         data_type: 'rfq_analysis',
         rfq_id,
-        rfq_reference,
+        rfq_reference: rfqRef,
         rfq_analysis: {
           subject: subject,
           analysis_content: aiResponse.summary || analysisContent,
@@ -122,7 +139,7 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
  * Local mode: runs model in-process via @xenova/transformers
  * Remote mode: calls HuggingFace Inference API via hfChatCompletion
  */
-async function callAIAnalysis(input: ProcessorInput, subject: string, analysisContent: string): Promise<AnalysisData> {
+async function callAIAnalysis(input: ProcessorInput, subject: string, analysisContent: string, workspace: import('@/lib/middleware/workspace-context').WorkspaceContext): Promise<AnalysisData> {
   const { action_type } = input;
 
   // Build the user message using the appropriate prompt builder from FUNCTION_MAP
@@ -130,9 +147,9 @@ async function callAIAnalysis(input: ProcessorInput, subject: string, analysisCo
 
   if (action_type === 'reanalyze' && input.rfq_id) {
     // For reanalyze: fetch customer info + rfq items from DB for full context
-    const customers = await getData('customers', { rfqId: input.rfq_id }, input.workspace!) as Array<Record<string, unknown>>;
+    const customers = await getData('customers', { rfqId: input.rfq_id }, workspace) as Array<Record<string, unknown>>;
     const customer = customers[0];
-    const items = await getData('quotationItems', { rfqId: input.rfq_id }, input.workspace!) as Array<Record<string, unknown>>;
+    const items = await getData('quotationItems', { rfqId: input.rfq_id }, workspace) as Array<Record<string, unknown>>;
 
     userMessage = buildReanalyzeUserMessage({
       subject,

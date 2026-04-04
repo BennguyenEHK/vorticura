@@ -33,6 +33,9 @@ import { processAnalysis } from './actions/analysis-actions';
 import { processSupplierRespond } from './actions/supplier-respond-actions';
 import { eventBus } from './event-bus';
 
+// ========== WORKSPACE RESOLUTION ==========
+import { getServerActionWorkspace } from './middleware/get-workspace';
+
 // ========== PIPELINE CHAINING ==========
 import { loadProcessorInput } from './data-loader';
 
@@ -160,6 +163,19 @@ export async function handleHTTPRequest(input: ProcessorInput): Promise<Processo
     const validatedInput = validateInput(input);
     dataType = validatedInput.data_type;
     actionType = validatedInput.action_type;
+
+    // Step 2.5: Resolve workspace from auth cookie (server action context)
+    // SECURITY: Always prefer cookie-based auth to prevent tenant impersonation
+    // Only allow input.workspace passthrough in non-production (test/dev scripts)
+    const cookieWorkspace = await getServerActionWorkspace();
+    if (cookieWorkspace) {
+      validatedInput.workspace = cookieWorkspace; // cookie always wins over input
+    } else if (!validatedInput.workspace) {
+      // No cookie AND no input workspace — only acceptable in test/dev context
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('Authentication required — no workspace context');
+      }
+    }
 
     // Step 3: Handle 'proceed' action — pipeline chain to next step
     if (actionType === 'proceed') {
