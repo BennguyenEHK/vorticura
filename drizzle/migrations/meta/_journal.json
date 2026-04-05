@@ -8,6 +8,13 @@
       "when": 1769218240591,
       "tag": "0002_add_incoming_emails",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1769304000000,
+      "tag": "0003_rename_client_to_user_rfq_items",
+      "breakpoints": true
     }
   ]
 }
