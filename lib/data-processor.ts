@@ -160,14 +160,19 @@ export async function handleHTTPRequest(input: ProcessorInput): Promise<Processo
     // Step 2: Validate input via Validator (checks data_type + action_type + structure)
     const validatedInput = validateInput(input);
     
-    // If input is an incoming email, map it to the next routed step; otherwise keep original data/action types
+    // If input is an incoming email, map it to the next routed step; otherwise keep original data/action types //also changed the within validatedInput 
     const typeTransfer =
       validatedInput.data_type === 'incoming_email'
         ? INCOMING_EMAIL_ROUTE[validatedInput.action_type]
         : undefined;
 
-    dataType = typeTransfer?.nextDataType ?? validatedInput.data_type;
-    actionType = typeTransfer?.nextActionType ?? validatedInput.action_type;
+    Object.assign(validatedInput, {
+      data_type: typeTransfer?.nextDataType ?? validatedInput.data_type,
+      action_type: typeTransfer?.nextActionType ?? validatedInput.action_type,
+    });
+
+    dataType =  validatedInput.data_type;
+    actionType = validatedInput.action_type;
 
     // Step 2.5: Resolve workspace from auth cookie (server action context)
     // SECURITY: Always prefer cookie-based auth to prevent tenant impersonation
@@ -198,6 +203,33 @@ export async function handleHTTPRequest(input: ProcessorInput): Promise<Processo
       emitProcessorResult(finalResult, chainResult.data_type as DataType, validatedInput);
 
       return finalResult;
+    }
+
+    // Step 3.5: Enrich input with DB context via data-loader
+    // When UI sends minimal payload (e.g., rfq_id + ai_comments for reanalyze),
+    // data-loader fills in the full JSON shape from DB tables.
+    // Skip for:
+    //   - incoming_email origin (typeTransfer set) — payload already complete from email watcher
+    //   - missing rfq_id/quotation_id — nothing to load from DB (e.g., fresh file upload)
+    const hasDbKey = validatedInput.rfq_id || validatedInput.quotation_id;
+    if (!typeTransfer && hasDbKey && validatedInput.workspace) {
+      try {
+        const enrichedInput = await loadProcessorInput({
+          data_type: dataType,
+          action_type: actionType,
+          rfq_id: validatedInput.rfq_id,
+          quotation_id: validatedInput.quotation_id,
+          email_id: validatedInput.email?.email_id,
+          workspace: validatedInput.workspace,
+          overrides: validatedInput, // User-provided fields always override DB values
+        });
+        // Merge enriched DB data back — user overrides survive via the overrides param above
+        Object.assign(validatedInput, enrichedInput);
+      } catch {
+        // Non-fatal: if loader has no builder for this data_type/action_type combo,
+        // fall through and let the processor handle the raw input as-is
+        // (e.g., email/send has no loader — it just needs the validated input)
+      }
     }
 
     // Step 4: Normalize quotation data if applicable
