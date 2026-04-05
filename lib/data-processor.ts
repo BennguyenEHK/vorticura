@@ -30,7 +30,7 @@ import { processQuotation } from './actions/quotation-actions';
 import { processEmail } from './actions/email-actions';
 import { processSupplierSearch } from './actions/supplier-search-actions';
 import { processAnalysis } from './actions/analysis-actions';
-import { processSupplierRespond } from './actions/respond-actions';
+import { processRespond } from './actions/respond-actions';
 import { eventBus } from './event-bus';
 
 // ========== WORKSPACE RESOLUTION ==========
@@ -85,18 +85,18 @@ const DATA_PROCESSORS: Record<string, Record<string, ProcessorFn>> = {
   'supplier_search': {
     search: processSupplierSearch,     // Search for potential suppliers
     research: processSupplierSearch,   // Re-search with user corrections
-  },
-  'incoming_email': {
-    handleRFQ: processAnalysis,                    // RFQ detected → routes to rfq_analysis:analyze
-    handleRespond: processSupplierRespond, // Supplier response → routes to respond_service:supplier_respond
-    handleUnknown: processEmail,                   // Unclassified → routes to email:generate
-  },
+  }, 
   'respond_service': {
-    supplier_respond: processSupplierRespond, // Supplier replied to inquiry → AI parse + update item statuses
-    customer_respond: processSupplierRespond, // Customer replied to quotation → AI parse + route response
+    supplier_respond: processRespond, // Supplier replied to inquiry → AI parse + update item statuses
+    customer_respond: processRespond, // Customer replied to quotation → AI parse + route response
   },
 };
 
+const INCOMING_EMAIL_ROUTE: Record<string, PipelineStep> = {
+  handleRFQ:                      { nextDataType: 'rfq_analysis',    nextActionType: 'analyze' },           // New RFQ detected
+  handleSupplierRespond:          { nextDataType: 'respond_service', nextActionType: 'supplier_respond' },  // Supplier replied
+  handleCustomerRespond:          { nextDataType: 'respond_service', nextActionType: 'customer_respond' }  // Customer replied
+};
 // =============================================
 // PIPELINE CHAIN MAP
 // =============================================
@@ -108,15 +108,7 @@ const DATA_PROCESSORS: Record<string, Record<string, ProcessorFn>> = {
 //   rfq_analysis → supplier_search → email (contact suppliers)
 //   respond_service (all available) → quotation → email (send quotation)
 
-/** Internal routing map for incoming_email action_types → next pipeline target */
-const INCOMING_EMAIL_ROUTE: Record<string, PipelineStep> = {
-  handleRFQ:              { nextDataType: 'rfq_analysis',    nextActionType: 'analyze' },           // New RFQ detected
-  handleRespond: { nextDataType: 'respond_service', nextActionType: 'supplier_respond' },  // Supplier replied
-  handleUnknown:          { nextDataType: 'email',           nextActionType: 'generate' },           // Unclassified fallback
-};
-
 const PIPELINE_NEXT: Record<string, PipelineStep | null> = {
-  'incoming_email':  null,  // Routed internally via INCOMING_EMAIL_ROUTE (not pipeline chain)
   'rfq_analysis':    { nextDataType: 'supplier_search', nextActionType: 'search' },
   'supplier_search': { nextDataType: 'email',           nextActionType: 'generate' },
   'quotation':       { nextDataType: 'email',           nextActionType: 'generate' },
@@ -167,8 +159,15 @@ export async function handleHTTPRequest(input: ProcessorInput): Promise<Processo
 
     // Step 2: Validate input via Validator (checks data_type + action_type + structure)
     const validatedInput = validateInput(input);
-    dataType = validatedInput.data_type;
-    actionType = validatedInput.action_type;
+    
+    // If input is an incoming email, map it to the next routed step; otherwise keep original data/action types
+    const typeTransfer =
+      validatedInput.data_type === 'incoming_email'
+        ? INCOMING_EMAIL_ROUTE[validatedInput.action_type]
+        : undefined;
+
+    dataType = typeTransfer?.nextDataType ?? validatedInput.data_type;
+    actionType = typeTransfer?.nextActionType ?? validatedInput.action_type;
 
     // Step 2.5: Resolve workspace from auth cookie (server action context)
     // SECURITY: Always prefer cookie-based auth to prevent tenant impersonation
@@ -272,10 +271,10 @@ export async function handleHTTPRequest(input: ProcessorInput): Promise<Processo
  */
 async function executePipelineChain(input: ProcessorInput): Promise<ProcessorResult> {
   const { data_type, workspace } = input;
-
   // Look up what comes next in the pipeline
-  const nextStep = PIPELINE_NEXT[data_type];
-  if (!nextStep) {
+  const typeTransfer =  PIPELINE_NEXT[data_type];
+
+  if (!typeTransfer) {
     // No next step defined — this data_type is terminal or handled internally
     return {
       success: true,
@@ -297,27 +296,30 @@ async function executePipelineChain(input: ProcessorInput): Promise<ProcessorRes
   }
 
   // Use data-loader to build a complete ProcessorInput for the next step
+  // Passes action_type directly so the 2-level PAYLOAD_LOADERS map can route correctly
   const nextInput = await loadProcessorInput({
-    data_type: nextStep.nextDataType,
+    data_type: typeTransfer.nextDataType,
+    action_type: typeTransfer.nextActionType,
     rfq_id: rfqId,
+    quotation_id: input.quotation_id,  // Forward quotation_id if present
+    email_id: input.email?.email_id,   // Forward email_id if present
     workspace,
-    overrides: { action_type: nextStep.nextActionType },
   });
 
   // Look up the processor for the next data_type + action_type (2-level)
-  const nextTypeProcessors = DATA_PROCESSORS[nextStep.nextDataType];
+  const nextTypeProcessors = DATA_PROCESSORS[typeTransfer.nextDataType];
   if (!nextTypeProcessors) {
-    throw new Error(`No processor group for pipeline next step: ${nextStep.nextDataType}`);
+    throw new Error(`No processor group for pipeline next step: ${typeTransfer.nextDataType}`);
   }
-  const nextProcessor = nextTypeProcessors[nextStep.nextActionType];
+  const nextProcessor = nextTypeProcessors[typeTransfer.nextActionType];
   if (!nextProcessor) {
     throw new Error(
-      `No processor for pipeline step: ${nextStep.nextDataType}:${nextStep.nextActionType}`
+      `No processor for pipeline step: ${typeTransfer.nextDataType}:${typeTransfer.nextActionType}`
     );
   }
 
   // Normalize if chaining into quotation
-  const finalInput = nextStep.nextDataType === 'quotation'
+  const finalInput = typeTransfer.nextDataType === 'quotation'
     ? normalizeQuotationData(nextInput)
     : nextInput;
 
@@ -343,9 +345,7 @@ function emitProcessorResult(result: ProcessorResult, dataType: DataType, input:
   // Emit comms-update for incoming_email routing notifications
   if (dataType === 'incoming_email' && input.incoming_email) {
     const ie = input.incoming_email;
-    const routeType = input.action_type === 'handleUnknown'
-      ? 'incoming-email-unclassified'
-      : 'incoming-email-routed';
+    const routeType = 'incoming-email-routed';
     eventBus.emit('comms-update', {
       type: routeType,
       routedTo: result.data_type, // effective data_type after routing
@@ -391,7 +391,7 @@ function updateStats(actionType: string): void {
   if (['generate', 'analyze', 'search', 'proceed', 'handleRFQ'].includes(actionType)) {
     stats.totalGenerations++;
   }
-  if (['update', 'manual_update', 'send', 're_generate', 'reanalyze', 'research', 'supplier_respond', 'customer_respond', 'handleRespond', 'handleUnknown'].includes(actionType)) {
+  if (['update', 'manual_update', 'send', 're_generate', 'reanalyze', 'research', 'supplier_respond', 'customer_respond', 'handleSupplierRespond', 'handleCustomerRespond'].includes(actionType)) {
     stats.totalUpdates++;
   }
   stats.totalProcessed++;
