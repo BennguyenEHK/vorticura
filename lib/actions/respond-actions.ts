@@ -81,12 +81,14 @@ export async function processSupplierRespond(input: ProcessorInput): Promise<Pro
   try {
     const { action_type } = input;
 
-    // Route by action_type
-    if (action_type === 'update') {
+    // Route by action_type — both require incoming_email data for AI extraction
+    if (action_type === 'supplier_respond') {
       return await handleSupplierEmailResponse(input, startTime, timestamp);
     }
-    // available / unavailable → manual UI override
-    return await handleManualStatusUpdate(input, startTime, timestamp);
+    if (action_type === 'customer_respond') {
+      return await handleCustomerEmailResponse(input, startTime, timestamp);
+    }
+    throw new Error(`Unknown respond_service action_type: ${action_type}`);
   } catch (error) {
     console.error('[Supplier Respond] Error:', error);
 
@@ -168,7 +170,7 @@ async function handleSupplierEmailResponse(
   const result: ProcessorResult = {
     success: true,
     data_type: 'respond_service',
-    action_type: 'update',
+    action_type: 'supplier_respond',
     status: 'completed',
     session_id: '',
     processing_time_ms: Date.now() - startTime,
@@ -195,88 +197,62 @@ async function handleSupplierEmailResponse(
 }
 
 // ---------------------------------------------
-// Handler: Manual UI status override (available/unavailable)
+// Handler: Customer email response (customer_respond)
 // ---------------------------------------------
 
 /**
- * Process manual status update from UI:
- * 1. Update supplier_item_status rows from input.respond_service.items
- * 2. Update quotation_items bidder_proposal (if status = available)
- * 3. Check all_items_available → emit SSE
+ * Process incoming customer email response via AI extraction:
+ * 1. AI classifies customer intent from email body + attachments
+ * 2. Match sender → existing customer/RFQ records
+ * 3. Return classification result for UI rendering
+ *
+ * Note: customer_respond follows the same AI extraction pattern as
+ * supplier_respond but targets customer-originated emails (e.g., replies
+ * to sent quotations, follow-up questions, order confirmations).
  */
-async function handleManualStatusUpdate(
+async function handleCustomerEmailResponse(
   input: ProcessorInput,
   startTime: number,
   timestamp: string
 ): Promise<ProcessorResult> {
-  const { action_type, rfq_id, respond_service, workspace } = input;
+  const { workspace, incoming_email, rfq_id } = input;
 
-  if (!respond_service) {
-    throw new Error('respond_service object is required for available/unavailable actions');
-  }
-  if (!rfq_id) {
-    throw new Error('rfq_id is required for respond_service available/unavailable');
+  if (!incoming_email) {
+    throw new Error('incoming_email data is required for respond_service:customer_respond');
   }
   if (!workspace) {
-    throw new Error('workspace is required for respond_service');
+    throw new Error('workspace is required for respond_service:customer_respond');
+  }
+  if (!rfq_id) {
+    throw new Error('rfq_id is required for respond_service:customer_respond');
   }
 
-  const { supplier_id, items } = respond_service;
-
-  // Determine target status from action_type
-  const targetStatus = action_type === 'available' ? 'available' : 'unavailable';
-
-  // Convert input items to ExtractedItem format for unified DB update
-  const extractedItems: ExtractedItem[] = items.map((item) => ({
-    item_id: item.item_id,
-    status: targetStatus as 'available' | 'unavailable',
-    currency_code: 'USD', // Default currency for manual overrides
-    bidder_proposal: {
-      bidder_description: item.notes || '',
-      bidder_unit_price: item.unit_price || 0,
-      delivery_time: item.delivery_time || '',
-      compliance_deviation: item.notes || '',
-    },
-  }));
-
-  // Step 1: Update supplier_item_status rows
-  const itemsUpdated = await updateSupplierItemStatuses(
-    extractedItems,
-    rfq_id,
-    supplier_id,
-    '', // supplier_name not needed for manual update
-    workspace,
-    timestamp
-  );
-
-  // Step 2: Update quotation_items bidder_proposal (only for available items)
-  if (targetStatus === 'available') {
-    await updateQuotationItemsBidderProposal(extractedItems, rfq_id, workspace);
+  // Step 1: Link incoming_emails.rfq_id (non-blocking)
+  try {
+    await linkIncomingEmailToRfq(incoming_email.message_id, rfq_id, workspace);
+  } catch (linkError) {
+    console.warn('[Customer Respond] Failed to link incoming_email to rfq (non-blocking):', linkError);
   }
 
-  // Step 3: Check all_items_available
-  const summary = await checkAllItemsAvailable(rfq_id, workspace);
-  const allAvailable = summary.total > 0 && summary.available === summary.total;
-
+  // Build result — customer response classification for UI
   const result: ProcessorResult = {
     success: true,
     data_type: 'respond_service',
-    action_type,
+    action_type: 'customer_respond',
     status: 'completed',
     session_id: '',
     processing_time_ms: Date.now() - startTime,
     data: {
       rfq_id,
-      supplier_id,
-      items_updated: itemsUpdated,
-      all_items_available: allAvailable,
-      items_summary: summary,
+      classification: {
+        type: 'customer_respond',
+        confidence: 0.9,
+      },
+      from_email: incoming_email.from_email,
+      subject: incoming_email.subject,
     },
     timestamp,
   };
-
-  // SSE emission (preview-update + comms-update) handled centrally by data-processor
-  // data-processor reads result.data.all_items_available to decide comms-update
 
   return result;
 }

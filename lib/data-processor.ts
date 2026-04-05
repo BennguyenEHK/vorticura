@@ -87,14 +87,13 @@ const DATA_PROCESSORS: Record<string, Record<string, ProcessorFn>> = {
     research: processSupplierSearch,   // Re-search with user corrections
   },
   'incoming_email': {
-    handleRFQ: processAnalysis,                    // RFQ detected → processAnalysis handles incoming_email input
-    handleSuppliersRespond: processSupplierRespond, // Supplier response → processSupplierRespond handles incoming_email input
-    handleUnknown: processEmail,                   // Fallback → processEmail handles incoming_email input for UI report
+    handleRFQ: processAnalysis,                    // RFQ detected → routes to rfq_analysis:analyze
+    handleRespond: processSupplierRespond, // Supplier response → routes to respond_service:supplier_respond
+    handleUnknown: processEmail,                   // Unclassified → routes to email:generate
   },
   'respond_service': {
-    update: processSupplierRespond,       // AI parses supplier email → update item statuses + bidder_proposal
-    available: processSupplierRespond,    // Manual UI override: mark items as available
-    unavailable: processSupplierRespond,  // Manual UI override: mark items as unavailable
+    supplier_respond: processSupplierRespond, // Supplier replied to inquiry → AI parse + update item statuses
+    customer_respond: processSupplierRespond, // Customer replied to quotation → AI parse + route response
   },
 };
 
@@ -109,11 +108,15 @@ const DATA_PROCESSORS: Record<string, Record<string, ProcessorFn>> = {
 //   rfq_analysis → supplier_search → email (contact suppliers)
 //   respond_service (all available) → quotation → email (send quotation)
 
+/** Internal routing map for incoming_email action_types → next pipeline target */
+const INCOMING_EMAIL_ROUTE: Record<string, PipelineStep> = {
+  handleRFQ:              { nextDataType: 'rfq_analysis',    nextActionType: 'analyze' },           // New RFQ detected
+  handleRespond: { nextDataType: 'respond_service', nextActionType: 'supplier_respond' },  // Supplier replied
+  handleUnknown:          { nextDataType: 'email',           nextActionType: 'generate' },           // Unclassified fallback
+};
+
 const PIPELINE_NEXT: Record<string, PipelineStep | null> = {
-  'incoming_email':  null,  // Routed internally via DATA_PROCESSORS['incoming_email'] map:
-  // handleRFQ        → data_type: rfq_analysis, action_type: analyze
-  // handleSuppliersRespond → data_type: respond_service, action_type: classify_type
-  // handleUnknown    → data_type: email, action_type: generate
+  'incoming_email':  null,  // Routed internally via INCOMING_EMAIL_ROUTE (not pipeline chain)
   'rfq_analysis':    { nextDataType: 'supplier_search', nextActionType: 'search' },
   'supplier_search': { nextDataType: 'email',           nextActionType: 'generate' },
   'quotation':       { nextDataType: 'email',           nextActionType: 'generate' },
@@ -388,7 +391,7 @@ function updateStats(actionType: string): void {
   if (['generate', 'analyze', 'search', 'proceed', 'handleRFQ'].includes(actionType)) {
     stats.totalGenerations++;
   }
-  if (['update', 'manual_update', 'send', 're_generate', 'reanalyze', 'research', 'available', 'unavailable', 'handleSuppliersRespond', 'handleUnknown'].includes(actionType)) {
+  if (['update', 'manual_update', 'send', 're_generate', 'reanalyze', 'research', 'supplier_respond', 'customer_respond', 'handleRespond', 'handleUnknown'].includes(actionType)) {
     stats.totalUpdates++;
   }
   stats.totalProcessed++;

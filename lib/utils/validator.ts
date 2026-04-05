@@ -19,8 +19,8 @@ export type QuotationActionType = 'generate' | 'update' | 'manual_update' | 'cal
 export type EmailActionType = 'send' | 'generate' | 're_generate';
 export type RfqAnalysisActionType = 'analyze' | 'reanalyze';
 export type SupplierSearchActionType = 'search' | 'research';
-export type RespondServiceActionType = 'update' | 'available' | 'unavailable';
-export type IncomingEmailActionType = 'handleRFQ' | 'handleSuppliersRespond' | 'handleUnknown';
+export type RespondServiceActionType = 'supplier_respond' | 'customer_respond';
+export type IncomingEmailActionType = 'handleRFQ' | 'handleRespond' | 'handleUnknown';
 
 /** Universal action: 'proceed' = accept current result, move to next pipeline step */
 export type UniversalActionType = 'proceed';
@@ -232,14 +232,13 @@ const EXTRACTION_VALIDATE: Record<string, Record<string, ValidatorFn>> = {
     research: validateSuppliersSearch,  // Re-search with updated criteria
   },
   'respond_service': {
-    update: validateSupplierRespond,          // Parse supplier response email, update item statuses
-    available: validateSupplierRespond,       // Manual UI override: mark items available
-    unavailable: validateSupplierRespond,     // Manual UI override: mark items unavailable
+    supplier_respond: validateSupplierRespond,   // Supplier replied to inquiry → parse + update items
+    customer_respond: validateSupplierRespond,   // Customer replied to quotation → parse + route
   },
   'incoming_email': {
-    handleRFQ: validateIncomingEmail,              // RFQ detected → route to rfq_analysis
-    handleSuppliersRespond: validateIncomingEmail,  // Supplier response → route to respond_service
-    handleUnknown: validateIncomingEmail,          // No pattern matched → log only
+    handleRFQ: validateIncomingEmail,       // RFQ detected → route to rfq_analysis:analyze
+    handleRespond: validateIncomingEmail,   // Respond detected → route to respond_service:supplier_respond
+    handleUnknown: validateIncomingEmail,   // Unclassified → route to email:generate
   },
 };
 
@@ -679,64 +678,27 @@ function validateSuppliersSearch(input: ProcessorInput): ProcessorInput {
 // #############################################################################
 
 /**
- * Validate respond_service data_type (available, unavailable)
- * Checks: rfq_id required, respond_service object with items array
+ * Validate respond_service data_type (supplier_respond, customer_respond)
+ * Both action_types require incoming_email data (the raw email to classify and process)
+ * and rfq_id for linking to the correct RFQ context.
  * @param input - Raw input
  * @returns Validated input
  */
 function validateSupplierRespond(input: ProcessorInput): ProcessorInput {
   const { action_type } = input;
 
-  // 'update' action: AI parses incoming supplier email — requires incoming_email data
-  if (action_type === 'update') {
-    // incoming_email object carries the raw email for AI extraction
-    if (!input.incoming_email || typeof input.incoming_email !== 'object') {
-      throw new Error('incoming_email object is required for respond_service:update');
-    }
-    const ie = input.incoming_email;
-    if (!ie.from_email) throw new Error('incoming_email.from_email is required for respond_service:update');
-    if (!ie.email_body_text) throw new Error('incoming_email.email_body_text is required for respond_service:update');
-    return input;
+  // Both supplier_respond and customer_respond require incoming_email data
+  if (!input.incoming_email || typeof input.incoming_email !== 'object') {
+    throw new Error(`incoming_email object is required for respond_service:${action_type}`);
   }
+  const ie = input.incoming_email;
+  if (!ie.from_email) throw new Error(`incoming_email.from_email is required for respond_service:${action_type}`);
+  if (!ie.email_body_text) throw new Error(`incoming_email.email_body_text is required for respond_service:${action_type}`);
 
-  // 'available' / 'unavailable' actions: manual UI override — requires respond_service data
+  // rfq_id is required for linking the response to the correct RFQ
   if (!input.rfq_id) throw new Error('rfq_id is required for respond_service data_type');
   const rId = parseInt(String(input.rfq_id));
   if (isNaN(rId) || rId <= 0) throw new Error('rfq_id must be a positive integer');
-
-  // respond_service object is required for manual overrides
-  if (!input.respond_service || typeof input.respond_service !== 'object') {
-    throw new Error('respond_service object is required for respond_service data_type');
-  }
-
-  // supplier_id is required and must be a positive integer
-  if (!input.respond_service.supplier_id) {
-    throw new Error('respond_service.supplier_id is required');
-  }
-  const supplierId = parseInt(String(input.respond_service.supplier_id), 10);
-  if (isNaN(supplierId) || supplierId <= 0) {
-    throw new Error('respond_service.supplier_id must be a positive integer');
-  }
-
-  // items array is required and non-empty
-  if (!Array.isArray(input.respond_service.items) || input.respond_service.items.length === 0) {
-    throw new Error('respond_service.items must be a non-empty array');
-  }
-
-  // Validate each item in the response
-  input.respond_service.items.forEach((item, index) => {
-    // item_id is required and must be a positive integer
-    if (!item.item_id) {
-      throw new Error(`respond_service.items[${index}].item_id is required`);
-    }
-    const itemId = parseInt(String(item.item_id), 10);
-    if (isNaN(itemId) || itemId <= 0) {
-      throw new Error(`respond_service.items[${index}].item_id must be a positive integer`);
-    }
-    if (!['available', 'unavailable'].includes(item.status)) {
-      throw new Error(`respond_service.items[${index}].status must be 'available' or 'unavailable'`);
-    }
-  });
 
   return input;
 }
