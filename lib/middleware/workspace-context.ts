@@ -1,5 +1,5 @@
 // =============================================
-// 🔐 WORKSPACE CONTEXT MANAGER
+// WORKSPACE CONTEXT MANAGER
 // =============================================
 // Purpose: Manage user workspace context for tenant isolation
 // Provides: getDatabaseFilter, injectWorkspaceContext, buildWhereClause
@@ -15,7 +15,7 @@ import { PgTable } from 'drizzle-orm/pg-core'; // PostgreSQL table type
  * Provides methods to generate database filters based on workspace mode
  */
 export class WorkspaceContext {
-  public readonly client_id: number;
+  public readonly user_id: number;      // renamed from client_id
   public readonly company_id: number;
   public readonly username: string;
   public readonly role: string;
@@ -26,17 +26,17 @@ export class WorkspaceContext {
    * @param user - User object with tenant identifiers
    */
   constructor(user: {
-    client_id: number;
+    user_id: number;       // renamed from client_id
     company_id: number;
     username?: string;
     role?: string;
   }) {
     // Validate required fields for tenant isolation (allow falsy but valid ids like 0)
-    if (user.client_id == null || user.company_id == null) {
-      throw new Error('WorkspaceContext requires client_id and company_id');
+    if (user.user_id == null || user.company_id == null) {
+      throw new Error('WorkspaceContext requires user_id and company_id');
     }
 
-    this.client_id = user.client_id;
+    this.user_id = user.user_id;
     this.company_id = user.company_id;
     this.username = user.username || 'Unknown';
     this.role = user.role || 'user';
@@ -46,17 +46,17 @@ export class WorkspaceContext {
   /**
    * Build database filter conditions based on workspace mode
    * Phase 1 (Shared): Returns { company_id: 1 }
-   * Phase 2 (Individual): Returns { company_id: 1, client_id: 5 }
+   * Phase 2 (Individual): Returns { company_id: 1, user_id: 5 }
    * @returns Filter object for database queries
    */
-  getDatabaseFilter(): { company_id: number; client_id?: number } {
-    const filter: { company_id: number; client_id?: number } = {
+  getDatabaseFilter(): { company_id: number; user_id?: number } {
+    const filter: { company_id: number; user_id?: number } = {
       company_id: this.company_id,
     };
 
-    // Add client_id when isolation is enabled (Phase 2)
+    // Add user_id when isolation is enabled (Phase 2)
     if (workspaceConfig.isClientIsolationEnabled()) {
-      filter.client_id = this.client_id;
+      filter.user_id = this.user_id;
     }
 
     return filter;
@@ -64,15 +64,15 @@ export class WorkspaceContext {
 
   /**
    * Inject workspace context into data for INSERT operations
-   * Uses camelCase keys (companyId, clientId) to match Drizzle column definitions
+   * Uses camelCase keys (companyId, userId) to match Drizzle column definitions
    * @param data - Data object to inject context into
    * @returns Data object with workspace context injected
    */
-  injectWorkspaceContext<T extends Record<string, unknown>>(data: T): T & { companyId: number; clientId: number } {
+  injectWorkspaceContext<T extends Record<string, unknown>>(data: T): T & { companyId: number; userId: number } {
     return {
       ...data,
       companyId: this.company_id,   // camelCase to match Drizzle schema column keys
-      clientId: this.client_id,     // camelCase to match Drizzle schema column keys
+      userId: this.user_id,         // renamed from clientId → userId
     };
   }
 
@@ -84,7 +84,7 @@ export class WorkspaceContext {
     return {
       type: workspaceConfig.getWorkspaceMode(),
       company_id: this.company_id,
-      client_id: this.client_id,
+      user_id: this.user_id,  // renamed from client_id
       isolation_enabled: workspaceConfig.isClientIsolationEnabled(),
       user: {
         username: this.username,
@@ -95,7 +95,6 @@ export class WorkspaceContext {
 
   /**
    * Check if user has permission for a specific action
-   * Changed from 'quotation' to 'records' as per requirement
    * @param action - Permission action to check
    * @returns Boolean indicating if user has permission
    */
@@ -103,7 +102,7 @@ export class WorkspaceContext {
     // Admin has all permissions
     if (this.role === 'admin') return true;
 
-    // Define role-based permissions (using 'records' instead of 'quotation')
+    // Define role-based permissions
     const permissions: Record<string, string[]> = {
       user: ['view_records', 'create_records', 'update_records'],
       manager: ['view_records', 'create_records', 'update_records', 'delete_records'],
@@ -120,13 +119,13 @@ export class WorkspaceContext {
    * @param data - Data object with tenant identifiers
    * @returns Boolean indicating if data belongs to workspace
    */
-  verifyOwnership(data: { company_id: number; client_id?: number }): boolean {
+  verifyOwnership(data: { company_id: number; user_id?: number }): boolean {
     // Always check company_id
     if (data.company_id !== this.company_id) return false;
 
-    // Check client_id if isolation enabled and client_id exists in data
-    if (workspaceConfig.isClientIsolationEnabled() && data.client_id) {
-      return data.client_id === this.client_id;
+    // Check user_id if isolation enabled and user_id exists in data
+    if (workspaceConfig.isClientIsolationEnabled() && data.user_id) {
+      return data.user_id === this.user_id;
     }
 
     return true;
@@ -148,23 +147,17 @@ export class WorkspaceContext {
 
   /**
    * Build workspace WHERE clause for Drizzle queries
-   * Combines workspace filters (company_id, client_id) with additional conditions
+   * Combines workspace filters (company_id, user_id) with additional conditions
    * @param table - Drizzle table definition to build WHERE clause for
    * @param additionalFilters - Optional array of additional SQL conditions
    * @returns Combined SQL filter or undefined if no filters
-   *
-   * @example
-   * const whereClause = workspace.buildWhereClause(quotations, [
-   *   eq(quotations.quotation_id, 123)
-   * ]);
-   * const results = await db.select().from(quotations).where(whereClause);
    */
   buildWhereClause<T extends PgTable>(
     table: T,
     additionalFilters?: SQL[]
   ): SQL | undefined {
     const filters: SQL[] = [];
-    const baseFilter = this.getDatabaseFilter(); // Get workspace filter { company_id, client_id? }
+    const baseFilter = this.getDatabaseFilter(); // Get workspace filter { company_id, user_id? }
 
     // Validate that tenant columns exist on the provided table (camelCase = Drizzle column keys)
     if (baseFilter.company_id !== undefined && !('companyId' in table)) {
@@ -174,10 +167,10 @@ export class WorkspaceContext {
       );
     }
 
-    if (baseFilter.client_id !== undefined && !('clientId' in table)) {
+    if (baseFilter.user_id !== undefined && !('userId' in table)) {
       console.warn(
-        `buildWhereClause: table is missing 'clientId' column required by workspace filter. ` +
-        `Table must include clientId for client-level tenant isolation.`
+        `buildWhereClause: table is missing 'userId' column required by workspace filter. ` +
+        `Table must include userId for user-level tenant isolation.`
       );
     }
 
@@ -186,9 +179,9 @@ export class WorkspaceContext {
       filters.push(eq((table as Record<string, unknown>).companyId as Parameters<typeof eq>[0], baseFilter.company_id));
     }
 
-    // Add clientId filter if isolation is enabled (Phase 2)
-    if (baseFilter.client_id !== undefined && 'clientId' in table) {
-      filters.push(eq((table as Record<string, unknown>).clientId as Parameters<typeof eq>[0], baseFilter.client_id));
+    // Add userId filter if isolation is enabled (Phase 2)
+    if (baseFilter.user_id !== undefined && 'userId' in table) {
+      filters.push(eq((table as Record<string, unknown>).userId as Parameters<typeof eq>[0], baseFilter.user_id));
     }
 
     // Add user-provided additional filters

@@ -108,14 +108,14 @@ export function buildQuotationPayload(data: Record<string, unknown>, update = fa
 }
 
 /**
- * Build quotation items payload for QUOTATION_ITEMS table
- * Supports nested company_requirement/bidder_proposal or flat fields
+ * Build RFQ items payload for RFQ_ITEMS table
+ * Supports nested company_requirement or flat fields
  */
 export function buildQuotationItemsPayload(data: Record<string, unknown>, update = false): Payload {
   const payload: Payload = {};
 
   // PK/FK — exclude on UPDATE
-  if (!update && data.quotation_id != null) payload.quotationId = data.quotation_id;
+  if (!update && data.rfq_id != null) payload.rfqId = data.rfq_id;
   if (!update && data.item_id != null) {
     const itemId = parseInt(String(data.item_id), 10);
     if (isNaN(itemId) || itemId < 1) throw new Error('Invalid item_id: must be positive integer');
@@ -132,20 +132,6 @@ export function buildQuotationItemsPayload(data: Record<string, unknown>, update
 
   if (companyReq.uom != null) payload.uom = String(companyReq.uom);
   else if (data.uom != null) payload.uom = String(data.uom);
-
-  // Extract from nested bidder_proposal or flat fallback
-  const bidderProposal = (data.bidder_proposal || {}) as Record<string, unknown>;
-  if (bidderProposal.bidder_description != null) payload.bidderDescription = String(bidderProposal.bidder_description);
-  else if (data.bidder_description != null) payload.bidderDescription = String(data.bidder_description);
-
-  if (bidderProposal.bidder_unit_price != null) payload.bidderUnitPrice = String(parseFloat(String(bidderProposal.bidder_unit_price)));
-  else if (data.bidder_unit_price != null) payload.bidderUnitPrice = String(parseFloat(String(data.bidder_unit_price)));
-
-  if (bidderProposal.delivery_time != null) payload.deliveryTime = String(bidderProposal.delivery_time);
-  else if (data.delivery_time != null) payload.deliveryTime = String(data.delivery_time);
-
-  if (bidderProposal.compliance_deviation != null) payload.complianceDeviation = String(bidderProposal.compliance_deviation);
-  else if (data.compliance_deviation != null) payload.complianceDeviation = String(data.compliance_deviation);
 
   // Root-level currency
   if (data.currency_code != null) payload.currencyCode = String(data.currency_code);
@@ -282,8 +268,11 @@ export function buildSupplierItemStatusPayload(data: Record<string, unknown>, up
   if (data.source_url != null) payload.sourceUrl = String(data.source_url);
   // Status: 'pending' | 'available' | 'unavailable'
   if (data.status != null) payload.status = String(data.status);
-  if (data.unit_price != null) payload.unitPrice = String(data.unit_price);
+  if (data.bidder_unit_price != null) payload.bidderUnitPrice = String(data.bidder_unit_price);
+  else if (data.unit_price != null) payload.bidderUnitPrice = String(data.unit_price);
   if (data.delivery_time != null) payload.deliveryTime = String(data.delivery_time);
+  if (data.bidder_description != null) payload.bidderDescription = String(data.bidder_description);
+  if (data.compliance_deviation != null) payload.complianceDeviation = String(data.compliance_deviation);
   if (data.notes != null) payload.notes = String(data.notes);
   if (data.responded_at != null) payload.respondedAt = data.responded_at;
 
@@ -291,9 +280,9 @@ export function buildSupplierItemStatusPayload(data: Record<string, unknown>, up
 }
 
 /**
- * Build client company payload for CLIENT_COMPANY table
+ * Build user company payload for USER_COMPANY table
  */
-export function buildClientCompanyPayload(data: Record<string, unknown>): Payload {
+export function buildUserCompanyPayload(data: Record<string, unknown>): Payload {
   const payload: Payload = {};
 
   if (data.company_name != null) payload.companyName = String(data.company_name);
@@ -435,13 +424,13 @@ export async function checkDataExists(
     // Map snake_case table names to camelCase keys used by queries.ts getTableByName()
     const tableNameMap: Record<string, string> = {
       'quotations': 'quotations',
-      'quotation_items': 'quotationItems',
+      'rfq_items': 'rfqItems',
       'quotation_pricing': 'quotationPricing',
       'customers': 'customers',
       'email_table': 'emailTable',
       'rfq_analysis': 'rfqAnalysis',
       'supplier_search': 'supplierSearch',
-      'client_company': 'clientCompany',
+      'user_company': 'userCompany',
       'supplier_item_status': 'supplierItemStatus',
       'incoming_emails': 'incomingEmails',
     };
@@ -455,7 +444,7 @@ export async function checkDataExists(
     // Determine the correct lookup column based on table
     let filterColumn: string;
     switch (table) {
-      case 'client_company':
+      case 'user_company':
         filterColumn = 'companyId';
         break;
       case 'incoming_emails':
@@ -468,7 +457,7 @@ export async function checkDataExists(
         filterColumn = 'rfqId';
         break;
       default:
-        filterColumn = 'quotationId';    // quotations, quotation_items, quotation_pricing, email_table
+        filterColumn = 'quotationId';    // quotations, rfq_items, quotation_pricing, email_table
         break;
     }
 
@@ -570,28 +559,28 @@ async function handleQuotationWrite(
     }
   }
 
-  // --- STEP 3: QUOTATION_ITEMS table (iterate each item) ---
-  if (qd.quotation_items && qd.quotation_items.length > 0 && qd.quotation_id) {
+  // --- STEP 3: RFQ_ITEMS table (iterate each item) ---
+  if (qd.quotation_items && qd.quotation_items.length > 0 && qd.rfq_id) {
     for (const item of qd.quotation_items) {
       const itemId = item.item_id ? parseInt(String(item.item_id), 10) : null;
       let shouldInsert = true;
 
-      // Check existence by composite key: quotation_id + item_id
+      // Check existence by composite key: rfq_id + item_id
       if (itemId) {
         const existingItem = await getData(
-          'quotationItems',
-          { quotationId: qd.quotation_id!, itemId },
+          'rfqItems',
+          { rfqId: qd.rfq_id!, itemId },
           workspace
         );
 
         if (existingItem.length > 0) {
           const payload = buildQuotationItemsPayload(
-            { ...item, quotation_id: qd.quotation_id } as Record<string, unknown>,
+            { ...item, rfq_id: qd.rfq_id } as Record<string, unknown>,
             true
           );
           await updateData(
-            'quotationItems',
-            { quotationId: qd.quotation_id!, itemId },
+            'rfqItems',
+            { rfqId: qd.rfq_id!, itemId },
             payload,
             workspace
           );
@@ -601,10 +590,10 @@ async function handleQuotationWrite(
       }
 
       if (shouldInsert) {
-        const itemData: Record<string, unknown> = { ...item, quotation_id: qd.quotation_id };
+        const itemData: Record<string, unknown> = { ...item, rfq_id: qd.rfq_id };
         if (itemId) itemData.item_id = itemId;
         const payload = buildQuotationItemsPayload(itemData, false);
-        await insertData('quotationItems', {}, payload, workspace);
+        await insertData('rfqItems', {}, payload, workspace);
         console.log(`[DB] Item inserted ${itemId ? `(id: ${itemId})` : '(auto-ID)'}`);
       }
     }

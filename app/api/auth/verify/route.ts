@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       valid: true,
       user: {
-        client_id: workspace.client_id,
+        user_id: workspace.user_id,
         company_id: workspace.company_id,
         username: workspace.username,
         role: workspace.role,

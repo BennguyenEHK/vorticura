@@ -27,9 +27,9 @@ import { customType } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 // ============================================
-// 1. CLIENT_COMPANY TABLE
+// 1. USER_COMPANY TABLE (renamed from client_company)
 // ============================================
-export const clientCompany = pgTable('client_company', {
+export const userCompany = pgTable('user_company', {
   // Primary key - Auto-incrementing company ID
   companyId: serial('company_id').primaryKey(),
 
@@ -48,14 +48,14 @@ export const clientCompany = pgTable('client_company', {
 });
 
 // ============================================
-// 2. CLIENT_INFO TABLE
+// 2. USER_INFO TABLE (renamed from client_info)
 // ============================================
-export const clientInfo = pgTable('client_info', {
-  // Primary key - Auto-incrementing client ID
-  clientId: serial('client_id').primaryKey(),
+export const userInfo = pgTable('user_info', {
+  // Primary key - Auto-incrementing user ID (renamed from client_id)
+  userId: serial('user_id').primaryKey(),
 
   // Foreign key reference to company
-  companyId: integer('company_id').references(() => clientCompany.companyId),
+  companyId: integer('company_id').references(() => userCompany.companyId),
 
   // Authentication credentials
   username: varchar('username', { length: 50 }).notNull(),
@@ -67,14 +67,14 @@ export const clientInfo = pgTable('client_info', {
   oauthProviderId: varchar('oauth_provider_id', { length: 255 }), // Provider's unique user ID
 
   // User role and permissions
-  clientRole: varchar('client_role', { length: 30 }).default('user'),
+  userRole: varchar('user_role', { length: 30 }).default('user'),  // renamed from client_role
   permissions: text('permissions'),
 
   // Session tracking
   lastLogin: timestamp('last_login', { withTimezone: false }),
 
   // User status
-  clientStatus: varchar('client_status', { length: 20 }).default('active'),
+  userStatus: varchar('user_status', { length: 20 }).default('active'), // renamed from client_status
 
   // Timestamps
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
@@ -91,8 +91,8 @@ export const rfqAnalysis = pgTable('rfq_analysis', {
   rfqId: serial('rfq_id').primaryKey(),
 
   // Foreign keys — company_id is NOT NULL tenant FK
-  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
-  clientId: integer('client_id'),
+  companyId: integer('company_id').notNull().references(() => userCompany.companyId),
+  userId: integer('user_id'),  // renamed from client_id
 
   // RFQ identification — NOT NULL
   rfqReference: varchar('rfq_reference', { length: 100 }).notNull(),
@@ -122,8 +122,8 @@ export const quotations = pgTable('quotations', {
   rfqId: integer('rfq_id').notNull().references(() => rfqAnalysis.rfqId, { onDelete: 'cascade' }),
 
   // Foreign keys — company_id is NOT NULL tenant FK
-  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
-  clientId: integer('client_id'),
+  companyId: integer('company_id').notNull().references(() => userCompany.companyId),
+  userId: integer('user_id'),  // renamed from client_id
 
   // Quotation identification
   rfqReference: varchar('rfq_reference', { length: 100 }),
@@ -167,8 +167,8 @@ export const customers = pgTable('customers', {
   rfqId: integer('rfq_id').references(() => rfqAnalysis.rfqId, { onDelete: 'cascade' }),
 
   // Foreign keys — company_id NOT NULL
-  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
-  clientId: integer('client_id'),
+  companyId: integer('company_id').notNull().references(() => userCompany.companyId),
+  userId: integer('user_id'),  // renamed from client_id
 
   // Customer company information
   companyName: varchar('company_name', { length: 255 }).notNull(),
@@ -202,9 +202,9 @@ export const emailTable = pgTable('email_table', {
   rfqId: integer('rfq_id').references(() => rfqAnalysis.rfqId, { onDelete: 'set null' }),
 
   // Foreign keys
-  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
+  companyId: integer('company_id').notNull().references(() => userCompany.companyId),
   quotationId: integer('quotation_id').references(() => quotations.quotationId, { onDelete: 'set null' }),
-  clientId: integer('client_id'),
+  userId: integer('user_id'),  // renamed from client_id
 
   // Email metadata
   rfqReference: varchar('rfq_reference', { length: 100 }),
@@ -250,8 +250,8 @@ export const fileMetadata = pgTable('file_metadata', {
   quotationId: integer('quotation_id').references(() => quotations.quotationId, { onDelete: 'set null' }),
 
   // Foreign keys — company_id NOT NULL
-  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
-  clientId: integer('client_id'),
+  companyId: integer('company_id').notNull().references(() => userCompany.companyId),
+  userId: integer('user_id'),  // renamed from client_id
 
   // File information
   fileName: varchar('file_name', { length: 255 }).notNull(),
@@ -272,31 +272,28 @@ export const fileMetadata = pgTable('file_metadata', {
 });
 
 // ============================================
-// 8. QUOTATION_ITEMS TABLE
+// 8. RFQ_ITEMS TABLE (renamed from quotation_items)
 // ============================================
-export const quotationItems = pgTable('quotation_items', {
+// Now linked to rfq_analysis instead of quotations.
+// Bidder fields (bidder_description, bidder_unit_price, delivery_time, compliance_deviation)
+// moved to supplier_item_status table.
+export const rfqItems = pgTable('rfq_items', {
   // Primary key - Auto-incrementing item ID
   itemId: serial('item_id').primaryKey(),
 
-  // Foreign keys — company_id NOT NULL, quotation_id FK
-  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
-  quotationId: integer('quotation_id').notNull().references(() => quotations.quotationId, { onDelete: 'cascade' }),
-  clientId: integer('client_id'),
+  // Foreign keys — company_id NOT NULL, rfq_id FK (renamed from quotation_id)
+  companyId: integer('company_id').notNull().references(() => userCompany.companyId),
+  rfqId: integer('rfq_id').notNull().references(() => rfqAnalysis.rfqId, { onDelete: 'cascade' }),
+  userId: integer('user_id'),  // renamed from client_id
 
-  // Item descriptions
+  // Item descriptions (company requirement only — bidder fields moved to supplier_item_status)
   companyDescription: text('company_description'),
-  bidderDescription: text('bidder_description'),
 
-  // Quantity and pricing
+  // Quantity and unit of measure
   qty: numeric('qty', { precision: 10, scale: 0 }),
-  bidderUnitPrice: numeric('bidder_unit_price', { precision: 12, scale: 2 }),
-
-  // Unit of measure and delivery
   uom: varchar('uom', { length: 20 }),
-  deliveryTime: varchar('delivery_time', { length: 50 }),
 
-  // Compliance and currency
-  complianceDeviation: text('compliance_deviation'),
+  // Currency
   currencyCode: varchar('currency_code', { length: 3 }),
 
   // Timestamps
@@ -311,9 +308,9 @@ export const quotationPricing = pgTable('quotation_pricing', {
   itemId: serial('item_id').primaryKey(),
 
   // Foreign keys — company_id NOT NULL, quotation_id FK
-  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
+  companyId: integer('company_id').notNull().references(() => userCompany.companyId),
   quotationId: integer('quotation_id').notNull().references(() => quotations.quotationId, { onDelete: 'cascade' }),
-  clientId: integer('client_id'),
+  userId: integer('user_id'),  // renamed from client_id
 
   // Pricing calculations
   shippingCost: numeric('shipping_cost', { precision: 15, scale: 2 }),
@@ -402,8 +399,8 @@ export const supplierSearch = pgTable('supplier_search', {
   rfqId: integer('rfq_id').notNull().references(() => rfqAnalysis.rfqId, { onDelete: 'cascade' }),
 
   // Foreign keys — company_id NOT NULL
-  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
-  clientId: integer('client_id'),
+  companyId: integer('company_id').notNull().references(() => userCompany.companyId),
+  userId: integer('user_id'),  // renamed from client_id
 
   // Search identification
   rfqReference: varchar('rfq_reference', { length: 100 }),
@@ -434,8 +431,8 @@ export const supplierItemStatus = pgTable('supplier_item_status', {
   // FK → rfq_analysis (groups all items for one RFQ)
   rfqId: integer('rfq_id').notNull().references(() => rfqAnalysis.rfqId, { onDelete: 'cascade' }),
 
-  // FK → quotation_items (which specific item)
-  itemId: integer('item_id').references(() => quotationItems.itemId),
+  // FK → rfq_items (which specific item)
+  itemId: integer('item_id').references(() => rfqItems.itemId),
 
   // Supplier identification
   supplierId: integer('supplier_id'),
@@ -447,9 +444,11 @@ export const supplierItemStatus = pgTable('supplier_item_status', {
   // Item status: 'pending' | 'available' | 'unavailable'
   status: varchar('status', { length: 20 }).default('pending').notNull(),
 
-  // Supplier's quoted price and delivery for this item
-  unitPrice: numeric('unit_price', { precision: 15, scale: 4 }),
-  deliveryTime: varchar('delivery_time', { length: 100 }),
+  // Bidder proposal fields (moved from rfq_items)
+  bidderDescription: text('bidder_description'),                             // Supplier's product description
+  bidderUnitPrice: numeric('bidder_unit_price', { precision: 15, scale: 4 }), // Renamed from unit_price
+  deliveryTime: varchar('delivery_time', { length: 100 }),                    // Supplier's delivery estimate
+  complianceDeviation: text('compliance_deviation'),                          // Meets specs / deviations
 
   // Supplier notes/comments about this item
   notes: text('notes'),
@@ -458,8 +457,8 @@ export const supplierItemStatus = pgTable('supplier_item_status', {
   respondedAt: timestamp('responded_at', { withTimezone: false }),
 
   // Tenant isolation
-  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
-  clientId: integer('client_id'),
+  companyId: integer('company_id').notNull().references(() => userCompany.companyId),
+  userId: integer('user_id'),  // renamed from client_id
 
   // Timestamps
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
@@ -474,9 +473,9 @@ export const supplierItemStatus = pgTable('supplier_item_status', {
 export const userSessions = pgTable(
   'user_sessions',
   {
-    // Composite primary key (company_id, client_id)
+    // Composite primary key (company_id, user_id)
     companyId: integer('company_id').notNull(),
-    clientId: integer('client_id').notNull(),
+    userId: integer('user_id').notNull(),  // renamed from client_id
 
     // Last viewed item tracking
     lastViewedItemId: integer('last_viewed_item_id'),
@@ -492,7 +491,7 @@ export const userSessions = pgTable(
   },
   (table) => ({
     // Composite primary key definition
-    pk: primaryKey({ columns: [table.companyId, table.clientId] }),
+    pk: primaryKey({ columns: [table.companyId, table.userId] }),
   })
 );
 
@@ -507,8 +506,8 @@ export const workboardSnapshots = pgTable('workboard_snapshots', {
   rfqId: integer('rfq_id').notNull().references(() => rfqAnalysis.rfqId, { onDelete: 'cascade' }),
 
   // Tenant isolation
-  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
-  clientId: integer('client_id'),
+  companyId: integer('company_id').notNull().references(() => userCompany.companyId),
+  userId: integer('user_id'),  // renamed from client_id
 
   // Snapshot versioning
   version: integer('version').notNull(),
@@ -537,8 +536,8 @@ export const emailConnections = pgTable('email_connections', {
   connectionId: serial('connection_id').primaryKey(),
 
   // Foreign keys — tenant isolation
-  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
-  clientId: integer('client_id').notNull().references(() => clientInfo.clientId),
+  companyId: integer('company_id').notNull().references(() => userCompany.companyId),
+  userId: integer('user_id').notNull().references(() => userInfo.userId),  // renamed from client_id
 
   // Provider info
   provider: varchar('provider', { length: 20 }).notNull(),          // 'gmail' | 'outlook'
@@ -607,8 +606,8 @@ export const incomingEmails = pgTable('incoming_emails', {
   rfqId: integer('rfq_id').references(() => rfqAnalysis.rfqId, { onDelete: 'set null' }),
 
   // Tenant isolation
-  clientId: integer('client_id'),
-  companyId: integer('company_id').notNull().references(() => clientCompany.companyId),
+  userId: integer('user_id'),  // renamed from client_id
+  companyId: integer('company_id').notNull().references(() => userCompany.companyId),
 
   // Timestamps
   receivedAt: timestamp('received_at', { withTimezone: false }),
@@ -620,11 +619,11 @@ export const incomingEmails = pgTable('incoming_emails', {
 // TYPE EXPORTS
 // ============================================
 // Export inferred types for TypeScript usage
-export type ClientCompany = typeof clientCompany.$inferSelect;
-export type NewClientCompany = typeof clientCompany.$inferInsert;
+export type UserCompany = typeof userCompany.$inferSelect;
+export type NewUserCompany = typeof userCompany.$inferInsert;
 
-export type ClientInfo = typeof clientInfo.$inferSelect;
-export type NewClientInfo = typeof clientInfo.$inferInsert;
+export type UserInfo = typeof userInfo.$inferSelect;
+export type NewUserInfo = typeof userInfo.$inferInsert;
 
 export type Customer = typeof customers.$inferSelect;
 export type NewCustomer = typeof customers.$inferInsert;
@@ -635,8 +634,8 @@ export type NewEmail = typeof emailTable.$inferInsert;
 export type FileMetadata = typeof fileMetadata.$inferSelect;
 export type NewFileMetadata = typeof fileMetadata.$inferInsert;
 
-export type QuotationItem = typeof quotationItems.$inferSelect;
-export type NewQuotationItem = typeof quotationItems.$inferInsert;
+export type RfqItem = typeof rfqItems.$inferSelect;
+export type NewRfqItem = typeof rfqItems.$inferInsert;
 
 export type QuotationPricing = typeof quotationPricing.$inferSelect;
 export type NewQuotationPricing = typeof quotationPricing.$inferInsert;

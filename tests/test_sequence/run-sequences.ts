@@ -27,7 +27,7 @@ import { pool } from '@/lib/db/client';
 // =============================================
 
 const workspace = new WorkspaceContext({
-  client_id: 1,
+  user_id: 1,       // renamed from client_id
   company_id: 1,
   username: 'test-runner',
   role: 'admin',
@@ -378,24 +378,24 @@ const TEST_CASES: TestCase[] = [
 // =============================================
 
 /**
- * Insert client_company row (company_id=1) if it doesn't exist.
+ * Insert user_company row (company_id=1) if it doesn't exist.
  * This is the FK parent for all tenant tables.
  */
-async function ensureClientCompany(): Promise<void> {
-  const existing = await getData('clientCompany', { companyId: 1 }, workspace);
+async function ensureUserCompany(): Promise<void> {
+  const existing = await getData('userCompany', { companyId: 1 }, workspace);
   if (existing.length > 0) {
-    console.log(`${DIM}  [setup] client_company (id=1) already exists${RESET}`);
+    console.log(`${DIM}  [setup] user_company (id=1) already exists${RESET}`);
     return;
   }
 
-  // Insert a minimal client_company row
-  await insertData('clientCompany', {}, {
+  // Insert a minimal user_company row
+  await insertData('userCompany', {}, {
     companyName: 'Test Engineering Pte Ltd.',
     companyNumber: 'REG-TEST-001',
     companyAddress: '100 Cecil Street, #10-01, Singapore 049710',
     companyEmail: 'sales@testengineering.com',
   }, workspace);
-  console.log(`${GREEN}  [setup] client_company (id=1) inserted${RESET}`);
+  console.log(`${GREEN}  [setup] user_company (id=1) inserted${RESET}`);
 }
 
 // =============================================
@@ -422,7 +422,7 @@ async function runTests(): Promise<void> {
 
   // SETUP: ensure FK parent exists
   try {
-    await ensureClientCompany();
+    await ensureUserCompany();
   } catch (err) {
     console.error(`${RED}SETUP FAILED: ${err}${RESET}`);
     await pool.end();

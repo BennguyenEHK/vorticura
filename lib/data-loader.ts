@@ -190,8 +190,8 @@ async function loadQuotationInput(
 }
 
 /**
- * Load supplier respond input from supplierItemStatus table.
- * Returns all items for the given RFQ so the supplier_respond
+ * Load respond service input from supplierItemStatus table.
+ * Returns all items for the given RFQ so the respond_service
  * processor can update their availability status.
  */
 async function loadSupplierRespondInput(
@@ -204,7 +204,7 @@ async function loadSupplierRespondInput(
     workspace
   );
 
-  // Map DB rows to the supplier_respond items shape
+  // Map DB rows to the respond_service items shape
   const items = supplierItems.map((item) => ({
     item_id: item.itemId ?? 0,
     status: (item.status as 'available' | 'unavailable') ?? 'pending',
@@ -215,7 +215,7 @@ async function loadSupplierRespondInput(
 
   return {
     rfq_id: rfqId,
-    supplier_respond: {
+    respond_service: {
       rfq_id: rfqId,
       supplier_id: 0,
       items,
@@ -235,7 +235,7 @@ const DATA_LOADERS: Record<DataType, LoaderFn> = {
   supplier_search: loadSupplierSearchInput,
   email: loadEmailInput,
   quotation: loadQuotationInput,
-  supplier_respond: loadSupplierRespondInput,
+  respond_service: loadSupplierRespondInput,
   // incoming_email is classified internally (no pipeline chain loads into it)
   incoming_email: async () => ({}),
 };

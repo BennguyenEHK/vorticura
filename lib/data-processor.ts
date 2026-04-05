@@ -5,7 +5,7 @@
 // =============================================
 // Server action entry point for all UI → server communication
 // Input: JSON structured data → Output: JSON structured result
-// Supports: quotation, email, rfq_analysis, supplier_search, supplier_respond, incoming_email
+// Supports: quotation, email, rfq_analysis, supplier_search, respond_service, incoming_email
 //
 // Architecture:
 //   UI Component → handleHTTPRequest(ProcessorInput)
@@ -30,7 +30,7 @@ import { processQuotation } from './actions/quotation-actions';
 import { processEmail } from './actions/email-actions';
 import { processSupplierSearch } from './actions/supplier-search-actions';
 import { processAnalysis } from './actions/analysis-actions';
-import { processSupplierRespond } from './actions/supplier-respond-actions';
+import { processSupplierRespond } from './actions/respond-actions';
 import { eventBus } from './event-bus';
 
 // ========== WORKSPACE RESOLUTION ==========
@@ -91,7 +91,7 @@ const DATA_PROCESSORS: Record<string, Record<string, ProcessorFn>> = {
     handleSuppliersRespond: processSupplierRespond, // Supplier response → processSupplierRespond handles incoming_email input
     handleUnknown: processEmail,                   // Fallback → processEmail handles incoming_email input for UI report
   },
-  'supplier_respond': {
+  'respond_service': {
     update: processSupplierRespond,       // AI parses supplier email → update item statuses + bidder_proposal
     available: processSupplierRespond,    // Manual UI override: mark items as available
     unavailable: processSupplierRespond,  // Manual UI override: mark items as unavailable
@@ -107,15 +107,18 @@ const DATA_PROCESSORS: Record<string, Record<string, ProcessorFn>> = {
 //
 // Pipeline flow:
 //   rfq_analysis → supplier_search → email (contact suppliers)
-//   supplier_respond (all available) → quotation → email (send quotation)
+//   respond_service (all available) → quotation → email (send quotation)
 
 const PIPELINE_NEXT: Record<string, PipelineStep | null> = {
-  'incoming_email':  null,  // Handled internally — routes to rfq_analysis or supplier_respond
+  'incoming_email':  null,  // Routed internally via DATA_PROCESSORS['incoming_email'] map:
+  // handleRFQ        → data_type: rfq_analysis, action_type: analyze
+  // handleSuppliersRespond → data_type: respond_service, action_type: classify_type
+  // handleUnknown    → data_type: email, action_type: generate
   'rfq_analysis':    { nextDataType: 'supplier_search', nextActionType: 'search' },
   'supplier_search': { nextDataType: 'email',           nextActionType: 'generate' },
   'quotation':       { nextDataType: 'email',           nextActionType: 'generate' },
   'email':           null, // Terminal — no automatic next step after email send
-  'supplier_respond': null, // Complex logic — handled inside processor (check all items status)
+  'respond_service': null, // Complex logic — handled inside processor (check all items status)
 };
 
 // =============================================
@@ -328,7 +331,7 @@ async function executePipelineChain(input: ProcessorInput): Promise<ProcessorRes
 /**
  * Emit SSE events based on processor result and input context.
  * Handles: preview-update for all results, comms-update for incoming_email routing
- * and supplier_respond all-items-available notifications.
+ * and respond_service all-items-available notifications.
  */
 function emitProcessorResult(result: ProcessorResult, dataType: DataType, input: ProcessorInput): void {
   // Always emit preview-update for UI real-time rendering
@@ -349,7 +352,7 @@ function emitProcessorResult(result: ProcessorResult, dataType: DataType, input:
     });
   }
 
-  // Emit all-items-available when supplier_respond indicates readiness for quotation
+  // Emit all-items-available when respond_service indicates readiness for quotation
   const resultData = result.data as Record<string, unknown> | undefined;
   if (resultData?.all_items_available === true) {
     eventBus.emit('comms-update', {

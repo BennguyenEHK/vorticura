@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { hash } from 'bcryptjs';
 import { db } from '@/lib/db/client';
-import { clientInfo, clientCompany } from '@/lib/db/schema';
+import { userInfo, userCompany } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { generateJWT } from '@/lib/middleware/auth-helpers';
 
@@ -65,9 +65,9 @@ export async function POST(request: NextRequest) {
 
     // Check if username already exists in database
     const existingUser = await db
-      .select({ clientId: clientInfo.clientId })
-      .from(clientInfo)
-      .where(eq(clientInfo.username, body.username))
+      .select({ userId: userInfo.userId })
+      .from(userInfo)
+      .where(eq(userInfo.username, body.username))
       .limit(1);
 
     if (existingUser.length > 0) {
@@ -81,14 +81,14 @@ export async function POST(request: NextRequest) {
     const passwordHash = await hash(body.password, 10);
 
     // Wrap company and user creation in a single transaction
-    let newCompany: typeof clientCompany.$inferInsert & { companyId: number };
-    let newUser: typeof clientInfo.$inferInsert & { clientId: number };
+    let newCompany: typeof userCompany.$inferInsert & { companyId: number };
+    let newUser: typeof userInfo.$inferInsert & { userId: number };
 
     try {
       [newCompany, newUser] = await db.transaction(async (tx) => {
         // Create company first (company must exist before user)
         const [company] = await tx
-          .insert(clientCompany)
+          .insert(userCompany)
           .values({
             companyName: body.company_name,
             companyEmail: body.company_email || null,
@@ -100,14 +100,14 @@ export async function POST(request: NextRequest) {
 
         // Create user with company reference (first user becomes admin)
         const [user] = await tx
-          .insert(clientInfo)
+          .insert(userInfo)
           .values({
             companyId: company.companyId,
             username: body.username,
             passwordHash: passwordHash,
             email: body.email || null,
-            clientRole: 'admin', // First user of company is admin
-            clientStatus: 'active',
+            userRole: 'admin', // First user of company is admin
+            userStatus: 'active',
             lastLogin: new Date(),
           })
           .returning();
@@ -124,10 +124,10 @@ export async function POST(request: NextRequest) {
 
     // Generate JWT token for auto-login after signup
     const token = await generateJWT({
-      client_id: newUser.clientId,
+      user_id: newUser.userId,
       company_id: newCompany.companyId,
       username: newUser.username,
-      role: newUser.clientRole || 'admin',
+      role: newUser.userRole || 'admin',
     });
 
     // Create response with user data
@@ -135,15 +135,15 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Account created successfully',
       user: {
-        client_id: newUser.clientId,
+        user_id: newUser.userId,
         company_id: newCompany.companyId,
         username: newUser.username,
-        role: newUser.clientRole,
+        role: newUser.userRole,
       },
       workspace: {
         type: 'shared',
         company_id: newCompany.companyId,
-        client_id: newUser.clientId,
+        user_id: newUser.userId,
         company_name: newCompany.companyName,
       },
     });

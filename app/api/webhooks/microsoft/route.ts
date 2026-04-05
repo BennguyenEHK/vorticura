@@ -320,7 +320,7 @@ async function processNotification(notification: GraphNotification): Promise<voi
   // Step 3e: Build workspace context and run pipeline
   // -----------------------------------------
   const workspace = new WorkspaceContext({
-    client_id: connection.clientId,
+    user_id: connection.userId,
     company_id: connection.companyId,
   });
 

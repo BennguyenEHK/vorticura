@@ -20,13 +20,13 @@ import { db } from './client';
 
 // Import all essential tables from schema.ts
 import {
-  clientCompany,
-  clientInfo,
+  userCompany,      // renamed from clientCompany
+  userInfo,         // renamed from clientInfo
   customers,
   emailConnections,
   emailTable,
   fileMetadata,
-  quotationItems,
+  rfqItems,         // renamed from quotationItems
   quotationPricing,
   quotations,
   rfqAnalysis,
@@ -86,13 +86,13 @@ function multipleCol<T extends PgTable>(
  */
 function getTableByName(tableName: string): PgTable {
   const tableMap: Record<string, PgTable> = {
-    clientCompany,
-    clientInfo,
+    userCompany,       // renamed from clientCompany
+    userInfo,          // renamed from clientInfo
     customers,
     emailConnections,
     emailTable,
     fileMetadata,
-    quotationItems,
+    rfqItems,          // renamed from quotationItems
     quotationPricing,
     quotations,
     rfqAnalysis,
@@ -288,13 +288,13 @@ export async function getData(
       }
 
       if (
-        workspaceFilter.client_id !== undefined &&
-        'clientId' in secondaryTable
+        workspaceFilter.user_id !== undefined &&
+        'userId' in secondaryTable
       ) {
         joinConditions.push(
           eq(
-            (secondaryTable as any).clientId,
-            workspaceFilter.client_id
+            (secondaryTable as any).userId,
+            workspaceFilter.user_id
           )
         );
       }
@@ -602,13 +602,13 @@ export async function getSnapshotById(
 // =============================================
 // Export all tables for direct access if needed
 export {
-  clientCompany,
-  clientInfo,
+  userCompany,       // renamed from clientCompany
+  userInfo,          // renamed from clientInfo
   customers,
   emailConnections,
   emailTable,
   fileMetadata,
-  quotationItems,
+  rfqItems,          // renamed from quotationItems
   quotationPricing,
   quotations,
   rfqAnalysis,

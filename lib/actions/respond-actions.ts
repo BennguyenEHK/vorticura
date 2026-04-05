@@ -1,5 +1,5 @@
 // =============================================
-// SUPPLIER RESPOND ACTIONS - Supplier Response Processor
+// RESPOND SERVICE ACTIONS - Supplier Response Processor
 // =============================================
 // Internal server module (called by data-processor, NOT a server action)
 // Flow: ProcessorInput → route by action_type → AI extraction / manual override → DB update → ProcessorResult
@@ -16,7 +16,7 @@
 //   incoming_emails       — link rfq_id after matching
 
 import { getData, updateData, insertData } from '@/lib/db/queries';
-import { buildSupplierItemStatusPayload, buildQuotationItemsPayload } from '@/lib/utils/databaseHandler';
+import { buildSupplierItemStatusPayload } from '@/lib/utils/databaseHandler';
 import { getLocalModel } from '@/lib/ai-agent/local-model';
 import { hfChatCompletion, SUPPLIER_RESPOND_SYSTEM_PROMPT } from '@/lib/ai-agent/hf-client';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
@@ -71,7 +71,7 @@ interface ItemsSummary {
  * Process supplier response based on action_type
  * - update: AI parses incoming email → extracts items → updates DB
  * - available/unavailable: Manual UI override → updates specific items
- * @param input - Validated ProcessorInput (data_type: 'supplier_respond')
+ * @param input - Validated ProcessorInput (data_type: 'respond_service')
  * @returns ProcessorResult with items_updated + all_items_available flag
  */
 export async function processSupplierRespond(input: ProcessorInput): Promise<ProcessorResult> {
@@ -92,7 +92,7 @@ export async function processSupplierRespond(input: ProcessorInput): Promise<Pro
 
     const errorResult: ProcessorResult = {
       success: false,
-      data_type: 'supplier_respond',
+      data_type: 'respond_service',
       action_type: input.action_type,
       status: 'error',
       session_id: '',
@@ -127,10 +127,10 @@ async function handleSupplierEmailResponse(
   const { workspace, incoming_email } = input;
 
   if (!incoming_email) {
-    throw new Error('incoming_email data is required for supplier_respond:update');
+    throw new Error('incoming_email data is required for respond_service:update');
   }
   if (!workspace) {
-    throw new Error('workspace is required for supplier_respond:update');
+    throw new Error('workspace is required for respond_service:update');
   }
 
   // Step 1: AI extracts structured data from the email
@@ -167,7 +167,7 @@ async function handleSupplierEmailResponse(
   // Build result matching Sequence 3 output schema
   const result: ProcessorResult = {
     success: true,
-    data_type: 'supplier_respond',
+    data_type: 'respond_service',
     action_type: 'update',
     status: 'completed',
     session_id: '',
@@ -175,7 +175,7 @@ async function handleSupplierEmailResponse(
     data: {
       incoming_email_id: null, // Set by DB on insert
       classification: {
-        type: 'supplier_respond',
+        type: 'respond_service',
         confidence: extraction.confidence,
       },
       rfq_id: extraction.rfq_id,
@@ -200,7 +200,7 @@ async function handleSupplierEmailResponse(
 
 /**
  * Process manual status update from UI:
- * 1. Update supplier_item_status rows from input.supplier_respond.items
+ * 1. Update supplier_item_status rows from input.respond_service.items
  * 2. Update quotation_items bidder_proposal (if status = available)
  * 3. Check all_items_available → emit SSE
  */
@@ -209,19 +209,19 @@ async function handleManualStatusUpdate(
   startTime: number,
   timestamp: string
 ): Promise<ProcessorResult> {
-  const { action_type, rfq_id, supplier_respond, workspace } = input;
+  const { action_type, rfq_id, respond_service, workspace } = input;
 
-  if (!supplier_respond) {
-    throw new Error('supplier_respond object is required for available/unavailable actions');
+  if (!respond_service) {
+    throw new Error('respond_service object is required for available/unavailable actions');
   }
   if (!rfq_id) {
-    throw new Error('rfq_id is required for supplier_respond available/unavailable');
+    throw new Error('rfq_id is required for respond_service available/unavailable');
   }
   if (!workspace) {
-    throw new Error('workspace is required for supplier_respond');
+    throw new Error('workspace is required for respond_service');
   }
 
-  const { supplier_id, items } = supplier_respond;
+  const { supplier_id, items } = respond_service;
 
   // Determine target status from action_type
   const targetStatus = action_type === 'available' ? 'available' : 'unavailable';
@@ -260,7 +260,7 @@ async function handleManualStatusUpdate(
 
   const result: ProcessorResult = {
     success: true,
-    data_type: 'supplier_respond',
+    data_type: 'respond_service',
     action_type,
     status: 'completed',
     session_id: '',
@@ -486,61 +486,18 @@ async function updateSupplierItemStatuses(
 }
 
 /**
- * Update quotation_items with bidder_proposal data from supplier response.
- * Only updates items that are 'available' with non-zero pricing.
+ * Update bidder_proposal data from supplier response.
+ * NOTE: Bidder fields (bidder_description, bidder_unit_price, delivery_time, compliance_deviation)
+ * moved from rfq_items to supplier_item_status table. These are now written by
+ * updateSupplierItemStatuses() above. This function is kept as a no-op for call-site compatibility.
  */
 async function updateQuotationItemsBidderProposal(
-  items: ExtractedItem[],
-  rfqId: number,
-  workspace: WorkspaceContext
+  _items: ExtractedItem[],
+  _rfqId: number,
+  _workspace: WorkspaceContext
 ): Promise<void> {
-  // Get the quotation_id linked to this rfq_id
-  const quotations = await getData('quotations', { rfqId }, workspace) as Array<Record<string, unknown>>;
-  if (quotations.length === 0) {
-    console.warn(`[Supplier Respond] No quotation found for rfq_id=${rfqId}, skipping bidder_proposal update`);
-    return;
-  }
-
-  const quotationId = Number(quotations[0].quotationId);
-
-  for (const item of items) {
-    // Only update available items with actual pricing data
-    if (item.status !== 'available' || !item.bidder_proposal.bidder_unit_price) continue;
-
-    try {
-      // Check if quotation_item exists
-      const existingItem = await getData(
-        'quotationItems',
-        { quotationId, itemId: item.item_id },
-        workspace
-      ) as Array<Record<string, unknown>>;
-
-      if (existingItem.length > 0) {
-        // Build bidder_proposal payload for quotation_items update
-        const itemPayload = buildQuotationItemsPayload({
-          bidder_proposal: {
-            bidder_description: item.bidder_proposal.bidder_description,
-            bidder_unit_price: item.bidder_proposal.bidder_unit_price,
-            delivery_time: item.bidder_proposal.delivery_time,
-            compliance_deviation: item.bidder_proposal.compliance_deviation,
-          },
-          currency_code: item.currency_code,
-        }, true); // update mode
-
-        await updateData(
-          'quotationItems',
-          { quotationId, itemId: item.item_id },
-          itemPayload,
-          workspace
-        );
-        console.log(`[Supplier Respond] Updated quotation_items bidder_proposal: item_id=${item.item_id}`);
-      } else {
-        console.warn(`[Supplier Respond] quotation_item not found: quotation_id=${quotationId}, item_id=${item.item_id}`);
-      }
-    } catch (dbError) {
-      console.error(`[Supplier Respond] DB error updating quotation_item ${item.item_id}:`, dbError);
-    }
-  }
+  // Bidder fields now live on supplier_item_status and are written by updateSupplierItemStatuses().
+  // No separate rfq_items update needed.
 }
 
 /**
@@ -562,7 +519,7 @@ async function linkIncomingEmailToRfq(
       { id: Number(match.id) },
       {
         rfqId,
-        classificationType: 'supplier_respond',
+        classificationType: 'respond_service',
         classificationConfidence: '0.93',
         processedAt: new Date(),
       },

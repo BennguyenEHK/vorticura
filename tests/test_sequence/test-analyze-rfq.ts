@@ -5,7 +5,7 @@ import {handleHTTPRequest} from '@/lib/data-processor';
 import { WorkspaceContext } from '@/lib/middleware/workspace-context';
 
 const workspace = new WorkspaceContext({
-  client_id: 1,
+  user_id: 1,       // renamed from client_id
   company_id: 1,
   username: 'test-runner',
   role: 'admin',

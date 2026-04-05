@@ -12,14 +12,14 @@
 // =============================================
 
 /** Supported data types for processing */
-export type DataType = 'quotation' | 'email' | 'rfq_analysis' | 'supplier_search' | 'supplier_respond' | 'incoming_email';
+export type DataType = 'quotation' | 'email' | 'rfq_analysis' | 'supplier_search' | 'respond_service' | 'incoming_email';
 
 /** Action types per data_type */
 export type QuotationActionType = 'generate' | 'update' | 'manual_update' | 'calculate';
 export type EmailActionType = 'send' | 'generate' | 're_generate';
 export type RfqAnalysisActionType = 'analyze' | 'reanalyze';
 export type SupplierSearchActionType = 'search' | 'research';
-export type SupplierRespondActionType = 'update' | 'available' | 'unavailable';
+export type RespondServiceActionType = 'update' | 'available' | 'unavailable';
 export type IncomingEmailActionType = 'handleRFQ' | 'handleSuppliersRespond' | 'handleUnknown';
 
 /** Universal action: 'proceed' = accept current result, move to next pipeline step */
@@ -30,7 +30,7 @@ export type ActionType =
   | EmailActionType
   | RfqAnalysisActionType
   | SupplierSearchActionType
-  | SupplierRespondActionType
+  | RespondServiceActionType
   | IncomingEmailActionType
   | UniversalActionType;
 
@@ -62,7 +62,7 @@ export interface ProcessorInput {
   email?: EmailData;                    // For email data_type
   analysis?: AnalysisData;              // For rfq_analysis data_type
   search?: SearchData;                  // For supplier_search data_type
-  supplier_respond?: SupplierRespondData; // For supplier_respond data_type
+  respond_service?: SupplierRespondData; // For respond_service data_type
   incoming_email?: IncomingEmailData; // For incoming_email data_type
   ai_comments?: AiComments;          // For reject/regenerate feedback on any data_type
   workspace?: import('@/lib/middleware/workspace-context').WorkspaceContext; // Workspace for tenant isolation
@@ -231,14 +231,14 @@ const EXTRACTION_VALIDATE: Record<string, Record<string, ValidatorFn>> = {
     search: validateSuppliersSearch,    // Search for new suppliers
     research: validateSuppliersSearch,  // Re-search with updated criteria
   },
-  'supplier_respond': {
+  'respond_service': {
     update: validateSupplierRespond,          // Parse supplier response email, update item statuses
     available: validateSupplierRespond,       // Manual UI override: mark items available
     unavailable: validateSupplierRespond,     // Manual UI override: mark items unavailable
   },
   'incoming_email': {
     handleRFQ: validateIncomingEmail,              // RFQ detected → route to rfq_analysis
-    handleSuppliersRespond: validateIncomingEmail,  // Supplier response → route to supplier_respond
+    handleSuppliersRespond: validateIncomingEmail,  // Supplier response → route to respond_service
     handleUnknown: validateIncomingEmail,          // No pattern matched → log only
   },
 };
@@ -266,7 +266,7 @@ export function validateInput(input: ProcessorInput): ProcessorInput {
   }
 
   // Step 3: data_type must be one of the supported types
-  const validDataTypes: DataType[] = ['quotation', 'email', 'rfq_analysis', 'supplier_search', 'supplier_respond', 'incoming_email'];
+  const validDataTypes: DataType[] = ['quotation', 'email', 'rfq_analysis', 'supplier_search', 'respond_service', 'incoming_email'];
   if (!validDataTypes.includes(input.data_type)) {
     throw new Error(`Invalid data_type: must be one of ${validDataTypes.join(' | ')}`);
   }
@@ -675,12 +675,12 @@ function validateSuppliersSearch(input: ProcessorInput): ProcessorInput {
 }
 
 // #############################################################################
-// SUPPLIER RESPOND VALIDATORS
+// RESPOND SERVICE VALIDATORS
 // #############################################################################
 
 /**
- * Validate supplier_respond data_type (available, unavailable)
- * Checks: rfq_id required, supplier_respond object with items array
+ * Validate respond_service data_type (available, unavailable)
+ * Checks: rfq_id required, respond_service object with items array
  * @param input - Raw input
  * @returns Validated input
  */
@@ -691,50 +691,50 @@ function validateSupplierRespond(input: ProcessorInput): ProcessorInput {
   if (action_type === 'update') {
     // incoming_email object carries the raw email for AI extraction
     if (!input.incoming_email || typeof input.incoming_email !== 'object') {
-      throw new Error('incoming_email object is required for supplier_respond:update');
+      throw new Error('incoming_email object is required for respond_service:update');
     }
     const ie = input.incoming_email;
-    if (!ie.from_email) throw new Error('incoming_email.from_email is required for supplier_respond:update');
-    if (!ie.email_body_text) throw new Error('incoming_email.email_body_text is required for supplier_respond:update');
+    if (!ie.from_email) throw new Error('incoming_email.from_email is required for respond_service:update');
+    if (!ie.email_body_text) throw new Error('incoming_email.email_body_text is required for respond_service:update');
     return input;
   }
 
-  // 'available' / 'unavailable' actions: manual UI override — requires supplier_respond data
-  if (!input.rfq_id) throw new Error('rfq_id is required for supplier_respond data_type');
+  // 'available' / 'unavailable' actions: manual UI override — requires respond_service data
+  if (!input.rfq_id) throw new Error('rfq_id is required for respond_service data_type');
   const rId = parseInt(String(input.rfq_id));
   if (isNaN(rId) || rId <= 0) throw new Error('rfq_id must be a positive integer');
 
-  // supplier_respond object is required for manual overrides
-  if (!input.supplier_respond || typeof input.supplier_respond !== 'object') {
-    throw new Error('supplier_respond object is required for supplier_respond data_type');
+  // respond_service object is required for manual overrides
+  if (!input.respond_service || typeof input.respond_service !== 'object') {
+    throw new Error('respond_service object is required for respond_service data_type');
   }
 
   // supplier_id is required and must be a positive integer
-  if (!input.supplier_respond.supplier_id) {
-    throw new Error('supplier_respond.supplier_id is required');
+  if (!input.respond_service.supplier_id) {
+    throw new Error('respond_service.supplier_id is required');
   }
-  const supplierId = parseInt(String(input.supplier_respond.supplier_id), 10);
+  const supplierId = parseInt(String(input.respond_service.supplier_id), 10);
   if (isNaN(supplierId) || supplierId <= 0) {
-    throw new Error('supplier_respond.supplier_id must be a positive integer');
+    throw new Error('respond_service.supplier_id must be a positive integer');
   }
 
   // items array is required and non-empty
-  if (!Array.isArray(input.supplier_respond.items) || input.supplier_respond.items.length === 0) {
-    throw new Error('supplier_respond.items must be a non-empty array');
+  if (!Array.isArray(input.respond_service.items) || input.respond_service.items.length === 0) {
+    throw new Error('respond_service.items must be a non-empty array');
   }
 
   // Validate each item in the response
-  input.supplier_respond.items.forEach((item, index) => {
+  input.respond_service.items.forEach((item, index) => {
     // item_id is required and must be a positive integer
     if (!item.item_id) {
-      throw new Error(`supplier_respond.items[${index}].item_id is required`);
+      throw new Error(`respond_service.items[${index}].item_id is required`);
     }
     const itemId = parseInt(String(item.item_id), 10);
     if (isNaN(itemId) || itemId <= 0) {
-      throw new Error(`supplier_respond.items[${index}].item_id must be a positive integer`);
+      throw new Error(`respond_service.items[${index}].item_id must be a positive integer`);
     }
     if (!['available', 'unavailable'].includes(item.status)) {
-      throw new Error(`supplier_respond.items[${index}].status must be 'available' or 'unavailable'`);
+      throw new Error(`respond_service.items[${index}].status must be 'available' or 'unavailable'`);
     }
   });
 

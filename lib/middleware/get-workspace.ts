@@ -14,7 +14,7 @@ import { getWorkspaceFromToken, AUTH_COOKIE_CONFIG } from '@/lib/middleware/auth
  * This is the EFFICIENT method - no token re-verification needed
  *
  * Middleware already verified the token and injected these headers:
- * - x-client-id
+ * - x-user-id (renamed from x-client-id)
  * - x-company-id
  * - x-username
  * - x-user-role
@@ -33,28 +33,28 @@ import { getWorkspaceFromToken, AUTH_COOKIE_CONFIG } from '@/lib/middleware/auth
  */
 export function getWorkspaceFromHeaders(request: NextRequest): WorkspaceContext | null {
   // Read headers injected by middleware.ts
-  const clientIdStr = request.headers.get('x-client-id');
+  const userIdStr = request.headers.get('x-user-id');     // renamed from x-client-id
   const companyIdStr = request.headers.get('x-company-id');
   const username = request.headers.get('x-username');
   const role = request.headers.get('x-user-role');
 
   // Validate required headers exist
-  if (!clientIdStr || !companyIdStr || !username || !role) {
+  if (!userIdStr || !companyIdStr || !username || !role) {
     return null;
   }
 
   // Parse numeric IDs with radix 10 for safety
-  const client_id = parseInt(clientIdStr, 10);
+  const user_id = parseInt(userIdStr, 10);
   const company_id = parseInt(companyIdStr, 10);
 
   // Validate parsing succeeded (prevent NaN injection)
-  if (isNaN(client_id) || isNaN(company_id)) {
+  if (isNaN(user_id) || isNaN(company_id)) {
     return null;
   }
 
   // Create WorkspaceContext from header values (NO token verification needed!)
   return new WorkspaceContext({
-    client_id,
+    user_id,       // renamed from client_id
     company_id,
     username,
     role,

@@ -149,7 +149,7 @@ async function callAIAnalysis(input: ProcessorInput, subject: string, analysisCo
     // For reanalyze: fetch customer info + rfq items from DB for full context
     const customers = await getData('customers', { rfqId: input.rfq_id }, workspace) as Array<Record<string, unknown>>;
     const customer = customers[0];
-    const items = await getData('quotationItems', { rfqId: input.rfq_id }, workspace) as Array<Record<string, unknown>>;
+    const items = await getData('rfqItems', { rfqId: input.rfq_id }, workspace) as Array<Record<string, unknown>>;
 
     userMessage = buildReanalyzeUserMessage({
       subject,

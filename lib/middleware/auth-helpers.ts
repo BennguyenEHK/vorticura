@@ -23,7 +23,7 @@ const JWT_SECRET = new TextEncoder().encode(rawJwtSecret || 'quoteflow-ai-secret
  * Contains user and tenant information
  */
 export interface JWTPayload {
-  client_id: number;
+  user_id: number;     // renamed from client_id
   company_id: number;
   username: string;
   role: string;
@@ -42,7 +42,7 @@ export async function verifyJWT(token: string): Promise<JWTPayload | null> {
 
     // Validate required fields
     if (
-      typeof payload.client_id === 'number' &&
+      typeof payload.user_id === 'number' &&
       typeof payload.company_id === 'number' &&
       typeof payload.username === 'string' &&
       typeof payload.role === 'string'
@@ -87,7 +87,7 @@ export async function getWorkspaceFromToken(token: string): Promise<WorkspaceCon
   try {
     // Create workspace context from payload
     return new WorkspaceContext({
-      client_id: payload.client_id,
+      user_id: payload.user_id,
       company_id: payload.company_id,
       username: payload.username,
       role: payload.role,

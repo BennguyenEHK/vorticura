@@ -18,7 +18,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { eq, and, sql } from 'drizzle-orm';
 
 import { db } from '@/lib/db/client';
-import { emailConnections, clientInfo, clientCompany } from '@/lib/db/schema';
+import { emailConnections, userInfo, userCompany } from '@/lib/db/schema';
 import { decryptToken, encryptToken, refreshGoogleToken } from '@/lib/services/email/oauth-helper';
 import { fetchGmailHistory, fetchGmailMessage, markGmailRead } from '@/lib/services/email/gmail-client';
 import { processEmailMessage } from '@/lib/services/email/email-pipeline';
@@ -226,7 +226,7 @@ export async function POST(request: NextRequest) {
     // Step 7: Build workspace context for pipeline
     // -----------------------------------------
     const workspace = new WorkspaceContext({
-      client_id: connection.clientId,
+      user_id: connection.userId,
       company_id: connection.companyId,
     });
 

@@ -71,7 +71,7 @@ export async function getQuotationItems(
 ): Promise<QuotationItem[]> {
   try {
     const rows = await getData(
-      'quotationItems',
+      'rfqItems',
       { quotationId },
       workspace
     );

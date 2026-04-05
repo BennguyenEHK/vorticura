@@ -168,7 +168,7 @@ export async function middleware(request: NextRequest) {
 
   // Create new headers from request and add workspace context
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('x-client-id', String(payload.client_id));
+  requestHeaders.set('x-user-id', String(payload.user_id));  // renamed from x-client-id
   requestHeaders.set('x-company-id', String(payload.company_id));
   requestHeaders.set('x-username', payload.username);
   requestHeaders.set('x-user-role', payload.role);

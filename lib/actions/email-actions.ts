@@ -80,7 +80,7 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
             subject: effectiveEmail?.subject || '',
             body: effectiveEmail?.email_content || '',
           },
-          workspace?.client_id,
+          workspace?.user_id,
           workspace?.company_id,
         );
         resultData = sendResult;
@@ -272,18 +272,18 @@ interface EmailDraftData {
  */
 async function sendEmailViaProvider(
   draft: EmailDraftData,
-  clientId?: number,
+  userId?: number,
   companyId?: number,
 ): Promise<{ messageId: string }> {
   // Try to find an active OAuth email connection for this user
-  if (clientId && companyId) {
+  if (userId && companyId) {
     try {
       const connections = await db
         .select()
         .from(emailConnections)
         .where(
           and(
-            eq(emailConnections.clientId, clientId),
+            eq(emailConnections.userId, userId),
             eq(emailConnections.companyId, companyId),
             eq(emailConnections.status, 'active'),
           )

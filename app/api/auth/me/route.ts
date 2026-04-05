@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWorkspaceFromToken } from '@/lib/middleware/auth-helpers';
 import { db } from '@/lib/db/client';
-import { clientInfo, clientCompany } from '@/lib/db/schema';
+import { userInfo, userCompany } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 
 /**
@@ -50,17 +50,17 @@ export async function GET(request: NextRequest) {
     // Get full user details from database
     const users = await db
       .select({
-        clientId: clientInfo.clientId,
-        companyId: clientInfo.companyId,
-        username: clientInfo.username,
-        email: clientInfo.email,
-        role: clientInfo.clientRole,
-        status: clientInfo.clientStatus,
-        lastLogin: clientInfo.lastLogin,
-        createdAt: clientInfo.createdAt,
+        userId: userInfo.userId,
+        companyId: userInfo.companyId,
+        username: userInfo.username,
+        email: userInfo.email,
+        role: userInfo.userRole,
+        status: userInfo.userStatus,
+        lastLogin: userInfo.lastLogin,
+        createdAt: userInfo.createdAt,
       })
-      .from(clientInfo)
-      .where(eq(clientInfo.clientId, workspace.client_id))
+      .from(userInfo)
+      .where(eq(userInfo.userId, workspace.user_id))
       .limit(1);
 
     const user = users[0];
@@ -76,12 +76,12 @@ export async function GET(request: NextRequest) {
     // Get company details for workspace info
     const companies = await db
       .select({
-        companyId: clientCompany.companyId,
-        companyName: clientCompany.companyName,
-        companyEmail: clientCompany.companyEmail,
+        companyId: userCompany.companyId,
+        companyName: userCompany.companyName,
+        companyEmail: userCompany.companyEmail,
       })
-      .from(clientCompany)
-      .where(eq(clientCompany.companyId, workspace.company_id))
+      .from(userCompany)
+      .where(eq(userCompany.companyId, workspace.company_id))
       .limit(1);
 
     const company = companies[0];
@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       user: {
-        client_id: user.clientId,
+        user_id: user.userId,
         company_id: user.companyId,
         username: user.username,
         email: user.email,

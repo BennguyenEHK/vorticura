@@ -17,7 +17,7 @@ import { eq, and } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 
 import { db } from '@/lib/db/client';
-import { clientInfo, clientCompany, emailConnections } from '@/lib/db/schema';
+import { userInfo, userCompany, emailConnections } from '@/lib/db/schema';
 import {
   exchangeGoogleCode,
   decodeGoogleIdToken,
@@ -128,11 +128,11 @@ async function handleSignup(
   // Check if a user with this Google ID already exists
   const [existingUser] = await db
     .select()
-    .from(clientInfo)
+    .from(userInfo)
     .where(
       and(
-        eq(clientInfo.oauthProvider, 'google'),
-        eq(clientInfo.oauthProviderId, profile.sub),
+        eq(userInfo.oauthProvider, 'google'),
+        eq(userInfo.oauthProviderId, profile.sub),
       ),
     )
     .limit(1);
@@ -147,16 +147,16 @@ async function handleSignup(
   const result = await db.transaction(async (tx) => {
     // Create the company (use Google profile name as company name initially)
     const [company] = await tx
-      .insert(clientCompany)
+      .insert(userCompany)
       .values({
         companyName: profile.name ? `${profile.name}'s Company` : 'My Company',
         companyEmail: profile.email,
       })
-      .returning({ companyId: clientCompany.companyId });
+      .returning({ companyId: userCompany.companyId });
 
     // Create the user with Google OAuth identity (no password)
     const [user] = await tx
-      .insert(clientInfo)
+      .insert(userInfo)
       .values({
         companyId: company.companyId,
         username: profile.name || profile.email,
@@ -164,13 +164,13 @@ async function handleSignup(
         passwordHash: null, // OAuth-only user — no password
         oauthProvider: 'google',
         oauthProviderId: profile.sub,
-        clientRole: 'admin', // First user in company is admin
+        userRole: 'admin', // First user in company is admin
       })
       .returning({
-        clientId: clientInfo.clientId,
-        companyId: clientInfo.companyId,
-        username: clientInfo.username,
-        clientRole: clientInfo.clientRole,
+        userId: userInfo.userId,
+        companyId: userInfo.companyId,
+        username: userInfo.username,
+        userRole: userInfo.userRole,
       });
 
     return { company, user };
@@ -183,7 +183,7 @@ async function handleSignup(
     .insert(emailConnections)
     .values({
       companyId: result.company.companyId,
-      clientId: result.user.clientId,
+      userId: result.user.userId,
       provider: 'gmail',
       providerAccountId: profile.sub,
       emailAddress: profile.email,
@@ -214,10 +214,10 @@ async function handleSignup(
 
   // Generate JWT and set auth cookie
   const jwtPayload: JWTPayload = {
-    client_id: result.user.clientId,
+    user_id: result.user.userId,
     company_id: result.user.companyId!,
     username: result.user.username,
-    role: result.user.clientRole || 'user',
+    role: result.user.userRole || 'user',
   };
 
   const token = await generateJWT(jwtPayload);
@@ -248,16 +248,16 @@ async function handleLogin(
   // Look up user by Google OAuth provider ID
   const [user] = await db
     .select({
-      clientId: clientInfo.clientId,
-      companyId: clientInfo.companyId,
-      username: clientInfo.username,
-      clientRole: clientInfo.clientRole,
+      userId: userInfo.userId,
+      companyId: userInfo.companyId,
+      username: userInfo.username,
+      userRole: userInfo.userRole,
     })
-    .from(clientInfo)
+    .from(userInfo)
     .where(
       and(
-        eq(clientInfo.oauthProvider, 'google'),
-        eq(clientInfo.oauthProviderId, profile.sub),
+        eq(userInfo.oauthProvider, 'google'),
+        eq(userInfo.oauthProviderId, profile.sub),
       ),
     )
     .limit(1);
@@ -270,16 +270,16 @@ async function handleLogin(
 
   // Update last login timestamp
   await db
-    .update(clientInfo)
+    .update(userInfo)
     .set({ lastLogin: new Date() })
-    .where(eq(clientInfo.clientId, user.clientId));
+    .where(eq(userInfo.userId, user.userId));
 
   // Generate JWT and set auth cookie
   const jwtPayload: JWTPayload = {
-    client_id: user.clientId,
+    user_id: user.userId,
     company_id: user.companyId!,
     username: user.username,
-    role: user.clientRole || 'user',
+    role: user.userRole || 'user',
   };
 
   const token = await generateJWT(jwtPayload);
@@ -333,7 +333,7 @@ async function handleConnect(
     .insert(emailConnections)
     .values({
       companyId: workspace.company_id,
-      clientId: workspace.client_id,
+      userId: workspace.user_id,
       provider: 'gmail',
       providerAccountId: profile.sub,
       emailAddress: profile.email,

@@ -5,7 +5,7 @@
 
 import type {
   Quotation,
-  QuotationItem,
+  RfqItem,           // renamed from QuotationItem
   QuotationPricing,
   Customer,
   Email,
@@ -13,14 +13,14 @@ import type {
   SupplierSearch,
   FileMetadata,
   UserSession,
-  ClientCompany,
-  ClientInfo,
+  UserCompany,       // renamed from ClientCompany
+  UserInfo,          // renamed from ClientInfo
 } from '@/lib/db/schema';
 
 // Re-export schema types for convenience
 export type {
   Quotation,
-  QuotationItem,
+  RfqItem,
   QuotationPricing,
   Customer,
   Email,
@@ -28,8 +28,8 @@ export type {
   SupplierSearch,
   FileMetadata,
   UserSession,
-  ClientCompany,
-  ClientInfo,
+  UserCompany,
+  UserInfo,
 };
 
 /**
@@ -49,7 +49,7 @@ export interface DatabaseResult<T> {
  */
 export interface WorkspaceFilter {
   companyId: number;        // Always required for tenant isolation
-  clientId?: number;        // Optional, included when client isolation enabled
+  userId?: number;          // Optional, included when user isolation enabled (renamed from clientId)
 }
 
 /**

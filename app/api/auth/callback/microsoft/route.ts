@@ -16,7 +16,7 @@ import { eq, and } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 
 import { db } from '@/lib/db/client';
-import { clientCompany, clientInfo, emailConnections } from '@/lib/db/schema';
+import { userCompany, userInfo, emailConnections } from '@/lib/db/schema';
 import {
   exchangeMicrosoftCode,
   decodeMicrosoftIdToken,
@@ -140,11 +140,11 @@ async function handleSignup(
   // Check if a user with this Microsoft account already exists
   const [existingUser] = await db
     .select()
-    .from(clientInfo)
+    .from(userInfo)
     .where(
       and(
-        eq(clientInfo.oauthProvider, 'microsoft'),
-        eq(clientInfo.oauthProviderId, profile.oid)
+        eq(userInfo.oauthProvider, 'microsoft'),
+        eq(userInfo.oauthProviderId, profile.oid)
       )
     )
     .limit(1);
@@ -184,16 +184,16 @@ async function handleSignup(
   const result = await db.transaction(async (tx) => {
     // Create the company
     const [company] = await tx
-      .insert(clientCompany)
+      .insert(userCompany)
       .values({
         companyName: profile.name ? `${profile.name}'s Company` : 'My Company',
         companyEmail: profile.email,
       })
-      .returning({ companyId: clientCompany.companyId });
+      .returning({ companyId: userCompany.companyId });
 
     // Create the user (passwordHash is null for OAuth-only users)
     const [user] = await tx
-      .insert(clientInfo)
+      .insert(userInfo)
       .values({
         companyId: company.companyId,
         username: profile.name || profile.email,
@@ -201,20 +201,20 @@ async function handleSignup(
         passwordHash: null,
         oauthProvider: 'microsoft',
         oauthProviderId: profile.oid,
-        clientRole: 'admin', // First user is admin
-        clientStatus: 'active',
+        userRole: 'admin', // First user is admin
+        userStatus: 'active',
       })
       .returning({
-        clientId: clientInfo.clientId,
-        companyId: clientInfo.companyId,
-        username: clientInfo.username,
-        clientRole: clientInfo.clientRole,
+        userId: userInfo.userId,
+        companyId: userInfo.companyId,
+        username: userInfo.username,
+        userRole: userInfo.userRole,
       });
 
     // Insert email connection in the same transaction for atomicity
     await tx.insert(emailConnections).values({
       companyId: company.companyId,
-      clientId: user.clientId,
+      userId: user.userId,
       provider: 'outlook',
       providerAccountId: profile.oid,
       emailAddress: profile.email,
@@ -234,10 +234,10 @@ async function handleSignup(
 
   // Generate JWT for session
   const token = await generateJWT({
-    client_id: user.clientId,
+    user_id: user.userId,
     company_id: user.companyId!,
     username: user.username,
-    role: user.clientRole || 'user',
+    role: user.userRole || 'user',
   });
 
   // Build redirect response with auth cookie
@@ -277,17 +277,17 @@ async function handleLogin(
   // Look up existing user by Microsoft oid
   const [user] = await db
     .select({
-      clientId: clientInfo.clientId,
-      companyId: clientInfo.companyId,
-      username: clientInfo.username,
-      clientRole: clientInfo.clientRole,
-      clientStatus: clientInfo.clientStatus,
+      userId: userInfo.userId,
+      companyId: userInfo.companyId,
+      username: userInfo.username,
+      userRole: userInfo.userRole,
+      userStatus: userInfo.userStatus,
     })
-    .from(clientInfo)
+    .from(userInfo)
     .where(
       and(
-        eq(clientInfo.oauthProvider, 'microsoft'),
-        eq(clientInfo.oauthProviderId, profile.oid)
+        eq(userInfo.oauthProvider, 'microsoft'),
+        eq(userInfo.oauthProviderId, profile.oid)
       )
     )
     .limit(1);
@@ -301,7 +301,7 @@ async function handleLogin(
   }
 
   // Check if account is active
-  if (user.clientStatus !== 'active') {
+  if (user.userStatus !== 'active') {
     return NextResponse.redirect(
       `${APP_URL}/login?error=${encodeURIComponent(
         'Account suspended or deactivated. Please contact support.'
@@ -311,16 +311,16 @@ async function handleLogin(
 
   // Update last login timestamp
   await db
-    .update(clientInfo)
+    .update(userInfo)
     .set({ lastLogin: new Date() })
-    .where(eq(clientInfo.clientId, user.clientId));
+    .where(eq(userInfo.userId, user.userId));
 
   // Generate JWT for session
   const token = await generateJWT({
-    client_id: user.clientId,
+    user_id: user.userId,
     company_id: user.companyId!,
     username: user.username,
-    role: user.clientRole || 'user',
+    role: user.userRole || 'user',
   });
 
   // Build redirect response with auth cookie
@@ -409,7 +409,7 @@ async function handleConnect(
     .insert(emailConnections)
     .values({
       companyId: workspace.company_id,
-      clientId: workspace.client_id,
+      userId: workspace.user_id,
       provider: 'outlook',
       providerAccountId: profile.oid,
       emailAddress: profile.email,

@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { compare } from 'bcryptjs';
 import { db } from '@/lib/db/client';
-import { clientInfo, clientCompany } from '@/lib/db/schema';
+import { userInfo, userCompany } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { generateJWT } from '@/lib/middleware/auth-helpers';
 import { workspaceConfig } from '@/config/workspace.config';
@@ -40,17 +40,17 @@ export async function POST(request: NextRequest) {
     // Query user from database based on identifier type (email or username)
     const users = await db
       .select({
-        clientId: clientInfo.clientId,
-        companyId: clientInfo.companyId,
-        username: clientInfo.username,
-        email: clientInfo.email,
-        passwordHash: clientInfo.passwordHash,
-        oauthProvider: clientInfo.oauthProvider, // Check if user signed up via OAuth
-        role: clientInfo.clientRole,
-        status: clientInfo.clientStatus,
+        userId: userInfo.userId,
+        companyId: userInfo.companyId,
+        username: userInfo.username,
+        email: userInfo.email,
+        passwordHash: userInfo.passwordHash,
+        oauthProvider: userInfo.oauthProvider, // Check if user signed up via OAuth
+        role: userInfo.userRole,
+        status: userInfo.userStatus,
       })
-      .from(clientInfo)
-      .where(computedIsEmail ? eq(clientInfo.email, identifier) : eq(clientInfo.username, identifier))
+      .from(userInfo)
+      .where(computedIsEmail ? eq(userInfo.email, identifier) : eq(userInfo.username, identifier))
       .limit(1);
 
     const user = users[0];
@@ -100,24 +100,24 @@ export async function POST(request: NextRequest) {
     // Get company information for workspace context
     const companies = await db
       .select({
-        companyId: clientCompany.companyId,
-        companyName: clientCompany.companyName,
+        companyId: userCompany.companyId,
+        companyName: userCompany.companyName,
       })
-      .from(clientCompany)
-      .where(eq(clientCompany.companyId, user.companyId))
+      .from(userCompany)
+      .where(eq(userCompany.companyId, user.companyId))
       .limit(1);
 
     const company = companies[0];
 
     // Update last login timestamp for audit trail
     await db
-      .update(clientInfo)
+      .update(userInfo)
       .set({ lastLogin: new Date() })
-      .where(eq(clientInfo.clientId, user.clientId));
+      .where(eq(userInfo.userId, user.userId));
 
     // Generate JWT token with workspace context
     const token = await generateJWT({
-      client_id: user.clientId,
+      user_id: user.userId,
       company_id: user.companyId,
       username: user.username,
       role: user.role || 'user',
@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Login successful',
       user: {
-        client_id: user.clientId,
+        user_id: user.userId,
         company_id: user.companyId,
         username: user.username,
         role: user.role,
@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
       workspace: {
         type: workspaceConfig.getWorkspaceMode(),           // 'shared' or 'individual'
         company_id: user.companyId,
-        client_id: user.clientId,
+        user_id: user.userId,
         company_name: company?.companyName || null,
         isolation_enabled: workspaceConfig.isClientIsolationEnabled(),
       },

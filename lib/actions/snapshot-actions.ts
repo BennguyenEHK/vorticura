@@ -55,7 +55,7 @@ export async function createWorkboardSnapshot(
     }
 
     const workspaceContext = new WorkspaceContext({
-      client_id: workspace.client_id,
+      user_id: workspace.user_id,      // renamed from client_id
       company_id: workspace.company_id,
     });
 
