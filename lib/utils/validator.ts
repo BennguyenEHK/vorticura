@@ -1,11 +1,9 @@
 // =============================================
 // VALIDATOR MODULE - Multi-Data-Type Input Validation
 // =============================================
-// Unified input validation for all data types
-// - Validates data_type + action_type combinations
-// - Routes to specific validators via EXTRACTION_VALIDATE mapping
-// - Supports: quotation, email, rfq_analysis, supplier_search
-// Reference: make_sales_sse_server/api/quotation/validator.js
+// Unified input validation for all data types.
+// Routes data_type + action_type → dedicated validator via EXTRACTION_VALIDATE.
+// JSON schemas match data-loader.ts builders and Documents/json_sample/*.json.
 
 // =============================================
 // Types
@@ -42,34 +40,16 @@ export interface ProcessorResult {
   status: 'completed' | 'error';
   session_id: string;
   processing_time_ms: number;
-  data?: unknown;           // Processor-specific result data
-  error?: string;           // Error message if failed
+  data?: unknown;
+  error?: string;
   timestamp: string;
 }
 
-/** Generic processor input shape (JSON from HTTP request) */
-export interface ProcessorInput {
-  data_type: DataType;
-  action_type: ActionType;
-  session_id?: string;
-  quotation_id?: number;
-  rfq_id?: number;
-  rfq_reference?: string;
-  comments?: string;                    // Optional user comments for manual_update
-  quotation_data?: QuotationData;       // For quotation data_type
-  pricing_variables?: PricingVariable[];// For quotation calculate
-  modify_content?: ModifyContent;       // For quotation manual_update
-  email?: EmailData;                    // For email data_type
-  analysis?: AnalysisData;              // For rfq_analysis data_type
-  search?: SearchData;                  // For supplier_search data_type
-  respond_service?: SupplierRespondData; // For respond_service data_type
-  incoming_email?: IncomingEmailData; // For incoming_email data_type
-  ai_comments?: AiComments;          // For reject/regenerate feedback on any data_type
-  workspace?: import('@/lib/middleware/workspace-context').WorkspaceContext; // Workspace for tenant isolation
-  [key: string]: unknown;               // Allow additional fields
-}
+// =============================================
+// Sub-type interfaces
+// =============================================
 
-/** Quotation data structure */
+/** Quotation data for generate/update actions (quotation_Inpt.json) */
 interface QuotationData {
   quotation_id?: number;
   rfq_reference: string;
@@ -79,7 +59,7 @@ interface QuotationData {
   [key: string]: unknown;
 }
 
-/** Customer info within quotation */
+/** Customer info within quotation generate/update */
 interface CustomerInfo {
   company_name: string;
   attention_person: string;
@@ -90,7 +70,7 @@ interface CustomerInfo {
   [key: string]: unknown;
 }
 
-/** Single quotation item */
+/** Single quotation item (generate/update shape) */
 interface QuotationItem {
   item_id?: number;
   currency_code: string;
@@ -111,7 +91,7 @@ interface QuotationItem {
   [key: string]: unknown;
 }
 
-/** Pricing variable for calculate action */
+/** Pricing variable for quotation/calculate (quotation_calulate.json) */
 interface PricingVariable {
   item_id: string | number;
   shipping_cost: number;
@@ -121,17 +101,7 @@ interface PricingVariable {
   discount_rate?: number;
 }
 
-/** Modify content for manual_update */
-interface ModifyContent {
-  quotation_id?: number;
-  seller_info?: Record<string, unknown>;
-  customer_info?: Record<string, unknown>;
-  quotation_data?: Record<string, unknown>;
-  quotation_items?: Array<Record<string, unknown>>;
-  [key: string]: unknown;
-}
-
-/** Email data structure */
+/** Email data for email/send action */
 interface EmailData {
   email_id?: number;
   recipient_email: string;
@@ -140,7 +110,7 @@ interface EmailData {
   [key: string]: unknown;
 }
 
-/** RFQ analysis data structure */
+/** Analysis object shared by rfq_analysis and supplier_search/search */
 interface AnalysisData {
   rfq_id?: number;
   subject: string;
@@ -148,7 +118,7 @@ interface AnalysisData {
   [key: string]: unknown;
 }
 
-/** Supplier search data structure */
+/** Search object for supplier_search/research */
 interface SearchData {
   search_id?: number;
   subject: string;
@@ -156,47 +126,140 @@ interface SearchData {
   [key: string]: unknown;
 }
 
-/** Supplier respond data structure (tracks per-item availability) */
-interface SupplierRespondData {
-  rfq_id: number;
+/** RFQ item — shared by rfq_analysis/reanalyze and respond_service/customer_respond */
+export interface RfqItem {
+  item_id: string | number;
+  currency_code: string;
+  company_requirement: {
+    company_description: string;
+    qty: number;
+    uom: string;
+  };
+}
+
+/** Supplier item source — shared by supplier_search/research and respond_service/supplier_respond */
+export interface SupplierItemSource {
+  item_id: number;
   supplier_id: number;
-  items: Array<{
-    item_id: number;
-    status: 'available' | 'unavailable';
-    unit_price?: number;
-    delivery_time?: string;
-    notes?: string;
-  }>;
+  supplier_name: string;
+  source_url: string;
+  status: string;
+  delivery_time: string;
+  bidder_description: string;
+  bidder_unit_price: number;
+  compliance_deviation: string;
+  notes: string;
+}
+
+/** Previous email for email/re_generate (email-actions-json.json Input_2) */
+export interface PreviousEmail {
+  subject: string;
+  email_content: string;
+}
+
+/** Manual-update quotation data (quotation_ui_manual.json) — extends base with seller_info + pricing fields */
+interface ManualUpdateQuotationData {
+  quotation_id: number;
+  quotation_name?: string;
+  rfq_reference: string;
+  total_amount?: number;
+  quotation_date?: string;
+  page_number?: string;
+  commercial_terms?: string;
+  seller_info?: Record<string, unknown>;
+  customer_info?: Record<string, unknown>;
+  quotation_items?: ManualUpdateItem[];
   [key: string]: unknown;
 }
 
-/** Incoming email data (from email-watcher) — matches Json_method_plan.md §1.1 */
+/** Single item in manual_update shape — has sales_unit_price / ext_price instead of bidder_unit_price */
+interface ManualUpdateItem {
+  item_id: number;
+  sales_unit_price?: number;
+  ext_price?: number;
+  company_requirement?: {
+    company_description: string;
+    qty: number;
+    uom?: string;
+  };
+  bidder_proposal?: {
+    bidder_description: string;
+    delivery_time: string;
+    compliance_deviation: string;
+  };
+  [key: string]: unknown;
+}
+
+/** Incoming email data (from email-watcher) */
 export interface IncomingEmailData {
-  message_id: string;              // Unique message ID for dedup
+  message_id: string;
   from_email: string;
-  from_name?: string;              // Optional sender name
-  to: string[];                    // TO recipients
-  cc?: string[];                   // Optional CC recipients
+  from_name?: string;
+  to: string[];
+  cc?: string[];
   subject: string;
-  email_body_text: string;         // Plain-text email body
-  attachments_parsed?: Array<{     // Optional parsed attachment contents
+  email_body_text: string;
+  attachments_parsed?: Array<{
     filename: string;
     content_type: string;
     extracted_text: string;
   }>;
-  received_at?: string;            // Optional ISO 8601 timestamp
+  received_at?: string;
 }
 
-/** AI feedback comments (used in all reject/regenerate actions) */
+/** AI feedback comments (used in reject/regenerate actions) */
 interface AiComments {
-  general_feedback: string;        // Free-text overall feedback from user
+  general_feedback: string;
   inline_notes: Array<{
-    id: string;                    // Unique note ID (generated by UI)
-    selected_text: string;         // Text the user highlighted
-    comment: string;               // What the user wants changed
-    position: { start: number; end: number }; // Char offset in displayed content
-    timestamp: string;             // ISO 8601
+    id: string;
+    selected_text: string;
+    comment: string;
+    position: { start: number; end: number };
+    timestamp: string;
   }>;
+}
+
+// =============================================
+// ProcessorInput — main input interface
+// =============================================
+
+/** Generic processor input shape (JSON from HTTP request) */
+export interface ProcessorInput {
+  data_type: DataType;
+  action_type: ActionType;
+  session_id?: string;
+
+  // Identifiers
+  quotation_id?: number;
+  rfq_id?: number;
+  rfq_reference?: string;
+
+  // Quotation payloads
+  quotation_data?: QuotationData | ManualUpdateQuotationData;  // generate/update or manual_update shapes
+  pricing_variables?: PricingVariable[];                       // quotation/calculate
+
+  // Email payloads
+  email?: EmailData;                          // email/send
+  reference_content?: string;                 // email/generate — combined source content for AI
+  instructions?: string;                      // email/generate — optional AI/human instructions
+  previous_email?: PreviousEmail;             // email/re_generate — previous email to revise
+
+  // RFQ analysis payloads
+  analysis?: AnalysisData;                    // rfq_analysis/reanalyze, supplier_search/search
+  incoming_email?: IncomingEmailData;          // rfq_analysis/analyze, respond_service, incoming_email
+
+  // Supplier search payloads
+  search?: SearchData;                        // supplier_search/research
+  items_source?: SupplierItemSource[];         // supplier_search/research, respond_service/supplier_respond
+
+  // Shared payloads
+  rfq_items?: RfqItem[];                      // rfq_analysis/reanalyze, respond_service/customer_respond
+  ai_comments?: AiComments;                   // reanalyze/research/re_generate feedback
+  comments?: string;                          // Optional user comments
+
+  // Runtime
+  workspace?: import('@/lib/middleware/workspace-context').WorkspaceContext;
+  [key: string]: unknown;
 }
 
 // =============================================
@@ -205,40 +268,569 @@ interface AiComments {
 
 type ValidatorFn = (input: ProcessorInput) => ProcessorInput;
 
+// #############################################################################
+// SHARED SUB-VALIDATORS (reusable helpers)
+// #############################################################################
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; // Basic email format check
+
+/**
+ * Validate an incoming_email object structure.
+ * Reused by: rfq_analysis/analyze, respond_service/*, incoming_email/*
+ */
+function validateIncomingEmailObject(ie: unknown, context: string): asserts ie is IncomingEmailData {
+  if (!ie || typeof ie !== 'object') {
+    throw new Error(`incoming_email object is required for ${context}`);
+  }
+  const email = ie as Record<string, unknown>;
+
+  // message_id — dedup key
+  if (!email.message_id || (typeof email.message_id === 'string' && email.message_id.trim().length === 0)) {
+    throw new Error(`incoming_email.message_id is required for ${context}`);
+  }
+  // from_email — sender address
+  if (!email.from_email || typeof email.from_email !== 'string') {
+    throw new Error(`incoming_email.from_email is required for ${context}`);
+  }
+  if (!EMAIL_REGEX.test(email.from_email)) {
+    throw new Error(`incoming_email.from_email must be a valid email for ${context}`);
+  }
+  // to — recipient array
+  if (!Array.isArray(email.to) || email.to.length === 0) {
+    throw new Error(`incoming_email.to must be a non-empty array for ${context}`);
+  }
+  // subject — email subject line
+  if (!email.subject || (typeof email.subject === 'string' && email.subject.trim().length === 0)) {
+    throw new Error(`incoming_email.subject is required for ${context}`);
+  }
+  // email_body_text — plain-text body
+  if (!email.email_body_text || (typeof email.email_body_text === 'string' && email.email_body_text.trim().length === 0)) {
+    throw new Error(`incoming_email.email_body_text is required for ${context}`);
+  }
+  // Optional: cc must be array if provided
+  if (email.cc !== undefined && !Array.isArray(email.cc)) {
+    throw new Error(`incoming_email.cc must be an array for ${context}`);
+  }
+  // Optional: attachments_parsed must be array if provided
+  if (email.attachments_parsed !== undefined && !Array.isArray(email.attachments_parsed)) {
+    throw new Error(`incoming_email.attachments_parsed must be an array for ${context}`);
+  }
+  // Optional: received_at must be string if provided
+  if (email.received_at !== undefined && typeof email.received_at !== 'string') {
+    throw new Error(`incoming_email.received_at must be an ISO 8601 string for ${context}`);
+  }
+}
+
+/**
+ * Validate ai_comments object structure.
+ * Reused by: rfq_analysis/reanalyze, supplier_search/research, email/re_generate
+ */
+function validateAiCommentsObject(ac: unknown, context: string): asserts ac is AiComments {
+  if (!ac || typeof ac !== 'object') {
+    throw new Error(`ai_comments object is required for ${context}`);
+  }
+  const comments = ac as Record<string, unknown>;
+  if (typeof comments.general_feedback !== 'string') {
+    throw new Error(`ai_comments.general_feedback must be a string for ${context}`);
+  }
+  if (!Array.isArray(comments.inline_notes)) {
+    throw new Error(`ai_comments.inline_notes must be an array for ${context}`);
+  }
+}
+
+/**
+ * Validate rfq_items array structure.
+ * Reused by: rfq_analysis/reanalyze, respond_service/customer_respond
+ */
+function validateRfqItemsArray(items: unknown, context: string): asserts items is RfqItem[] {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new Error(`rfq_items must be a non-empty array for ${context}`);
+  }
+  items.forEach((item: Record<string, unknown>, i: number) => {
+    const ref = `rfq_items[${i}]`;
+    if (item.item_id === undefined || item.item_id === null) {
+      throw new Error(`${ref}.item_id is required for ${context}`);
+    }
+    if (!item.currency_code) {
+      throw new Error(`${ref}.currency_code is required for ${context}`);
+    }
+    const cr = item.company_requirement as Record<string, unknown> | undefined;
+    if (!cr) throw new Error(`${ref}.company_requirement is required for ${context}`);
+    if (!cr.company_description) throw new Error(`${ref}.company_requirement.company_description is required for ${context}`);
+    if (!cr.qty || Number(cr.qty) <= 0) throw new Error(`${ref}.company_requirement.qty must be > 0 for ${context}`);
+  });
+}
+
+/**
+ * Validate items_source array structure.
+ * Reused by: supplier_search/research, respond_service/supplier_respond
+ */
+function validateItemsSourceArray(items: unknown, context: string): asserts items is SupplierItemSource[] {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new Error(`items_source must be a non-empty array for ${context}`);
+  }
+  items.forEach((item: Record<string, unknown>, i: number) => {
+    const ref = `items_source[${i}]`;
+    if (item.item_id === undefined) throw new Error(`${ref}.item_id is required for ${context}`);
+    if (item.supplier_id === undefined) throw new Error(`${ref}.supplier_id is required for ${context}`);
+    if (!item.supplier_name) throw new Error(`${ref}.supplier_name is required for ${context}`);
+  });
+}
+
+/**
+ * Validate analysis object { subject, analysis_content }.
+ * Reused by: rfq_analysis/reanalyze, supplier_search/search
+ */
+function validateAnalysisObject(analysis: unknown, context: string): asserts analysis is AnalysisData {
+  if (!analysis || typeof analysis !== 'object') {
+    throw new Error(`analysis object is required for ${context}`);
+  }
+  const a = analysis as Record<string, unknown>;
+  if (!a.subject || (typeof a.subject === 'string' && a.subject.trim().length === 0)) {
+    throw new Error(`analysis.subject is required for ${context}`);
+  }
+  if (!a.analysis_content || (typeof a.analysis_content === 'string' && a.analysis_content.trim().length === 0)) {
+    throw new Error(`analysis.analysis_content is required for ${context}`);
+  }
+}
+
+/**
+ * Validate search object { subject, search_content }.
+ * Used by: supplier_search/research
+ */
+function validateSearchObject(search: unknown, context: string): asserts search is SearchData {
+  if (!search || typeof search !== 'object') {
+    throw new Error(`search object is required for ${context}`);
+  }
+  const s = search as Record<string, unknown>;
+  if (!s.subject || (typeof s.subject === 'string' && s.subject.trim().length === 0)) {
+    throw new Error(`search.subject is required for ${context}`);
+  }
+  if (!s.search_content || (typeof s.search_content === 'string' && s.search_content.trim().length === 0)) {
+    throw new Error(`search.search_content is required for ${context}`);
+  }
+}
+
+/**
+ * Validate a value is a positive integer. Returns the parsed int.
+ */
+function requirePositiveInt(val: unknown, name: string): number {
+  const n = parseInt(String(val), 10);
+  if (isNaN(n) || n <= 0) throw new Error(`${name} must be a positive integer`);
+  return n;
+}
+
+// #############################################################################
+// RFQ ANALYSIS VALIDATORS
+// #############################################################################
+
+/**
+ * rfq_analysis + analyze: Validates incoming_email object.
+ * JSON shape: { incoming_email: IncomingEmailData }
+ * Source: email watcher or direct upload
+ */
+function validateRfqAnalysisAnalyze(input: ProcessorInput): ProcessorInput {
+  validateIncomingEmailObject(input.incoming_email, 'rfq_analysis/analyze');
+  return input;
+}
+
+/**
+ * rfq_analysis + reanalyze: Validates rfq_id + ai_comments.
+ * rfq_reference, analysis, rfq_items are optional (enriched by data-loader).
+ * JSON shape: { rfq_id, ai_comments, rfq_reference?, analysis?, rfq_items? }
+ */
+function validateRfqAnalysisReanalyze(input: ProcessorInput): ProcessorInput {
+  // rfq_id is required — identifies which analysis to reprocess
+  if (!input.rfq_id) throw new Error('rfq_id is required for rfq_analysis/reanalyze');
+  requirePositiveInt(input.rfq_id, 'rfq_id');
+
+  // ai_comments is required — user feedback for the reanalysis
+  validateAiCommentsObject(input.ai_comments, 'rfq_analysis/reanalyze');
+
+  // Optional fields validated if present (may arrive from data-loader enrichment)
+  if (input.analysis) validateAnalysisObject(input.analysis, 'rfq_analysis/reanalyze');
+  if (input.rfq_items) validateRfqItemsArray(input.rfq_items, 'rfq_analysis/reanalyze');
+
+  return input;
+}
+
+// #############################################################################
+// SUPPLIER SEARCH VALIDATORS
+// #############################################################################
+
+/**
+ * supplier_search + search: Validates rfq_id + analysis object.
+ * JSON shape: { rfq_id, rfq_reference, analysis: { subject, analysis_content } }
+ * Note: uses `analysis` (from rfq_analysis output), NOT `search`.
+ */
+function validateSupplierSearchSearch(input: ProcessorInput): ProcessorInput {
+  // rfq_id is required — links to the analyzed RFQ
+  if (!input.rfq_id) throw new Error('rfq_id is required for supplier_search/search');
+  requirePositiveInt(input.rfq_id, 'rfq_id');
+
+  // analysis is optional at validation time — data-loader enriches from rfqAnalysis table
+  if (input.analysis) validateAnalysisObject(input.analysis, 'supplier_search/search');
+
+  return input;
+}
+
+/**
+ * supplier_search + research: Validates rfq_id + ai_comments.
+ * search, items_source, rfq_reference are optional (enriched by data-loader).
+ * JSON shape: { rfq_id, ai_comments, rfq_reference?, search?, items_source? }
+ */
+function validateSupplierSearchResearch(input: ProcessorInput): ProcessorInput {
+  // rfq_id is required — identifies which search to redo
+  if (!input.rfq_id) throw new Error('rfq_id is required for supplier_search/research');
+  requirePositiveInt(input.rfq_id, 'rfq_id');
+
+  // ai_comments is required — user feedback for re-search
+  validateAiCommentsObject(input.ai_comments, 'supplier_search/research');
+
+  // Optional fields validated if present
+  if (input.search) validateSearchObject(input.search, 'supplier_search/research');
+  if (input.items_source) validateItemsSourceArray(input.items_source, 'supplier_search/research');
+
+  return input;
+}
+
+// #############################################################################
+// QUOTATION VALIDATORS
+// #############################################################################
+
+/**
+ * quotation + generate/update: Validates full quotation_data shape.
+ * JSON shape: { quotation_data: { rfq_reference, customer_info, quotation_items[], commercial_terms } }
+ */
+function validateQuotationGenerateUpdate(input: ProcessorInput): ProcessorInput {
+  const actionType = input.action_type;
+
+  // quotation_data is required
+  if (!input.quotation_data) throw new Error('quotation_data is required');
+  const qd = input.quotation_data as QuotationData;
+
+  // quotation_id required for update, optional for generate
+  if (actionType === 'update') {
+    if (!qd.quotation_id) throw new Error('quotation_data.quotation_id is required for update action');
+    requirePositiveInt(qd.quotation_id, 'quotation_data.quotation_id');
+  }
+
+  // rfq_reference is required
+  if (!qd.rfq_reference) throw new Error('quotation_data.rfq_reference is required');
+
+  // customer_info is required with specific fields
+  const ci = qd.customer_info;
+  if (!ci) throw new Error('customer_info is required');
+  if (!ci.company_name) throw new Error('customer_info.company_name is required');
+  if (!ci.attention_person) throw new Error('customer_info.attention_person is required');
+  if (!Array.isArray(ci.carbon_copy_person)) throw new Error('customer_info.carbon_copy_person must be an array');
+  if (!ci.email) throw new Error('customer_info.email is required');
+  if (!ci.phone) throw new Error('customer_info.phone is required');
+  if (!ci.customer_address) throw new Error('customer_info.customer_address is required');
+
+  // commercial_terms is required
+  if (!qd.commercial_terms || typeof qd.commercial_terms !== 'string') {
+    throw new Error('commercial_terms is required and must be a string');
+  }
+
+  // quotation_items must be a non-empty array (max 100)
+  const items = qd.quotation_items;
+  if (!Array.isArray(items)) throw new Error('quotation_data.quotation_items must be an array');
+  if (items.length < 1) throw new Error('At least 1 quotation item is required');
+  if (items.length > 100) throw new Error('Maximum 100 quotation items allowed');
+
+  // Validate each item
+  items.forEach((item, index) => validateQuotationItem(item, index));
+
+  return input;
+}
+
+/**
+ * Validate a single quotation item (generate/update shape).
+ * Checks: currency_code, company_requirement (qty > 0), bidder_proposal (price > 0)
+ */
+function validateQuotationItem(item: QuotationItem, index: number): void {
+  const ref = `Item ${index + 1}`;
+
+  if (item.item_id !== undefined && item.item_id !== null) {
+    const id = parseInt(String(item.item_id), 10);
+    if (isNaN(id) || id < 1) throw new Error(`${ref}: item_id must be a positive integer`);
+  }
+  if (!item.currency_code) throw new Error(`${ref}: currency_code is required`);
+
+  // company_requirement
+  if (!item.company_requirement) throw new Error(`${ref}: company_requirement is required`);
+  if (!item.company_requirement.company_description) throw new Error(`${ref}: company_requirement.company_description is required`);
+  if (!item.company_requirement.qty || item.company_requirement.qty <= 0) {
+    throw new Error(`${ref}: company_requirement.qty must be greater than 0`);
+  }
+
+  // bidder_proposal
+  if (!item.bidder_proposal) throw new Error(`${ref}: bidder_proposal is required`);
+  if (!item.bidder_proposal.bidder_description) throw new Error(`${ref}: bidder_proposal.bidder_description is required`);
+  if (!item.bidder_proposal.bidder_unit_price || item.bidder_proposal.bidder_unit_price <= 0) {
+    throw new Error(`${ref}: bidder_proposal.bidder_unit_price must be greater than 0`);
+  }
+  if (!item.bidder_proposal.delivery_time) throw new Error(`${ref}: bidder_proposal.delivery_time is required`);
+  if (!item.bidder_proposal.compliance_deviation) throw new Error(`${ref}: bidder_proposal.compliance_deviation is required`);
+}
+
+/**
+ * quotation + manual_update: Validates quotation_data with manual-edit shape.
+ * JSON shape: { quotation_data: { quotation_id, rfq_reference, seller_info?, customer_info?, quotation_items? } }
+ */
+function validateQuotationManualUpdate(input: ProcessorInput): ProcessorInput {
+  // quotation_data is required
+  if (!input.quotation_data) throw new Error('quotation_data is required for manual_update');
+  const qd = input.quotation_data as ManualUpdateQuotationData;
+
+  // quotation_id is required inside quotation_data
+  if (!qd.quotation_id) throw new Error('quotation_data.quotation_id is required for manual_update');
+  requirePositiveInt(qd.quotation_id, 'quotation_data.quotation_id');
+
+  // rfq_reference is required
+  if (!qd.rfq_reference) throw new Error('quotation_data.rfq_reference is required for manual_update');
+
+  // seller_info is optional but must be object if present
+  if (qd.seller_info && typeof qd.seller_info !== 'object') {
+    throw new Error('quotation_data.seller_info must be an object');
+  }
+
+  // customer_info is optional but validated if present
+  if (qd.customer_info) {
+    if (typeof qd.customer_info !== 'object') throw new Error('quotation_data.customer_info must be an object');
+    const ccPerson = (qd.customer_info as Record<string, unknown>).carbon_copy_person;
+    if (ccPerson && !Array.isArray(ccPerson)) {
+      throw new Error('quotation_data.customer_info.carbon_copy_person must be an array');
+    }
+  }
+
+  // quotation_items validated if present
+  if (qd.quotation_items) {
+    if (!Array.isArray(qd.quotation_items)) throw new Error('quotation_data.quotation_items must be an array');
+    if (qd.quotation_items.length > 100) throw new Error('Maximum 100 quotation items allowed');
+
+    qd.quotation_items.forEach((item, i) => {
+      const ref = `quotation_items[${i}]`;
+      if (!item.item_id) throw new Error(`${ref}.item_id is required`);
+      requirePositiveInt(item.item_id, `${ref}.item_id`);
+      // Validate numeric pricing fields if present
+      if (item.sales_unit_price !== undefined && isNaN(Number(item.sales_unit_price))) {
+        throw new Error(`${ref}.sales_unit_price must be a number`);
+      }
+      if (item.ext_price !== undefined && isNaN(Number(item.ext_price))) {
+        throw new Error(`${ref}.ext_price must be a number`);
+      }
+    });
+  }
+
+  // comments is optional — for AI regeneration
+  if (input.comments !== undefined && typeof input.comments !== 'string') {
+    throw new Error('comments must be a string when provided');
+  }
+
+  return input;
+}
+
+/**
+ * quotation + calculate: Validates quotation_id + pricing_variables array.
+ * JSON shape: { quotation_id, pricing_variables: [{ item_id, shipping_cost, tax_rate, exchange_rate, profit_rate, discount_rate? }] }
+ */
+function validateQuotationCalculate(input: ProcessorInput): ProcessorInput {
+  // quotation_id is required at top level
+  if (!input.quotation_id) throw new Error('quotation_id is required for quotation/calculate');
+  requirePositiveInt(input.quotation_id, 'quotation_id');
+
+  // pricing_variables is required — array of per-item pricing params
+  if (!Array.isArray(input.pricing_variables) || input.pricing_variables.length === 0) {
+    throw new Error('pricing_variables must be a non-empty array for quotation/calculate');
+  }
+  if (input.pricing_variables.length > 100) {
+    throw new Error('Maximum 100 pricing variables allowed');
+  }
+
+  input.pricing_variables.forEach((pv, i) => {
+    const ref = `pricing_variables[${i}]`;
+    if (pv.item_id === undefined || pv.item_id === null) throw new Error(`${ref}.item_id is required`);
+    if (typeof pv.shipping_cost !== 'number') throw new Error(`${ref}.shipping_cost must be a number`);
+    if (typeof pv.tax_rate !== 'number') throw new Error(`${ref}.tax_rate must be a number`);
+    if (typeof pv.exchange_rate !== 'number') throw new Error(`${ref}.exchange_rate must be a number`);
+    if (typeof pv.profit_rate !== 'number') throw new Error(`${ref}.profit_rate must be a number`);
+    if (pv.discount_rate !== undefined && typeof pv.discount_rate !== 'number') {
+      throw new Error(`${ref}.discount_rate must be a number when provided`);
+    }
+  });
+
+  return input;
+}
+
+// #############################################################################
+// EMAIL VALIDATORS
+// #############################################################################
+
+/**
+ * email + generate: Validates reference_content string.
+ * JSON shape: { reference_content: string, instructions?: string }
+ */
+function validateEmailGenerate(input: ProcessorInput): ProcessorInput {
+  // reference_content is required — source material for AI to draft email from
+  if (input.reference_content === undefined || input.reference_content === null) {
+    throw new Error('reference_content is required for email/generate');
+  }
+  if (typeof input.reference_content !== 'string') {
+    throw new Error('reference_content must be a string for email/generate');
+  }
+
+  // instructions is optional but must be string if provided
+  if (input.instructions !== undefined && typeof input.instructions !== 'string') {
+    throw new Error('instructions must be a string when provided');
+  }
+
+  return input;
+}
+
+/**
+ * email + re_generate: Validates previous_email object + optional ai_comments.
+ * JSON shape: { previous_email: { subject, email_content }, ai_comments?: AiComments }
+ */
+function validateEmailRegenerate(input: ProcessorInput): ProcessorInput {
+  // previous_email is required — the email draft being revised
+  if (!input.previous_email || typeof input.previous_email !== 'object') {
+    throw new Error('previous_email object is required for email/re_generate');
+  }
+  if (!input.previous_email.subject || typeof input.previous_email.subject !== 'string') {
+    throw new Error('previous_email.subject is required for email/re_generate');
+  }
+  if (!input.previous_email.email_content || typeof input.previous_email.email_content !== 'string') {
+    throw new Error('previous_email.email_content is required for email/re_generate');
+  }
+
+  // ai_comments is optional — validated if present
+  if (input.ai_comments) {
+    validateAiCommentsObject(input.ai_comments, 'email/re_generate');
+  }
+
+  return input;
+}
+
+/**
+ * email + send: Validates email object with recipient/subject/content.
+ * JSON shape: { quotation_id?, rfq_reference?, email: { recipient_email, subject, email_content } }
+ */
+function validateEmailSend(input: ProcessorInput): ProcessorInput {
+  // email object is required for sending
+  if (!input.email || typeof input.email !== 'object') {
+    throw new Error('email object is required for email/send');
+  }
+
+  // recipient_email — validated with basic format check
+  if (!input.email.recipient_email) throw new Error('email.recipient_email is required');
+  if (!EMAIL_REGEX.test(input.email.recipient_email)) {
+    throw new Error('email.recipient_email must be a valid email address');
+  }
+
+  // subject — non-empty
+  if (!input.email.subject || input.email.subject.trim().length === 0) {
+    throw new Error('email.subject is required and cannot be empty');
+  }
+
+  // email_content — non-empty
+  if (!input.email.email_content || input.email.email_content.trim().length === 0) {
+    throw new Error('email.email_content is required and cannot be empty');
+  }
+
+  return input;
+}
+
+// #############################################################################
+// RESPOND SERVICE VALIDATORS
+// #############################################################################
+
+/**
+ * respond_service + supplier_respond: Validates incoming_email + rfq_id.
+ * items_source is optional (enriched by data-loader from supplierItemStatus).
+ * JSON shape: { rfq_id, incoming_email: IncomingEmailData, items_source?: SupplierItemSource[] }
+ */
+function validateRespondSupplier(input: ProcessorInput): ProcessorInput {
+  // rfq_id is required — links response to the correct RFQ
+  if (!input.rfq_id) throw new Error('rfq_id is required for respond_service/supplier_respond');
+  requirePositiveInt(input.rfq_id, 'rfq_id');
+
+  // incoming_email is required — the raw supplier reply email
+  validateIncomingEmailObject(input.incoming_email, 'respond_service/supplier_respond');
+
+  // items_source is optional — validated if present (may be enriched by data-loader)
+  if (input.items_source) validateItemsSourceArray(input.items_source, 'respond_service/supplier_respond');
+
+  return input;
+}
+
+/**
+ * respond_service + customer_respond: Validates incoming_email + rfq_id.
+ * rfq_items is optional (enriched by data-loader from rfqItems table).
+ * JSON shape: { rfq_id, incoming_email: IncomingEmailData, rfq_items?: RfqItem[] }
+ */
+function validateRespondCustomer(input: ProcessorInput): ProcessorInput {
+  // rfq_id is required — links response to the correct RFQ
+  if (!input.rfq_id) throw new Error('rfq_id is required for respond_service/customer_respond');
+  requirePositiveInt(input.rfq_id, 'rfq_id');
+
+  // incoming_email is required — the raw customer reply email
+  validateIncomingEmailObject(input.incoming_email, 'respond_service/customer_respond');
+
+  // rfq_items is optional — validated if present (may be enriched by data-loader)
+  if (input.rfq_items) validateRfqItemsArray(input.rfq_items, 'respond_service/customer_respond');
+
+  return input;
+}
+
+// #############################################################################
+// INCOMING EMAIL VALIDATORS
+// #############################################################################
+
+/**
+ * incoming_email + handleRFQ/handleRespond/handleUnknown: Validates incoming_email object.
+ * JSON shape: { incoming_email: IncomingEmailData }
+ */
+function validateIncomingEmail(input: ProcessorInput): ProcessorInput {
+  validateIncomingEmailObject(input.incoming_email, `incoming_email/${input.action_type}`);
+  return input;
+}
+
 // =============================================
 // EXTRACTION VALIDATION MAPPING TABLE
 // =============================================
-// Maps data_type + action_type → specific validator function
-// Each data_type has its own set of allowed action_types
+// Maps data_type + action_type → dedicated validator function.
+// Each combination has its own validator aligned with the JSON sample schema.
 
 const EXTRACTION_VALIDATE: Record<string, Record<string, ValidatorFn>> = {
-  'quotation': {
-    generate: validateQuotationGenerateUpdate,     // Full quotation generation
-    update: validateQuotationGenerateUpdate,        // Full quotation update
-    manual_update: validateQuotationManualUpdate,   // User edits from preview panel
-    calculate: validateQuotationManualUpdate,       // Calculate sales prices from pricing variables
-  },
-  'email': {
-    send: validateEmail,          // Send approved email
-    generate: validateEmail,      // Generate new email draft
-    re_generate: validateEmail,   // Regenerate rejected email
-  },
   'rfq_analysis': {
-    analyze: validateRfqAnalysis,    // Analyze new RFQ
-    reanalyze: validateRfqAnalysis,  // Re-analyze with user feedback
+    analyze:   validateRfqAnalysisAnalyze,     // incoming_email → rfq-analysis.json Input_1
+    reanalyze: validateRfqAnalysisReanalyze,   // rfq_id + ai_comments → rfq-analysis.json Input_2
   },
   'supplier_search': {
-    search: validateSuppliersSearch,    // Search for new suppliers
-    research: validateSuppliersSearch,  // Re-search with updated criteria
+    search:   validateSupplierSearchSearch,     // rfq_id + analysis → supplier-search.json Input_1
+    research: validateSupplierSearchResearch,   // rfq_id + ai_comments → supplier-search.json Input_2
+  },
+  'quotation': {
+    generate:      validateQuotationGenerateUpdate,  // quotation_data → quotation_Inpt.json
+    update:        validateQuotationGenerateUpdate,  // same shape, quotation_id required
+    manual_update: validateQuotationManualUpdate,    // quotation_data (manual shape) → quotation_ui_manual.json
+    calculate:     validateQuotationCalculate,       // quotation_id + pricing_variables → quotation_calulate.json
+  },
+  'email': {
+    generate:    validateEmailGenerate,     // reference_content → email-actions-json.json Input_1
+    re_generate: validateEmailRegenerate,   // previous_email + ai_comments → email-actions-json.json Input_2
+    send:        validateEmailSend,         // email object with recipient/subject/content
   },
   'respond_service': {
-    supplier_respond: validateSupplierRespond,   // Supplier replied to inquiry → parse + update items
-    customer_respond: validateSupplierRespond,   // Customer replied to quotation → parse + route
+    supplier_respond: validateRespondSupplier,   // incoming_email + rfq_id → respond_service.json supplier case
+    customer_respond: validateRespondCustomer,   // incoming_email + rfq_id → respond_service.json customer case
   },
   'incoming_email': {
-    handleRFQ: validateIncomingEmail,       // RFQ detected → route to rfq_analysis:analyze
-    handleRespond: validateIncomingEmail,   // Respond detected → route to respond_service:supplier_respond
-    handleUnknown: validateIncomingEmail,   // Unclassified → route to email:generate
+    handleRFQ:     validateIncomingEmail,   // incoming_email → route to rfq_analysis/analyze
+    handleRespond: validateIncomingEmail,   // incoming_email → route to respond_service
+    handleUnknown: validateIncomingEmail,   // incoming_email → unknown classification
   },
 };
 
@@ -247,56 +839,34 @@ const EXTRACTION_VALIDATE: Record<string, Record<string, ValidatorFn>> = {
 // =============================================
 
 /**
- * Validate and route input data based on data_type and action_type
- * Flow: check data_type → check action_type → route to specific validator
+ * Validate and route input data based on data_type and action_type.
+ * Flow: check data_type → check action_type → route to specific validator.
  * @param input - Raw JSON input from HTTP request
  * @returns Validated and normalized input
  * @throws Error if validation fails
  */
 export function validateInput(input: ProcessorInput): ProcessorInput {
   // Step 1: Input must exist
-  if (!input) {
-    throw new Error('Input data is required');
-  }
+  if (!input) throw new Error('Input data is required');
 
-  // Step 2: data_type is required
-  if (!input.data_type) {
-    throw new Error('data_type is required');
-  }
-
-  // Step 3: data_type must be one of the supported types
+  // Step 2: data_type is required and must be supported
+  if (!input.data_type) throw new Error('data_type is required');
   const validDataTypes: DataType[] = ['quotation', 'email', 'rfq_analysis', 'supplier_search', 'respond_service', 'incoming_email'];
   if (!validDataTypes.includes(input.data_type)) {
     throw new Error(`Invalid data_type: must be one of ${validDataTypes.join(' | ')}`);
   }
 
-  // Step 3.5: workspace context — skipped here, DB layer auto-injects clientId/companyId
+  // Step 3: action_type is required
+  if (!input.action_type) throw new Error('action_type is required');
 
-  // Step 4: action_type is required
-  if (!input.action_type) {
-    throw new Error('action_type is required');
-  }
-
-  // Step 4.5: Skip type-specific validation for lightweight actions
-  // 'proceed' = accept & advance pipeline (requires data_type + rfq_id)
-  // 'send'    = send approved email (content already validated at generate/re_generate)
+  // Step 4: Short-circuit for 'proceed' — lightweight, just needs rfq_id
   if (input.action_type === 'proceed') {
-    // Validate rfq_id exists and is a valid positive integer
-    if (!input.rfq_id) {
-      throw new Error('rfq_id is required for proceed action');
-    }
-    const rId = parseInt(String(input.rfq_id));
-    if (isNaN(rId) || rId <= 0) {
-      throw new Error('rfq_id must be a positive integer for proceed action');
-    }
+    if (!input.rfq_id) throw new Error('rfq_id is required for proceed action');
+    requirePositiveInt(input.rfq_id, 'rfq_id');
     return input;
   }
 
-  if (input.action_type === 'send') {
-    return input;
-  }
-
-  // Step 5: action_type must be valid for this data_type
+  // Step 5: Look up validator for this data_type + action_type
   const dataTypeValidators = EXTRACTION_VALIDATE[input.data_type];
   if (!dataTypeValidators) {
     throw new Error(`No validators configured for data_type: ${input.data_type}`);
@@ -319,456 +889,35 @@ export function validateInput(input: ProcessorInput): ProcessorInput {
 // =============================================
 
 /**
- * Normalize quotation data for consistent structure
+ * Normalize quotation data for consistent structure.
  * - Converts item_id to integer (prevents Map lookup failures)
  * - Preserves currency_code at both item and bidder_proposal level
- * @param input - Raw input data
+ * @param input - Validated input
  * @returns Deep-cloned normalized input
  */
 export function normalizeQuotationData(input: ProcessorInput): ProcessorInput {
-  // Deep clone to avoid mutations
   const normalized = JSON.parse(JSON.stringify(input)) as ProcessorInput;
 
   // Only normalize if quotation_data with items exists
-  if (normalized.quotation_data?.quotation_items) {
-    normalized.quotation_data.quotation_items = normalized.quotation_data.quotation_items.map(
-      (item) => {
-        // Normalize item_id to integer
-        if (item.item_id !== undefined && item.item_id !== null) {
-          item.item_id = parseInt(String(item.item_id), 10);
-        }
-
-        // Ensure currency_code exists in both item and bidder_proposal
-        if (item.currency_code !== undefined) {
-          if (!item.bidder_proposal) {
-            item.bidder_proposal = {} as QuotationItem['bidder_proposal'];
-          }
-          item.bidder_proposal.currency_code = item.currency_code;
-        }
-
-        return item;
+  const qd = normalized.quotation_data as QuotationData | undefined;
+  if (qd?.quotation_items) {
+    qd.quotation_items = qd.quotation_items.map((item) => {
+      // Normalize item_id to integer
+      if (item.item_id !== undefined && item.item_id !== null) {
+        item.item_id = parseInt(String(item.item_id), 10);
       }
-    );
+      // Ensure currency_code propagates to bidder_proposal
+      if (item.currency_code !== undefined) {
+        if (!item.bidder_proposal) {
+          item.bidder_proposal = {} as QuotationItem['bidder_proposal'];
+        }
+        item.bidder_proposal.currency_code = item.currency_code;
+      }
+      return item;
+    });
   }
 
   return normalized;
-}
-
-// #############################################################################
-// QUOTATION VALIDATORS
-// #############################################################################
-
-/**
- * Validate quotation generate/update action
- * Checks: quotation_data, customer_info, quotation_items (1-100 items)
- * @param input - Raw input
- * @returns Validated input
- */
-function validateQuotationGenerateUpdate(input: ProcessorInput): ProcessorInput {
-  const actionType = input.action_type;
-
-  // quotation_data is required
-  if (!input.quotation_data) {
-    throw new Error('quotation_data is required');
-  }
-
-  // quotation_id required for update, optional for generate
-  if (actionType === 'update') {
-    if (!input.quotation_data.quotation_id) {
-      throw new Error('quotation_data.quotation_id is required for update action');
-    }
-    const qId = parseInt(String(input.quotation_data.quotation_id));
-    if (isNaN(qId) || qId <= 0) {
-      throw new Error('quotation_data.quotation_id must be a positive integer');
-    }
-  }
-
-  // rfq_reference is required
-  if (!input.quotation_data.rfq_reference) {
-    throw new Error('quotation_data.rfq_reference is required');
-  }
-
-  // customer_info is required with specific fields
-  const ci = input.quotation_data.customer_info;
-  if (!ci) throw new Error('customer_info is required');
-  if (!ci.company_name) throw new Error('customer_info.company_name is required');
-  if (!ci.attention_person) throw new Error('customer_info.attention_person is required');
-  if (!Array.isArray(ci.carbon_copy_person)) throw new Error('customer_info.carbon_copy_person must be an array');
-  if (!ci.email) throw new Error('customer_info.email is required');
-  if (!ci.phone) throw new Error('customer_info.phone is required');
-  if (!ci.customer_address) throw new Error('customer_info.customer_address is required');
-
-  // commercial_terms is required
-  if (!input.quotation_data.commercial_terms || typeof input.quotation_data.commercial_terms !== 'string') {
-    throw new Error('commercial_terms is required and must be a string');
-  }
-
-  // quotation_items must be a non-empty array (max 100)
-  const items = input.quotation_data.quotation_items;
-  if (!Array.isArray(items)) throw new Error('quotation_data.quotation_items must be an array');
-  if (items.length < 1) throw new Error('At least 1 quotation item is required');
-  if (items.length > 100) throw new Error('Maximum 100 quotation items allowed');
-
-  // Validate each item
-  items.forEach((item, index) => validateQuotationItem(item, index));
-
-  return input;
-}
-
-/**
- * Validate a single quotation item structure
- * Checks: currency_code, company_requirement (qty > 0), bidder_proposal (price > 0)
- * @param item - Quotation item
- * @param index - Item index for error messages
- */
-function validateQuotationItem(item: QuotationItem, index: number): void {
-  const ref = `Item ${index + 1}`;
-
-  // item_id is optional but must be positive if provided
-  if (item.item_id !== undefined && item.item_id !== null) {
-    const id = parseInt(String(item.item_id), 10);
-    if (isNaN(id) || id < 1) throw new Error(`${ref}: item_id must be a positive integer`);
-  }
-
-  // currency_code is required
-  if (!item.currency_code) throw new Error(`${ref}: currency_code is required`);
-
-  // company_requirement is required with qty > 0
-  if (!item.company_requirement) throw new Error(`${ref}: company_requirement is required`);
-  if (!item.company_requirement.company_description) throw new Error(`${ref}: company_requirement.company_description is required`);
-  if (!item.company_requirement.qty || item.company_requirement.qty <= 0) {
-    throw new Error(`${ref}: company_requirement.qty must be greater than 0`);
-  }
-
-  // bidder_proposal is required with price > 0
-  if (!item.bidder_proposal) throw new Error(`${ref}: bidder_proposal is required`);
-  if (!item.bidder_proposal.bidder_description) throw new Error(`${ref}: bidder_proposal.bidder_description is required`);
-  if (!item.bidder_proposal.bidder_unit_price || item.bidder_proposal.bidder_unit_price <= 0) {
-    throw new Error(`${ref}: bidder_proposal.bidder_unit_price must be greater than 0`);
-  }
-  if (!item.bidder_proposal.delivery_time) throw new Error(`${ref}: bidder_proposal.delivery_time is required`);
-  if (!item.bidder_proposal.compliance_deviation) throw new Error(`${ref}: bidder_proposal.compliance_deviation is required`);
-}
-
-/**
- * Validate quotation manual_update action
- * For user edits from the Preview Panel (optional comments for AI regeneration)
- * Checks: quotation_id required, modify_content optional but validated if present
- * @param input - Raw input
- * @returns Validated input
- */
-function validateQuotationManualUpdate(input: ProcessorInput): ProcessorInput {
-  // quotation_id is required
-  if (!input.quotation_id) throw new Error('quotation_id is required for manual_update action');
-  const qId = parseInt(String(input.quotation_id));
-  if (isNaN(qId) || qId <= 0) throw new Error('quotation_id must be a positive integer');
-
-  // comments is optional (text or empty string) - for AI regeneration
-  if (input.comments !== undefined && typeof input.comments !== 'string') {
-    throw new Error('comments must be a string when provided');
-  }
-
-  // modify_content is optional but validated if present
-  if (input.modify_content) {
-    const mc = input.modify_content;
-    if (typeof mc !== 'object' || mc === null) throw new Error('modify_content must be an object');
-
-    // Validate quotation_id in modify_content matches input
-    if (mc.quotation_id && mc.quotation_id !== qId) {
-      throw new Error('modify_content.quotation_id must match input.quotation_id');
-    }
-
-    // Validate seller_info if provided
-    if (mc.seller_info && typeof mc.seller_info !== 'object') {
-      throw new Error('modify_content.seller_info must be an object');
-    }
-
-    // Validate customer_info if provided
-    if (mc.customer_info) {
-      if (typeof mc.customer_info !== 'object') throw new Error('modify_content.customer_info must be an object');
-      const ccPerson = (mc.customer_info as Record<string, unknown>).carbon_copy_person;
-      if (ccPerson && !Array.isArray(ccPerson)) {
-        throw new Error('modify_content.customer_info.carbon_copy_person must be an array');
-      }
-    }
-
-    // Validate quotation_items array if provided
-    if (mc.quotation_items) {
-      if (!Array.isArray(mc.quotation_items)) throw new Error('modify_content.quotation_items must be an array');
-
-      mc.quotation_items.forEach((item, index) => {
-        if (typeof item !== 'object' || item === null) {
-          throw new Error(`modify_content.quotation_items[${index}] must be an object`);
-        }
-        // item_id is required for matching
-        if (!item.item_id) throw new Error(`modify_content.quotation_items[${index}].item_id is required`);
-        const itemId = parseInt(String(item.item_id), 10);
-        if (isNaN(itemId) || itemId < 1) {
-          throw new Error(`modify_content.quotation_items[${index}].item_id must be a positive integer`);
-        }
-        // Validate numeric fields if provided
-        if (item.sales_unit_price !== undefined && isNaN(parseFloat(String(item.sales_unit_price)))) {
-          throw new Error(`modify_content.quotation_items[${index}].sales_unit_price must be a number`);
-        }
-        if (item.ext_price !== undefined && isNaN(parseFloat(String(item.ext_price)))) {
-          throw new Error(`modify_content.quotation_items[${index}].ext_price must be a number`);
-        }
-      });
-    }
-  }
-
-  return input;
-}
-
-// #############################################################################
-// EMAIL VALIDATORS
-// #############################################################################
-
-/**
- * Validate email data_type (send, generate, re_generate)
- * Checks: quotation_id, rfq_reference, email object with recipient/subject/content
- * @param input - Raw input
- * @returns Validated input
- */
-function validateEmail(input: ProcessorInput): ProcessorInput {
-  // quotation_id is required
-  if (!input.quotation_id) throw new Error('quotation_id is required for email data_type');
-  const qId = parseInt(String(input.quotation_id));
-  if (isNaN(qId) || qId <= 0) throw new Error('quotation_id must be a positive integer');
-
-  // rfq_reference is required
-  if (!input.rfq_reference) throw new Error('rfq_reference is required for email data_type');
-
-  // email object is required
-  if (!input.email || typeof input.email !== 'object') {
-    throw new Error('email object is required for email data_type');
-  }
-
-  // email.recipient_email is required with basic format check
-  if (!input.email.recipient_email) throw new Error('email.recipient_email is required');
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(input.email.recipient_email)) {
-    throw new Error('email.recipient_email must be a valid email address');
-  }
-
-  // email.subject is required and non-empty
-  if (!input.email.subject || input.email.subject.trim().length === 0) {
-    throw new Error('email.subject is required and cannot be empty');
-  }
-
-  // email.email_content is required and non-empty
-  if (!input.email.email_content || input.email.email_content.trim().length === 0) {
-    throw new Error('email.email_content is required and cannot be empty');
-  }
-
-  return input;
-}
-
-// #############################################################################
-// RFQ ANALYSIS VALIDATORS
-// #############################################################################
-
-/**
- * Validate rfq_analysis data_type (analyze, reanalyze)
- * Checks: rfq_id (optional for new analysis), rfq_reference, analysis object with subject/content
- * @param input - Raw input
- * @returns Validated input
- */
-function validateRfqAnalysis(input: ProcessorInput): ProcessorInput {
-  // rfq_id is optional for 'analyze', required for 'reanalyze'
-  if (input.rfq_id != null) {
-    const rId = parseInt(String(input.rfq_id));
-    if (isNaN(rId) || rId <= 0) throw new Error('rfq_id must be a positive integer');
-  }
-  if (input.action_type === 'reanalyze' && !input.rfq_id) {
-    throw new Error('rfq_id is required for reanalyze action');
-  }
-
-  // For reanalyze: analysis + rfq_reference loaded from DB; only require rfq_id + ai_comments
-  if (input.action_type === 'reanalyze') {
-    // ai_comments is required for reanalyze (user feedback)
-    if (!input.ai_comments || typeof input.ai_comments !== 'object') {
-      throw new Error('ai_comments is required for reanalyze action');
-    }
-    if (typeof input.ai_comments.general_feedback !== 'string') {
-      throw new Error('ai_comments.general_feedback must be a string');
-    }
-    if (!Array.isArray(input.ai_comments.inline_notes)) {
-      throw new Error('ai_comments.inline_notes must be an array');
-    }
-    // rfq_reference and analysis are optional for reanalyze — loaded from DB if missing
-    return input;
-  }
-
-  // For analyze: full validation required
-  // rfq_reference is required
-  if (!input.rfq_reference) throw new Error('rfq_reference is required for rfq_analysis data_type');
-
-  // analysis object is required
-  if (!input.analysis || typeof input.analysis !== 'object') {
-    throw new Error('analysis object is required for rfq_analysis data_type');
-  }
-
-  // analysis.subject is required
-  if (!input.analysis.subject || input.analysis.subject.trim().length === 0) {
-    throw new Error('analysis.subject is required and cannot be empty');
-  }
-
-  // analysis.analysis_content is required
-  if (!input.analysis.analysis_content || input.analysis.analysis_content.trim().length === 0) {
-    throw new Error('analysis.analysis_content is required and cannot be empty');
-  }
-
-  return input;
-}
-
-// #############################################################################
-// SUPPLIER SEARCH VALIDATORS
-// #############################################################################
-
-/**
- * Validate supplier_search data_type (search, research)
- * Checks: rfq_id (optional for new search), rfq_reference, search object with subject/content
- * @param input - Raw input
- * @returns Validated input
- */
-function validateSuppliersSearch(input: ProcessorInput): ProcessorInput {
-  // rfq_id is optional (resolved from rfq_reference if not provided), but must be valid if provided
-  if (input.rfq_id != null) {
-    const rId = parseInt(String(input.rfq_id));
-    if (isNaN(rId) || rId <= 0) throw new Error('rfq_id must be a positive integer');
-  }
-
-  // rfq_reference is required
-  if (!input.rfq_reference) throw new Error('rfq_reference is required for supplier_search data_type');
-
-  // search object is required
-  if (!input.search || typeof input.search !== 'object') {
-    throw new Error('search object is required for supplier_search data_type');
-  }
-
-  // search.subject is required
-  if (!input.search.subject || input.search.subject.trim().length === 0) {
-    throw new Error('search.subject is required and cannot be empty');
-  }
-
-  // search.search_content is required
-  if (!input.search.search_content || input.search.search_content.trim().length === 0) {
-    throw new Error('search.search_content is required and cannot be empty');
-  }
-
-  // ai_comments validation for research (feedback from user)
-  if (input.action_type === 'research' && input.ai_comments) {
-    if (typeof input.ai_comments !== 'object') {
-      throw new Error('ai_comments must be an object');
-    }
-    if (typeof input.ai_comments.general_feedback !== 'string') {
-      throw new Error('ai_comments.general_feedback must be a string');
-    }
-    if (!Array.isArray(input.ai_comments.inline_notes)) {
-      throw new Error('ai_comments.inline_notes must be an array');
-    }
-  }
-
-  return input;
-}
-
-// #############################################################################
-// RESPOND SERVICE VALIDATORS
-// #############################################################################
-
-/**
- * Validate respond_service data_type (supplier_respond, customer_respond)
- * Both action_types require incoming_email data (the raw email to classify and process)
- * and rfq_id for linking to the correct RFQ context.
- * @param input - Raw input
- * @returns Validated input
- */
-function validateSupplierRespond(input: ProcessorInput): ProcessorInput {
-  const { action_type } = input;
-
-  // Both supplier_respond and customer_respond require incoming_email data
-  if (!input.incoming_email || typeof input.incoming_email !== 'object') {
-    throw new Error(`incoming_email object is required for respond_service:${action_type}`);
-  }
-  const ie = input.incoming_email;
-  if (!ie.from_email) throw new Error(`incoming_email.from_email is required for respond_service:${action_type}`);
-  if (!ie.email_body_text) throw new Error(`incoming_email.email_body_text is required for respond_service:${action_type}`);
-
-  // rfq_id is required for linking the response to the correct RFQ
-  if (!input.rfq_id) throw new Error('rfq_id is required for respond_service data_type');
-  const rId = parseInt(String(input.rfq_id));
-  if (isNaN(rId) || rId <= 0) throw new Error('rfq_id must be a positive integer');
-
-  return input;
-}
-
-// #############################################################################
-// INCOMING EMAIL VALIDATORS
-// #############################################################################
-
-/**
- * Validate incoming_email data_type (handleRFQ, handleSuppliersRespond, handleUnknown)
- * Checks: incoming_email object with message_id, from_email, subject, email_body_text
- * @param input - Raw input
- * @returns Validated input
- */
-function validateIncomingEmail(input: ProcessorInput): ProcessorInput {
-  // incoming_email object is required
-  if (!input.incoming_email || typeof input.incoming_email !== 'object') {
-    throw new Error('incoming_email object is required for incoming_email data_type');
-  }
-
-  const ie = input.incoming_email;
-
-  // message_id is required (used for dedup)
-  if (!ie.message_id || ie.message_id.trim().length === 0) {
-    throw new Error('incoming_email.message_id is required and cannot be empty');
-  }
-
-  // from_email is required with basic format check
-  if (!ie.from_email) throw new Error('incoming_email.from_email is required');
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(ie.from_email)) {
-    throw new Error('incoming_email.from_email must be a valid email address');
-  }
-
-  // from_name is optional but must be string if provided
-  if (ie.from_name !== undefined && typeof ie.from_name !== 'string') {
-    throw new Error('incoming_email.from_name must be a string');
-  }
-
-  // to is required (array of recipient addresses)
-  if (!Array.isArray(ie.to) || ie.to.length === 0) {
-    throw new Error('incoming_email.to must be a non-empty array of recipient addresses');
-  }
-
-  // cc is optional but must be array if provided
-  if (ie.cc !== undefined && !Array.isArray(ie.cc)) {
-    throw new Error('incoming_email.cc must be an array');
-  }
-
-  // subject is required
-  if (!ie.subject || ie.subject.trim().length === 0) {
-    throw new Error('incoming_email.subject is required and cannot be empty');
-  }
-
-  // email_body_text is required
-  if (!ie.email_body_text || ie.email_body_text.trim().length === 0) {
-    throw new Error('incoming_email.email_body_text is required and cannot be empty');
-  }
-
-  // attachments_parsed is optional but must be array if provided
-  if (ie.attachments_parsed !== undefined && !Array.isArray(ie.attachments_parsed)) {
-    throw new Error('incoming_email.attachments_parsed must be an array');
-  }
-
-  // received_at is optional but must be valid ISO string if provided
-  if (ie.received_at !== undefined && typeof ie.received_at !== 'string') {
-    throw new Error('incoming_email.received_at must be an ISO 8601 string');
-  }
-
-  return input;
 }
 
 // =============================================
@@ -778,12 +927,29 @@ function validateIncomingEmail(input: ProcessorInput): ProcessorInput {
 export {
   EXTRACTION_VALIDATE,
   normalizeQuotationData as normalizeData,
+  // Quotation validators
   validateQuotationGenerateUpdate,
   validateQuotationManualUpdate,
+  validateQuotationCalculate,
   validateQuotationItem,
-  validateEmail,
-  validateRfqAnalysis,
-  validateSuppliersSearch,
-  validateSupplierRespond,
+  // Email validators
+  validateEmailGenerate,
+  validateEmailRegenerate,
+  validateEmailSend,
+  // RFQ analysis validators
+  validateRfqAnalysisAnalyze,
+  validateRfqAnalysisReanalyze,
+  // Supplier search validators
+  validateSupplierSearchSearch,
+  validateSupplierSearchResearch,
+  // Respond service validators
+  validateRespondSupplier,
+  validateRespondCustomer,
+  // Incoming email validator
   validateIncomingEmail,
+  // Shared sub-validators (for external reuse)
+  validateIncomingEmailObject,
+  validateAiCommentsObject,
+  validateRfqItemsArray,
+  validateItemsSourceArray,
 };
