@@ -273,6 +273,12 @@ type ValidatorFn = (input: ProcessorInput) => ProcessorInput;
 // #############################################################################
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; // Basic email format check
+const MAX_TEXT_LENGTH = 5_000_000; // 5MB cap on large text fields to prevent DoS
+
+/** Sanitize user-controlled values before interpolation into error messages (XSS prevention) */
+function safeLabel(val: unknown): string {
+  return String(val).slice(0, 50).replace(/[<>"'&]/g, '');
+}
 
 /**
  * Validate an incoming_email object structure.
@@ -303,9 +309,12 @@ function validateIncomingEmailObject(ie: unknown, context: string): asserts ie i
   if (!email.subject || (typeof email.subject === 'string' && email.subject.trim().length === 0)) {
     throw new Error(`incoming_email.subject is required for ${context}`);
   }
-  // email_body_text — plain-text body
+  // email_body_text — plain-text body (capped to prevent DoS)
   if (!email.email_body_text || (typeof email.email_body_text === 'string' && email.email_body_text.trim().length === 0)) {
     throw new Error(`incoming_email.email_body_text is required for ${context}`);
+  }
+  if (typeof email.email_body_text === 'string' && email.email_body_text.length > MAX_TEXT_LENGTH) {
+    throw new Error(`incoming_email.email_body_text exceeds max length (${MAX_TEXT_LENGTH}) for ${context}`);
   }
   // Optional: cc must be array if provided
   if (email.cc !== undefined && !Array.isArray(email.cc)) {
@@ -392,6 +401,9 @@ function validateAnalysisObject(analysis: unknown, context: string): asserts ana
   if (!a.analysis_content || (typeof a.analysis_content === 'string' && a.analysis_content.trim().length === 0)) {
     throw new Error(`analysis.analysis_content is required for ${context}`);
   }
+  if (typeof a.analysis_content === 'string' && a.analysis_content.length > MAX_TEXT_LENGTH) {
+    throw new Error(`analysis.analysis_content exceeds max length for ${context}`);
+  }
 }
 
 /**
@@ -408,6 +420,9 @@ function validateSearchObject(search: unknown, context: string): asserts search 
   }
   if (!s.search_content || (typeof s.search_content === 'string' && s.search_content.trim().length === 0)) {
     throw new Error(`search.search_content is required for ${context}`);
+  }
+  if (typeof s.search_content === 'string' && s.search_content.length > MAX_TEXT_LENGTH) {
+    throw new Error(`search.search_content exceeds max length for ${context}`);
   }
 }
 
@@ -677,8 +692,11 @@ function validateEmailGenerate(input: ProcessorInput): ProcessorInput {
   if (input.reference_content === undefined || input.reference_content === null) {
     throw new Error('reference_content is required for email/generate');
   }
-  if (typeof input.reference_content !== 'string') {
-    throw new Error('reference_content must be a string for email/generate');
+  if (typeof input.reference_content !== 'string' || input.reference_content.trim().length === 0) {
+    throw new Error('reference_content must be a non-empty string for email/generate');
+  }
+  if (input.reference_content.length > MAX_TEXT_LENGTH) {
+    throw new Error(`reference_content exceeds max length (${MAX_TEXT_LENGTH})`);
   }
 
   // instructions is optional but must be string if provided
@@ -869,14 +887,14 @@ export function validateInput(input: ProcessorInput): ProcessorInput {
   // Step 5: Look up validator for this data_type + action_type
   const dataTypeValidators = EXTRACTION_VALIDATE[input.data_type];
   if (!dataTypeValidators) {
-    throw new Error(`No validators configured for data_type: ${input.data_type}`);
+    throw new Error(`No validators configured for data_type: ${safeLabel(input.data_type)}`);
   }
 
   const validator = dataTypeValidators[input.action_type];
   if (!validator) {
     const allowedActions = Object.keys(dataTypeValidators).join(' | ');
     throw new Error(
-      `action_type '${input.action_type}' not supported for data_type '${input.data_type}'. Allowed: ${allowedActions}`
+      `action_type '${safeLabel(input.action_type)}' not supported for data_type '${safeLabel(input.data_type)}'. Allowed: ${allowedActions}`
     );
   }
 
