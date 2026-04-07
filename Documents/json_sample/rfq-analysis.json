@@ -1,0 +1,130 @@
+//Input_1:
+{
+  "data_type": "rfq_analysis",
+  "action_type": "ananlyze",
+  "incoming_email": {
+    "message_id": "<unique-msg-id@sender.com>",       // for dedup (incoming_emails.message_id)
+    "from_email": "james.rodriguez@pacificclimate.com",
+    "from_name": "James Rodriguez",
+    "to": ["sales@ourcompany.com"],
+    "cc": ["lisa.park@pacificclimate.com", "robert.thompson@pacificclimate.com"],
+    "subject": "RFQ - HVAC Equipment for Marina Boulevard Project",
+    "email_body_text": "Dear Sir/Madam,\n\nWe would like to request a quotation for the following HVAC equipment for our Marina Boulevard project...",
+    "attachments_parsed": [
+      {
+        "filename": "RFQ-HVAC-2026.pdf",
+        "content_type": "application/pdf",
+        "extracted_text": "ITEM 1: Industrial Chiller Unit, 50-Ton Capacity, Qty: 2 SETS..."
+      },
+      {
+        "filename": "floor-plan-specs.png",
+        "content_type": "image/png",
+        "extracted_text": "Floor plan showing HVAC zones A through D, total area 5000 sqm..."
+      }
+    ],
+    "received_at": "2026-03-31T10:00:00Z"
+  }
+}
+
+//Input_2:   //also will be genrated by suppliers_search 
+
+{
+  "data_type": "rfq_analysis",
+  "action_type": "reanalyze",
+  "rfq_id": 1,
+  "rfq_reference": "RFQ-2025-HVAC-EQUIPMENT",
+  "analysis": {
+    "subject": "RFQ Analysis - HVAC Equipment for Marina Boulevard Project",
+    "analysis_content": "Client Pacific Climate Solutions requests quotation for 3 categories..."
+  },
+  "rfq_items": [   //obliged 
+      {
+        "item_id": "1",
+        "currency_code": "USD",
+        "company_requirement": {
+          "company_description": "Industrial Chiller Unit, 50-Ton Capacity (Model ICU-50T)",
+          "qty": 2,
+          "uom": "SET"
+        }
+      },
+      {
+        "item_id": "2",
+        "currency_code": "USD",
+        "company_requirement": {
+          "company_description": "Air Handling Unit with Heat Recovery, 15000 CFM (Model AHU-15K-HR)",
+          "qty": 1,
+          "uom": "SET"
+        }
+      },
+      {
+        "item_id": "3",
+        "currency_code": "USD",
+        "company_requirement": {
+          "company_description": "Variable Refrigerant Flow (VRF) Outdoor Unit, 24HP (Model VRF-24HP)",
+          "qty": 5,
+          "uom": "EA"
+        }
+      }
+  ],
+  "ai_comments": { //auto_inject   
+    "general_feedback": "The analysis missed the delivery deadline requirement mentioned in the PDF",
+    "inline_notes": [
+      {
+        "id": "note_a1b2c3",
+        "selected_text": "50-Ton Capacity",
+        "comment": "Customer specified 60-Ton in the PDF attachment on page 3, paragraph 2",
+        "position": { "start": 142, "end": 157 },
+        "timestamp": "2026-03-31T10:05:00Z"
+      },
+      {
+        "id": "note_d4e5f6",
+        "selected_text": "No clarification needed",
+        "comment": "Actually we need to clarify the voltage requirements - 380V or 415V?",
+        "position": { "start": 401, "end": 425 },
+        "timestamp": "2026-03-31T10:05:30Z"
+      }
+    ]
+  }
+}
+
+
+//output of Input_1  and  Input_2: 
+{
+  "data_type": "rfq_analysis",
+  "rfq_id": 1,
+  "rfq_reference": "RFQ-2025-HVAC-EQUIPMENT",
+  "analysis": {
+    "subject": "RFQ Analysis - HVAC Equipment for Marina Boulevard Project",
+    "analysis_content": "Client Pacific Climate Solutions requests quotation for 3 categories..."
+  },
+  "rfq_items": [   //obliged 
+      {
+        "item_id": "1",
+        "currency_code": "USD",
+        "company_requirement": {
+          "company_description": "Industrial Chiller Unit, 50-Ton Capacity (Model ICU-50T)",
+          "qty": 2,
+          "uom": "SET"
+        }
+      },
+      {
+        "item_id": "2",
+        "currency_code": "USD",
+        "company_requirement": {
+          "company_description": "Air Handling Unit with Heat Recovery, 15000 CFM (Model AHU-15K-HR)",
+          "qty": 1,
+          "uom": "SET"
+        }
+      },
+      {
+        "item_id": "3",
+        "currency_code": "USD",
+        "company_requirement": {
+          "company_description": "Variable Refrigerant Flow (VRF) Outdoor Unit, 24HP (Model VRF-24HP)",
+          "qty": 5,
+          "uom": "EA"
+        }
+      }
+  ]
+}
+=> send to databaseHandler +  to emit sse

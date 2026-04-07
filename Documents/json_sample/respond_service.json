@@ -1,0 +1,286 @@
+
+//Input Json for supppliers_search_actions.ts
+
+case from suppliers:
+{
+  "data_type": "respond_service",
+  "action_type": "supplier_respond",  
+  "incoming_email": {
+    "message_id": "<unique-msg-id@sender.com>",       
+    "from_email": "james.rodriguez@pacificclimate.com",
+    "from_name": "James Rodriguez",
+    "to": ["sales@ourcompany.com"],
+    "cc": ["lisa.park@pacificclimate.com", "robert.thompson@pacificclimate.com"],
+    "subject": "RFQ - HVAC Equipment for Marina Boulevard Project",
+    "email_body_text": "Dear Sir/Madam,\n\nWe would like to request a quotation for the following HVAC equipment for our Marina Boulevard project...",
+    "attachments_parsed": [
+      {
+        "filename": "RFQ-HVAC-2026.pdf",
+        "content_type": "application/pdf",
+        "extracted_text": "ITEM 1: Industrial Chiller Unit, 50-Ton Capacity, Qty: 2 SETS..."
+      },
+      {
+        "filename": "floor-plan-specs.png",
+        "content_type": "image/png",
+        "extracted_text": "Floor plan showing HVAC zones A through D, total area 5000 sqm..."
+      }
+    ],
+    "received_at": "2026-03-31T10:00:00Z"
+  },
+  "items_source": [
+    {
+      "item_id": 1,
+      "supplier_id": 1,
+      "supplier_name": "Daikin Industries Ltd.",
+      "source_url": "https://www.daikin.com.sg/products/chillers/icu-50t",
+      "status": "pending",
+      "delivery_time": "8-10 weeks",
+      "bidder_description": "Advanced VRF outdoor unit with inverter technology, simultaneous heating and cooling capability, and smart building integration via BACnet protocol.",
+      "bidder_unit_price": 6200,
+      "compliance_deviation": "Exceeds minimum efficiency requirements by 15%. Includes 3-year extended warranty.",
+      "notes": "Authorized distributor in Singapore. R-410A compliant."
+    },
+    {
+      "item_id": 1,
+      "supplier_id": 2,
+      "supplier_name": "Carrier Global Corp.",
+      "source_url": "https://www.carrier.com/commercial/en/sg/products/chillers",
+      "status": "pending",
+      "delivery_time": "10-12 weeks",
+      "bidder_description": "Water-cooled chiller system with high-efficiency scroll compressors and advanced energy management controls.",
+      "bidder_unit_price": 8200,
+      "compliance_deviation": "Meets baseline efficiency standards. Optional extended warranty available at additional cost.",
+      "notes": "Direct OEM supply. Bulk discount applicable for multi-unit orders."
+    },
+    {
+      "item_id": 2,
+      "supplier_id": 3,
+      "supplier_name": "Trane Technologies",
+      "source_url": "https://www.trane.com/commercial/asia/sg/en/products/air-handlers.html",
+      "status": "pending",
+      "delivery_time": "8-12 weeks",
+      "bidder_description": "Modular air handling unit with integrated heat recovery and MERV 14 filtration for enhanced indoor air quality.",
+      "bidder_unit_price": 11500,
+      "compliance_deviation": "Surpasses air filtration standards and includes factory-installed energy recovery module.",
+      "notes": "Suitable for large commercial zones. Requires on-site commissioning."
+    },
+    {
+      "item_id": 3,
+      "supplier_id": 1,
+      "supplier_name": "Daikin Industries Ltd.",
+      "source_url": "https://www.daikin.com.sg/products/vrf/vrv-outdoor",
+      "status": "pending",
+      "delivery_time": "6-8 weeks",
+      "bidder_description": "High-performance VRV outdoor unit with variable refrigerant flow control and smart building connectivity.",
+      "bidder_unit_price": 5800,
+      "compliance_deviation": "Includes enhanced control interface and exceeds energy efficiency benchmarks by 10%.",
+      "notes": "Compact design. Pre-configured for BACnet integration."
+    },
+    {
+      "item_id": 3,
+      "supplier_id": 4,
+      "supplier_name": "Mitsubishi Electric Asia",
+      "source_url": "https://www.mitsubishielectric.com.sg/products/air-conditioning/vrf",
+      "status": "pending",
+      "delivery_time": "6-10 weeks",
+      "bidder_description": "City Multi VRF system with advanced zoning capabilities and real-time performance monitoring features.",
+      "bidder_unit_price": 6100,
+      "compliance_deviation": "Complies with all project specifications and includes smart diagnostics for predictive maintenance.",
+      "notes": "Optimized for multi-zone commercial buildings. Remote monitoring supported."
+    }
+  ]
+}
+
+
+
+//case from customer
+{
+  "data_type": "respond_service",
+  "action_type": "customer_respond",
+  "incoming_email": {
+    "message_id": "<unique-msg-id@sender.com>",       
+    "from_email": "james.rodriguez@pacificclimate.com",
+    "from_name": "James Rodriguez",
+    "to": ["sales@ourcompany.com"],
+    "cc": ["lisa.park@pacificclimate.com", "robert.thompson@pacificclimate.com"],
+    "subject": "RFQ - HVAC Equipment for Marina Boulevard Project",
+    "email_body_text": "Dear Sir/Madam,\n\nWe would like to request a quotation for the following HVAC equipment for our Marina Boulevard project...",
+    "attachments_parsed": [
+      {
+        "filename": "RFQ-HVAC-2026.pdf",
+        "content_type": "application/pdf",
+        "extracted_text": "ITEM 1: Industrial Chiller Unit, 50-Ton Capacity, Qty: 2 SETS..."
+      },
+      {
+        "filename": "floor-plan-specs.png",
+        "content_type": "image/png",
+        "extracted_text": "Floor plan showing HVAC zones A through D, total area 5000 sqm..."
+      }
+    ],
+    "received_at": "2026-03-31T10:00:00Z"
+  },
+  "rfq_items": [
+      {
+        "item_id": "1",
+        "currency_code": "USD",
+        "company_requirement": {
+          "company_description": "Industrial Chiller Unit, 50-Ton Capacity (Model ICU-50T)",
+          "qty": 2,
+          "uom": "SET"
+        }
+      },
+      {
+        "item_id": "2",
+        "currency_code": "USD",
+        "company_requirement": {
+          "company_description": "Air Handling Unit with Heat Recovery, 15000 CFM (Model AHU-15K-HR)",
+          "qty": 1,
+          "uom": "SET"
+        }
+      },
+      {
+        "item_id": "3",
+        "currency_code": "USD",
+        "company_requirement": {
+          "company_description": "Variable Refrigerant Flow (VRF) Outdoor Unit, 24HP (Model VRF-24HP)",
+          "qty": 5,
+          "uom": "EA"
+        }
+      }
+  ]
+}
+
+
+///OUTPUT OF AI
+//case 1 from customer  if goods available and unavailable update :
+{
+  "search_id": 1,
+  "rfq_id": 1,
+  "rfq_reference": "RFQ-2025-HVAC-EQUIPMENT",
+  "search": {   //called supplier_ssearch_prompt  agents to regenerate ! //all the infromation within should be update or no !
+      "subject": "Supplier Search Results - HVAC Equipment",
+      "search_content": "Identified 5 potential suppliers across 3 equipment categories. Daikin and Carrier lead on chillers; Trane for AHU; Daikin and Mitsubishi for VRF units. Pricing estimates range USD 5,800–12,000 per unit."
+   },
+   "items_source": [ //all the infromation within should be update or no !
+      {
+        "item_id": 1,
+        "supplier_id": 1,
+        "supplier_name": "Daikin Industries Ltd.",
+        "source_url": "https://www.daikin.com.sg/products/chillers/icu-50t",
+        "status": "pending",
+        "delivery_time": "8-10 weeks",
+        "bidder_description": "Advanced VRF outdoor unit with inverter technology, simultaneous heating and cooling capability, and smart building integration via BACnet protocol.",
+        "bidder_unit_price": 6200,
+        "compliance_deviation": "Exceeds minimum efficiency requirements by 15%. Includes 3-year extended warranty.",
+        "notes": "Authorized distributor in Singapore. R-410A compliant."
+      },
+      {
+        "item_id": 1,
+        "supplier_id": 2,
+        "supplier_name": "Carrier Global Corp.",
+        "source_url": "https://www.carrier.com/commercial/en/sg/products/chillers",
+        "status": "pending",
+        "delivery_time": "10-12 weeks",
+        "bidder_description": "Water-cooled chiller system with high-efficiency scroll compressors and advanced energy management controls.",
+        "bidder_unit_price": 8200,
+        "compliance_deviation": "Meets baseline efficiency standards. Optional extended warranty available at additional cost.",
+        "notes": "Direct OEM supply. Bulk discount applicable for multi-unit orders."
+      },
+      {
+        "item_id": 2,
+        "supplier_id": 3,
+        "supplier_name": "Trane Technologies",
+        "source_url": "https://www.trane.com/commercial/asia/sg/en/products/air-handlers.html",
+        "status": "pending",
+        "delivery_time": "8-12 weeks",
+        "bidder_description": "Modular air handling unit with integrated heat recovery and MERV 14 filtration for enhanced indoor air quality.",
+        "bidder_unit_price": 11500,
+        "compliance_deviation": "Surpasses air filtration standards and includes factory-installed energy recovery module.",
+        "notes": "Suitable for large commercial zones. Requires on-site commissioning."
+      },
+      {
+        "item_id": 3,
+        "supplier_id": 1,
+        "supplier_name": "Daikin Industries Ltd.",
+        "source_url": "https://www.daikin.com.sg/products/vrf/vrv-outdoor",
+        "status": "pending",
+        "delivery_time": "6-8 weeks",
+        "bidder_description": "High-performance VRV outdoor unit with variable refrigerant flow control and smart building connectivity.",
+        "bidder_unit_price": 5800,
+        "compliance_deviation": "Includes enhanced control interface and exceeds energy efficiency benchmarks by 10%.",
+        "notes": "Compact design. Pre-configured for BACnet integration."
+      },
+      {
+        "item_id": 3,
+        "supplier_id": 4,
+        "supplier_name": "Mitsubishi Electric Asia",
+        "source_url": "https://www.mitsubishielectric.com.sg/products/air-conditioning/vrf",
+        "status": "pending",
+        "delivery_time": "6-10 weeks",
+        "bidder_description": "City Multi VRF system with advanced zoning capabilities and real-time performance monitoring features.",
+        "bidder_unit_price": 6100,
+        "compliance_deviation": "Complies with all project specifications and includes smart diagnostics for predictive maintenance.",
+        "notes": "Optimized for multi-zone commercial buildings. Remote monitoring supported."
+      }
+    ],
+}
+ = >  update directly at modidfedDatabase 
+
+// case 2 if goods information being update :
+{
+  "rfq_id": 1,
+  "rfq_reference": "RFQ-2025-HVAC-EQUIPMENT",
+  "analysis": { //all the infromation within should be update or no !
+    "subject": "RFQ Analysis - HVAC Equipment for Marina Boulevard Project",     //called analysis_prompt  agents to regenerate !
+    "analysis_content": "Client Pacific Climate Solutions requests quotation for 3 categories..."
+  },
+  "rfq_items": [  //all the infromation within should be update or no !
+      {
+        "item_id": "1",
+        "currency_code": "USD",
+        "company_requirement": {
+          "company_description": "Industrial Chiller Unit, 50-Ton Capacity (Model ICU-50T)",
+          "qty": 2,
+          "uom": "SET"
+        }
+      },
+      {
+        "item_id": "2",
+        "currency_code": "USD",
+        "company_requirement": {
+          "company_description": "Air Handling Unit with Heat Recovery, 15000 CFM (Model AHU-15K-HR)",
+          "qty": 1,
+          "uom": "SET"
+        }
+      },
+      {
+        "item_id": "3",
+        "currency_code": "USD",
+        "company_requirement": {
+          "company_description": "Variable Refrigerant Flow (VRF) Outdoor Unit, 24HP (Model VRF-24HP)",
+          "qty": 5,
+          "uom": "EA"
+        }
+      }
+  ]
+  }
+}
+ = >  update directly at modidfedDatabase 
+
+
+// case 3, random resoind email :
+
+=> generate the json format similar as the Input_1  within email-actions-json.json !
+{
+  "data_type": "email",
+  "action_type": "generate",
+  "reference_content":  "input.incoming_email (for subjects, email_body_content and attachments ) || or anythin",
+  "instructions": "generated by AI or human"  // this is optional because it only use for suppleirs-respond-actions cases ! esle we still prompt for it to handle!
+} => recursive handlerHttprequest
+
+
+
+
+
+
+

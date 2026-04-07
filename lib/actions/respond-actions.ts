@@ -74,7 +74,7 @@ interface ItemsSummary {
  * @param input - Validated ProcessorInput (data_type: 'respond_service')
  * @returns ProcessorResult with items_updated + all_items_available flag
  */
-export async function processSupplierRespond(input: ProcessorInput): Promise<ProcessorResult> {
+export async function processRespond(input: ProcessorInput): Promise<ProcessorResult> {
   const startTime = Date.now();
   const timestamp = new Date().toISOString();
 

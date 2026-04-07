@@ -6,11 +6,6 @@
 //   build*Message  — function that injects dynamic variables into user message
 
 export {
-  CLASSIFY_EMAIL_PROMPT,
-  buildClassifyUserMessage,
-} from './classify-email';
-
-export {
   ANALYZE_RFQ_PROMPT,
   buildAnalyzeUserMessage,
   buildReanalyzeUserMessage,
@@ -23,12 +18,13 @@ export {
 } from './search-suppliers';
 
 export {
-  EXTRACT_SUPPLIER_RESPONSE_PROMPT,
-  buildExtractUserMessage,
-} from './extract-supplier-response';
-
-export {
   GENERATE_EMAIL_PROMPT,
   buildEmailUserMessage,
   buildRegenerateEmailUserMessage,
 } from './generate-email';
+
+export {
+  RESPOND_SERVICES_PROMPT,
+  buildCustomerRespondMessage,
+  buildSupplierRespondMessage,
+} from './respond-prompt';

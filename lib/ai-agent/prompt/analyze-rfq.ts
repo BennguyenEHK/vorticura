@@ -8,9 +8,10 @@ export const ANALYZE_RFQ_PROMPT = `You extract structured RFQ data from emails. 
 
 Output schema:
 {
-  "report": {
+  "rfq_analysis": {
     "subject": "RFQ Analysis - [topic]",
-    "analysis_content": "Summary: what client wants, key requirements, deadlines, clarification needed"
+    "analysis_content": "Summary: what client wants, key requirements, deadlines, clarification needed",
+    "analysis_status": "completed"
   },
   "customer_info": {
     "company_name": "",
@@ -41,7 +42,8 @@ Rules:
 - Default currency_code to "USD" if not specified.
 - If a field is not found, use empty string "" or empty array [].
 - Extract full customer contact info: company, person, CC, email, phone, fax, address.
-- analysis_content: concise summary of what is requested, note if clarification is needed.
+- rfq_analysis.analysis_content: concise summary of what is requested, note if clarification is needed.
+- rfq_analysis.analysis_status: always "completed".
 - company_description must include full item detail: model, part number, specs, material.`;
 
 // --- Input shape for the analyze user message builder ---

@@ -20,7 +20,7 @@ import { InferenceClient } from '@huggingface/inference';
 export {
   ANALYZE_RFQ_PROMPT as ANALYSIS_SYSTEM_PROMPT,
   SEARCH_SUPPLIERS_PROMPT as SUPPLIER_SEARCH_SYSTEM_PROMPT,
-  EXTRACT_SUPPLIER_RESPONSE_PROMPT as SUPPLIER_RESPOND_SYSTEM_PROMPT,
+  RESPOND_SERVICES_PROMPT as SUPPLIER_RESPOND_SYSTEM_PROMPT,
 } from './prompt';
 
 // =============================================
