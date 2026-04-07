@@ -1,19 +1,8 @@
 // =============================================
-// DATABASE HANDLER - Hybrid Registry Pattern
+// DATABASE HANDLER - Unified WRITE_MAP Pattern
 // =============================================
-// Unified database operations with typed payload builders + registry-driven routing.
-//
-// Architecture:
-//   modifyDatabase(input, workspace)
-//     ├─ data_type === 'quotation'  → handleQuotationWrite()  (dedicated multi-table handler)
-//     └─ all other data_types       → TABLE_REGISTRY lookup   → handleSingleTableWrite()
-//
-// Adding a new single-table data_type:
-//   1. Add a buildXxxPayload() function
-//   2. Add one entry to TABLE_REGISTRY (~10 lines)
-//   Done — no if/else needed.
-//
-// Reference: Documents/json_sample/json_method_plan.md
+// Data-driven database operations: WRITE_MAP[data_type][action_type] → TableWriteConfig[]
+// Single handler processes 1..N tables per data_type+action_type combination.
 
 import { insertData, getData, updateData } from '@/lib/db/queries';
 import { WorkspaceContext } from '@/lib/middleware/workspace-context';
@@ -29,24 +18,24 @@ type Payload = Record<string, any>;
 /** Builder function signature — maps raw data to Drizzle-compatible payload */
 type BuilderFn = (data: Record<string, unknown>, update?: boolean) => Payload;
 
-/** Registry config for single-table data types */
-interface SingleTableConfig {
-  table: string;                                              // camelCase name for queries.ts (e.g., 'emailTable')
-  existsTable: string;                                        // snake_case name for checkDataExists (e.g., 'email_table')
-  builder: BuilderFn;                                         // payload builder function
-  canUpdate: (input: ModifyDatabaseInput) => boolean;         // are required IDs present to attempt update?
-  getExistsId: (input: ModifyDatabaseInput) => number;        // ID value for existence check
-  getUpdateFilter: (input: ModifyDatabaseInput) => Record<string, unknown>; // WHERE clause for UPDATE
-  extractData: (input: ModifyDatabaseInput) => Record<string, unknown>;     // merge input fields into flat data for builder
+interface TableWriteConfig {
+  table: string;
+  existsTable: string;
+  builder: BuilderFn;
+  extract: (input: ModifyDatabaseInput) => Record<string, unknown> | Record<string, unknown>[] | null;
+  getExistsId: (data: Record<string, unknown>, input: ModifyDatabaseInput) => number | null;
+  getUpdateFilter: (data: Record<string, unknown>, input: ModifyDatabaseInput) => Record<string, unknown>;
+  updateOnly?: boolean;
+  onInsert?: (result: Record<string, unknown>, input: ModifyDatabaseInput) => void;
 }
 
 /** Input shape for modifyDatabase — flexible JSON from processors */
 export interface ModifyDatabaseInput {
-  data_type: string;               // quotation | email | rfq_analysis | supplier_search | incoming_email
-  rfq_id?: number;                 // Top-level RFQ ID (for rfq_analysis/supplier_search types)
-  quotation_id?: number;           // Top-level quotation ID (for quotation-stage types)
-  rfq_reference?: string;          // RFQ reference string
-  exchange_currency?: string;      // Target currency for pricing
+  data_type: string;
+  rfq_id?: number;
+  quotation_id?: number;
+  rfq_reference?: string;
+  exchange_currency?: string;
   // Quotation-specific
   quotationData?: {
     quotation_id?: number;
@@ -60,6 +49,7 @@ export interface ModifyDatabaseInput {
     version_number?: number;
     created_by?: string;
     customer_info?: Record<string, unknown>;
+    rfq_items?: Array<Record<string, unknown>>;
     quotation_items?: Array<Record<string, unknown>>;
   };
   // Pricing-specific (per-item array from pricing calculator)
@@ -67,7 +57,7 @@ export interface ModifyDatabaseInput {
     calculated_pricing?: Array<Record<string, unknown>>;
     total_amount?: number;
   };
-  pricing_variables?: Array<Record<string, unknown>>; // Per-item pricing variables
+  pricing_variables?: Array<Record<string, unknown>>;
   // Email-specific
   email?: Record<string, unknown>;
   email_id?: number;
@@ -79,6 +69,9 @@ export interface ModifyDatabaseInput {
   // Incoming Email-specific
   incoming_email?: Record<string, unknown>;
   incoming_email_id?: number;
+  // Multi-table support
+  rfq_items?: Array<Record<string, unknown>>;
+  items_source?: Array<Record<string, unknown>>;
 }
 
 // =============================================
@@ -111,7 +104,7 @@ export function buildQuotationPayload(data: Record<string, unknown>, update = fa
  * Build RFQ items payload for RFQ_ITEMS table
  * Supports nested company_requirement or flat fields
  */
-export function buildQuotationItemsPayload(data: Record<string, unknown>, update = false): Payload {
+export function buildRfqItemsPayload(data: Record<string, unknown>, update = false): Payload {
   const payload: Payload = {};
 
   // PK/FK — exclude on UPDATE
@@ -254,19 +247,16 @@ export function buildSupplierSearchPayload(data: Record<string, unknown>, update
 
 /**
  * Build supplier item status payload for SUPPLIER_ITEM_STATUS table
- * Used by supplier_respond flow to track per-item availability from suppliers
  */
 export function buildSupplierItemStatusPayload(data: Record<string, unknown>, update = false): Payload {
   const payload: Payload = {};
 
-  // PK/FK — exclude on UPDATE (with numeric validation)
   if (!update && data.id != null) payload.id = parseInt(String(data.id), 10);
   if (!update && data.rfq_id != null) payload.rfqId = parseInt(String(data.rfq_id), 10);
   if (data.item_id != null) payload.itemId = parseInt(String(data.item_id), 10);
   if (data.supplier_id != null) payload.supplierId = parseInt(String(data.supplier_id), 10);
   if (data.supplier_name != null) payload.supplierName = String(data.supplier_name);
   if (data.source_url != null) payload.sourceUrl = String(data.source_url);
-  // Status: 'pending' | 'available' | 'unavailable'
   if (data.status != null) payload.status = String(data.status);
   if (data.bidder_unit_price != null) payload.bidderUnitPrice = String(data.bidder_unit_price);
   else if (data.unit_price != null) payload.bidderUnitPrice = String(data.unit_price);
@@ -296,42 +286,32 @@ export function buildUserCompanyPayload(data: Record<string, unknown>): Payload 
 
 /**
  * Build incoming email payload for INCOMING_EMAILS table
- * Maps raw email fields from email-watcher to DB columns
  */
 export function buildIncomingEmailPayload(data: Record<string, unknown>, update = false): Payload {
   const payload: Payload = {};
 
-  // PK — exclude on UPDATE (with NaN guard)
   if (!update && data.id != null) {
     const id = parseInt(String(data.id), 10);
     if (!isNaN(id)) payload.id = id;
   }
-  // Dedup key
   if (data.message_id != null) payload.messageId = String(data.message_id);
-  // Sender info
   if (data.from_email != null) payload.fromEmail = String(data.from_email);
   if (data.from_name != null) payload.fromName = String(data.from_name);
-  // Recipients (arrays)
   if (data.to != null) {
     payload.toRecipients = Array.isArray(data.to) ? data.to.map(String) : [String(data.to)];
   }
   if (data.cc != null) {
     payload.ccRecipients = Array.isArray(data.cc) ? data.cc.map(String) : [String(data.cc)];
   }
-  // Email content
   if (data.subject != null) payload.subject = String(data.subject);
   if (data.email_body_text != null) payload.emailBodyText = String(data.email_body_text);
-  // Attachments (jsonb — pass through as-is)
   if (data.attachments_parsed != null) payload.attachmentsParsed = data.attachments_parsed;
-  // Classification (set after AI classify step)
   if (data.classification_type != null) payload.classificationType = String(data.classification_type);
   if (data.classification_confidence != null) payload.classificationConfidence = String(data.classification_confidence);
-  // FK link to rfq_analysis (set after routing, with NaN guard)
   if (data.rfq_id != null) {
     const rfqId = parseInt(String(data.rfq_id), 10);
     if (!isNaN(rfqId)) payload.rfqId = rfqId;
   }
-  // Timestamps — convert to Date objects for Drizzle timestamp columns
   if (data.received_at != null) payload.receivedAt = new Date(String(data.received_at));
   if (data.processed_at != null) payload.processedAt = new Date(String(data.processed_at));
 
@@ -339,71 +319,228 @@ export function buildIncomingEmailPayload(data: Record<string, unknown>, update 
 }
 
 // =============================================
-// TABLE REGISTRY — Single-table data types
+// WRITE_MAP — data-driven table routing [data_type] → TableWriteConfig[]
+// Each extract() self-gates on input presence — no action_type routing needed.
 // =============================================
-// Each entry defines how to route a data_type to its table.
-// Adding a new data_type = add one entry here + one builder above.
 
-const TABLE_REGISTRY: Record<string, SingleTableConfig> = {
-  // Email drafts and sent emails
-  email: {
-    table: 'emailTable',
-    existsTable: 'email_table',
-    builder: buildEmailPayload,
-    canUpdate: (input) => !!(input.email_id && input.quotation_id), // need both IDs to find existing
-    getExistsId: (input) => input.quotation_id!,                    // check by quotation_id
-    getUpdateFilter: (input) => ({ emailId: input.email_id }),      // update by email_id
-    extractData: (input) => ({
-      ...input.email,
-      quotation_id: input.quotation_id,
-      rfq_id: input.rfq_id,
-      rfq_reference: input.rfq_reference,
-    }),
-  },
+const WRITE_MAP: Record<string, TableWriteConfig[]> = {
 
-  // RFQ analysis reports
-  rfq_analysis: {
-    table: 'rfqAnalysis',
-    existsTable: 'rfq_analysis',
-    builder: buildRfqAnalysisPayload,
-    canUpdate: (input) => !!input.rfq_id,             // rfq_id is both check and update key
-    getExistsId: (input) => input.rfq_id!,
-    getUpdateFilter: (input) => ({ rfqId: input.rfq_id }),
-    extractData: (input) => ({
-      ...input.rfq_analysis,
-      rfq_id: input.rfq_id,
-      rfq_reference: input.rfq_reference,
-    }),
-  },
+  // ─── RFQ ANALYSIS ──────────────────────────────
+  rfq_analysis: [
+    {
+      table: 'rfqAnalysis',
+      existsTable: 'rfq_analysis',
+      builder: buildRfqAnalysisPayload,
+      extract: (input) => {
+        if (!input.rfq_analysis) return null;
+        return { ...input.rfq_analysis, rfq_id: input.rfq_id, rfq_reference: input.rfq_reference };
+      },
+      getExistsId: (_data, input) => input.rfq_id ?? null,
+      getUpdateFilter: (_data, input) => ({ rfqId: input.rfq_id }),
+    },
+    {
+      table: 'rfqItems',
+      existsTable: 'rfq_items',
+      builder: buildRfqItemsPayload,
+      extract: (input) => {
+        if (!input.rfq_items?.length) return null;
+        return input.rfq_items.map(item => ({ ...item, rfq_id: input.rfq_id }));
+      },
+      getExistsId: (data) => data.item_id ? Number(data.item_id) : null,
+      getUpdateFilter: (data, input) => ({ rfqId: input.rfq_id, itemId: parseInt(String(data.item_id)) }),
+    },
+  ],
 
-  // Supplier search results
-  supplier_search: {
-    table: 'supplierSearch',
-    existsTable: 'supplier_search',
-    builder: buildSupplierSearchPayload,
-    canUpdate: (input) => !!(input.search_id && input.rfq_id), // need both to find existing
-    getExistsId: (input) => input.rfq_id!,                     // check by rfq_id
-    getUpdateFilter: (input) => ({ searchId: input.search_id }),// update by search_id
-    extractData: (input) => ({
-      ...input.suppliers_search,
-      rfq_id: input.rfq_id,
-      rfq_reference: input.rfq_reference,
-    }),
-  },
+  // ─── SUPPLIER SEARCH ───────────────────────────
+  supplier_search: [
+    {
+      table: 'supplierSearch',
+      existsTable: 'supplier_search',
+      builder: buildSupplierSearchPayload,
+      extract: (input) => {
+        if (!input.suppliers_search) return null;
+        return { ...input.suppliers_search, rfq_id: input.rfq_id, rfq_reference: input.rfq_reference };
+      },
+      getExistsId: (_data, input) => input.rfq_id ?? null,
+      getUpdateFilter: (_data, input) => ({ searchId: input.search_id }),
+    },
+    {
+      table: 'supplierItemStatus',
+      existsTable: 'supplier_item_status',
+      builder: buildSupplierItemStatusPayload,
+      extract: (input) => {
+        if (!input.items_source?.length) return null;
+        return input.items_source.map(item => ({ ...item, rfq_id: input.rfq_id }));
+      },
+      getExistsId: (data) => data.rfq_id ? Number(data.rfq_id) : null,
+      getUpdateFilter: (data) => ({
+        rfqId: Number(data.rfq_id),
+        itemId: Number(data.item_id),
+        supplierId: Number(data.supplier_id),
+      }),
+    },
+  ],
 
-  // Raw incoming emails from email-watcher
-  incoming_email: {
-    table: 'incomingEmails',
-    existsTable: 'incoming_emails',
-    builder: buildIncomingEmailPayload,
-    canUpdate: (input) => !!input.incoming_email_id,             // update by incoming_email_id
-    getExistsId: (input) => input.incoming_email_id!,
-    getUpdateFilter: (input) => ({ id: input.incoming_email_id }),
-    extractData: (input) => ({
-      ...input.incoming_email,
-      rfq_id: input.rfq_id,
-    }),
-  },
+  // ─── QUOTATION (all actions: generate/update/manual_update/calculate) ───
+  // Each extract self-gates: quotationData fields → quotations/customers/items,
+  // calculatedPricing → quotationPricing. No action_type split needed.
+  quotation: [
+    {
+      table: 'quotations',
+      existsTable: 'quotations',
+      builder: buildQuotationPayload,
+      extract: (input) => {
+        if (!input.quotationData) return null;
+        return input.quotationData as unknown as Record<string, unknown>;
+      },
+      getExistsId: (_data, input) => input.quotationData?.quotation_id ?? null,
+      getUpdateFilter: (_data, input) => ({ quotationId: input.quotationData!.quotation_id }),
+      onInsert: (result, input) => {
+        if (result?.quotationId && input.quotationData) {
+          input.quotationData.quotation_id = result.quotationId as number;
+        }
+      },
+    },
+    {
+      table: 'customers',
+      existsTable: 'customers',
+      builder: buildCustomerPayload,
+      extract: (input) => {
+        const qd = input.quotationData;
+        if (!qd?.customer_info || !qd.rfq_id) return null;
+        return { customer_info: qd.customer_info, rfq_id: qd.rfq_id } as Record<string, unknown>;
+      },
+      getExistsId: (_data, input) => input.quotationData?.rfq_id ?? null,
+      getUpdateFilter: (_data, input) => ({ rfqId: input.quotationData!.rfq_id }),
+    },
+    {
+      table: 'userCompany',
+      existsTable: 'user_company',
+      builder: buildUserCompanyPayload,
+      extract: (input) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const si = (input.quotationData as any)?.seller_info;
+        if (!si) return null;
+        return { company_name: si.company_name, company_address: si.address, company_fax: si.fax_number, company_email: si.email };
+      },
+      getExistsId: () => 1,
+      getUpdateFilter: () => ({}),
+      updateOnly: true,
+    },
+    {
+      table: 'rfqItems',
+      existsTable: 'rfq_items',
+      builder: buildRfqItemsPayload,
+      extract: (input) => {
+        const qd = input.quotationData;
+        const items = qd?.rfq_items || qd?.quotation_items;
+        if (!items?.length || !qd?.rfq_id) return null;
+        return items.map((item) => ({ ...item, rfq_id: qd.rfq_id }));
+      },
+      getExistsId: (data, input) => {
+        const itemId = data.item_id ? parseInt(String(data.item_id), 10) : null;
+        return itemId && input.quotationData?.rfq_id ? input.quotationData.rfq_id : null;
+      },
+      getUpdateFilter: (data, input) => ({
+        rfqId: input.quotationData!.rfq_id,
+        itemId: parseInt(String(data.item_id)),
+      }),
+    },
+    {
+      table: 'supplierItemStatus',
+      existsTable: 'supplier_item_status',
+      builder: buildSupplierItemStatusPayload,
+      extract: (input) => {
+        const qd = input.quotationData;
+        const items = qd?.rfq_items || qd?.quotation_items;
+        if (!items?.length) return null;
+        const withBidder = items.filter((item) => item.bidder_proposal && item.supplier_id);
+        if (!withBidder.length) return null;
+        return withBidder.map((item) => ({
+          rfq_id: qd?.rfq_id || input.rfq_id,
+          item_id: item.item_id,
+          supplier_id: item.supplier_id,
+          ...(item.bidder_proposal as Record<string, unknown>),
+        }));
+      },
+      getExistsId: (data) => data.rfq_id ? Number(data.rfq_id) : null,
+      getUpdateFilter: (data) => ({
+        rfqId: Number(data.rfq_id),
+        itemId: Number(data.item_id),
+        supplierId: Number(data.supplier_id),
+      }),
+    },
+    {
+      table: 'quotationPricing',
+      existsTable: 'quotation_pricing',
+      builder: buildPricingPayload,
+      extract: (input) => {
+        const cp = input.calculatedPricing?.calculated_pricing;
+        if (!cp?.length || !input.quotationData?.quotation_id) return null;
+        return cp.map(pricingItem => {
+          const itemId = pricingItem.item_id ? Number(pricingItem.item_id) : null;
+          let vars: Record<string, unknown> = {};
+          if (Array.isArray(input.pricing_variables) && itemId) {
+            vars = (input.pricing_variables.find(v => Number(v.item_id) === itemId) || {}) as Record<string, unknown>;
+          }
+          return {
+            quotation_id: input.quotationData!.quotation_id,
+            item_id: pricingItem.item_id,
+            pricingVariables: vars,
+            calculatedPricing: { calculated_pricing: [pricingItem] },
+            exchange_currency: input.exchange_currency || 'VND',
+          };
+        });
+      },
+      getExistsId: (data) => data.item_id ? Number(data.quotation_id) : null,
+      getUpdateFilter: (data) => ({
+        quotationId: Number(data.quotation_id),
+        itemId: parseInt(String(data.item_id)),
+      }),
+    },
+    {
+      table: 'quotations',
+      existsTable: 'quotations',
+      builder: (_data) => ({ totalAmount: String(_data.total_amount) }),
+      extract: (input) => {
+        if (input.calculatedPricing?.total_amount == null || !input.quotationData?.quotation_id) return null;
+        return { quotation_id: input.quotationData.quotation_id, total_amount: input.calculatedPricing.total_amount };
+      },
+      getExistsId: (data) => Number(data.quotation_id),
+      getUpdateFilter: (data) => ({ quotationId: Number(data.quotation_id) }),
+      updateOnly: true,
+    },
+  ],
+
+  // ─── EMAIL ─────────────────────────────────────
+  email: [
+    {
+      table: 'emailTable',
+      existsTable: 'email_table',
+      builder: buildEmailPayload,
+      extract: (input) => {
+        if (!input.email) return null;
+        return { ...input.email, quotation_id: input.quotation_id, rfq_id: input.rfq_id, rfq_reference: input.rfq_reference };
+      },
+      getExistsId: (_data, input) => (input.email_id && input.quotation_id) ? input.quotation_id! : null,
+      getUpdateFilter: (_data, input) => ({ emailId: input.email_id }),
+    },
+  ],
+
+  // ─── INCOMING EMAIL ────────────────────────────
+  incoming_email: [
+    {
+      table: 'incomingEmails',
+      existsTable: 'incoming_emails',
+      builder: buildIncomingEmailPayload,
+      extract: (input) => {
+        if (!input.incoming_email) return null;
+        return { ...input.incoming_email, rfq_id: input.rfq_id };
+      },
+      getExistsId: (_data, input) => input.incoming_email_id ?? null,
+      getUpdateFilter: (_data, input) => ({ id: input.incoming_email_id }),
+    },
+  ],
 };
 
 // =============================================
@@ -413,7 +550,6 @@ const TABLE_REGISTRY: Record<string, SingleTableConfig> = {
 /**
  * Check if data exists in a table by primary/foreign key
  * Uses getData from queries.ts for workspace-isolated lookups
- * @returns Array of matching rows (empty if not found)
  */
 export async function checkDataExists(
   table: string,
@@ -421,7 +557,6 @@ export async function checkDataExists(
   workspace: WorkspaceContext
 ): Promise<Record<string, unknown>[]> {
   try {
-    // Map snake_case table names to camelCase keys used by queries.ts getTableByName()
     const tableNameMap: Record<string, string> = {
       'quotations': 'quotations',
       'rfq_items': 'rfqItems',
@@ -441,14 +576,13 @@ export async function checkDataExists(
       return await getData('quotations', { quotationId: keysId }, workspace) as Record<string, unknown>[];
     }
 
-    // Determine the correct lookup column based on table
     let filterColumn: string;
     switch (table) {
       case 'user_company':
         filterColumn = 'companyId';
         break;
       case 'incoming_emails':
-        filterColumn = 'id';             // PK lookup for incoming emails
+        filterColumn = 'id';
         break;
       case 'rfq_analysis':
       case 'supplier_search':
@@ -457,207 +591,61 @@ export async function checkDataExists(
         filterColumn = 'rfqId';
         break;
       default:
-        filterColumn = 'quotationId';    // quotations, rfq_items, quotation_pricing, email_table
+        filterColumn = 'quotationId';
         break;
     }
 
     return await getData(tableName, { [filterColumn]: keysId }, workspace) as Record<string, unknown>[];
   } catch (error) {
     console.error(`Error checking data existence in ${table}:`, error);
-    return []; // Return empty on error (assume not exists)
+    return [];
   }
 }
 
 // =============================================
-// GENERIC SINGLE-TABLE HANDLER
+// UNIFIED HANDLER — 3 Layers
 // =============================================
 
-/**
- * Handle insert/update for any single-table data_type using registry config.
- * Pattern: extract data → check exists → INSERT or UPDATE
- */
-async function handleSingleTableWrite(
-  config: SingleTableConfig,
+async function handleWrite(
+  configs: TableWriteConfig[],
   input: ModifyDatabaseInput,
   workspace: WorkspaceContext
 ): Promise<void> {
-  const data = config.extractData(input);
+  for (const config of configs) {
+    // Layer 1: Extract data
+    const extracted = config.extract(input);
+    if (extracted === null) continue;
 
-  // Attempt update if required IDs are present
-  if (config.canUpdate(input)) {
-    const existsId = config.getExistsId(input);
-    const existing = await checkDataExists(config.existsTable, existsId, workspace);
+    const items: Record<string, unknown>[] = Array.isArray(extracted) ? extracted : [extracted];
 
-    if (existing.length > 0) {
-      // UPDATE — exclude PK/FK from SET clause
-      const updatePayload = config.builder(data, true);
-      const filter = config.getUpdateFilter(input);
-      await updateData(config.table, filter, updatePayload, workspace);
-      console.log(`[DB] ${config.table} updated`);
-      return;
-    }
-  }
+    for (const item of items) {
+      // Layer 2: Build payload + check existence
+      const existsId = config.getExistsId(item, input);
 
-  // INSERT — include all fields
-  const insertPayload = config.builder(data, false);
-  await insertData(config.table, {}, insertPayload, workspace);
-  console.log(`[DB] ${config.table} inserted`);
-}
+      if (existsId !== null) {
+        const existing = await checkDataExists(config.existsTable, existsId, workspace);
 
-// =============================================
-// MULTI-TABLE HANDLER: QUOTATION
-// =============================================
-
-/**
- * Dedicated handler for quotation data_type — writes to multiple tables in order:
- *   1. quotations (parent row)
- *   2. customers (linked by rfq_id)
- *   3. quotation_items (per-item, linked by quotation_id)
- *   4. quotation_pricing (per-item pricing, linked by quotation_id)
- *
- * Which tables are written depends on which input fields are populated.
- * Action processors control this by choosing what data to include.
- */
-async function handleQuotationWrite(
-  input: ModifyDatabaseInput,
-  workspace: WorkspaceContext
-): Promise<void> {
-  const qd = input.quotationData!;
-
-  // --- STEP 1: QUOTATIONS table ---
-  if (qd.quotation_id) {
-    const existing = await checkDataExists('quotations', qd.quotation_id, workspace);
-    if (existing.length > 0) {
-      const payload = buildQuotationPayload(qd as unknown as Record<string, unknown>, true);
-      await updateData('quotations', { quotationId: qd.quotation_id }, payload, workspace);
-      console.log(`[DB] Quotation updated: ${qd.quotation_id}`);
-    } else {
-      const payload = buildQuotationPayload(qd as unknown as Record<string, unknown>, false);
-      const result = await insertData('quotations', {}, payload, workspace);
-      qd.quotation_id = result?.quotationId;
-      console.log(`[DB] Quotation inserted: ${qd.quotation_id}`);
-    }
-  } else {
-    // INSERT with auto-generated ID
-    const payload = buildQuotationPayload(qd as unknown as Record<string, unknown>, false);
-    const result = await insertData('quotations', {}, payload, workspace);
-    qd.quotation_id = result?.quotationId;
-    console.log(`[DB] Quotation inserted (auto-ID): ${qd.quotation_id}`);
-  }
-
-  // --- STEP 2: CUSTOMERS table (uses rfqId as FK) ---
-  if (qd.customer_info && qd.rfq_id) {
-    const existingCustomer = await checkDataExists('customers', qd.rfq_id, workspace);
-    if (existingCustomer.length > 0) {
-      const payload = buildCustomerPayload(qd as unknown as Record<string, unknown>, true);
-      await updateData('customers', { rfqId: qd.rfq_id }, payload, workspace);
-      console.log(`[DB] Customer updated for rfq: ${qd.rfq_id}`);
-    } else {
-      const payload = buildCustomerPayload(qd as unknown as Record<string, unknown>, false);
-      await insertData('customers', {}, payload, workspace);
-      console.log(`[DB] Customer inserted for rfq: ${qd.rfq_id}`);
-    }
-  }
-
-  // --- STEP 3: RFQ_ITEMS table (iterate each item) ---
-  if (qd.quotation_items && qd.quotation_items.length > 0 && qd.rfq_id) {
-    for (const item of qd.quotation_items) {
-      const itemId = item.item_id ? parseInt(String(item.item_id), 10) : null;
-      let shouldInsert = true;
-
-      // Check existence by composite key: rfq_id + item_id
-      if (itemId) {
-        const existingItem = await getData(
-          'rfqItems',
-          { rfqId: qd.rfq_id!, itemId },
-          workspace
-        );
-
-        if (existingItem.length > 0) {
-          const payload = buildQuotationItemsPayload(
-            { ...item, rfq_id: qd.rfq_id } as Record<string, unknown>,
-            true
-          );
-          await updateData(
-            'rfqItems',
-            { rfqId: qd.rfq_id!, itemId },
-            payload,
-            workspace
-          );
-          console.log(`[DB] Item ${itemId} updated`);
-          shouldInsert = false;
+        if (existing.length > 0) {
+          const updatePayload = config.builder(item, true);
+          if (Object.keys(updatePayload).length === 0) continue; // empty payload → skip
+          const filter = config.getUpdateFilter(item, input);
+          await updateData(config.table, filter, updatePayload, workspace);
+          console.log(`[DB] ${config.table} updated`);
+          continue;
         }
       }
 
-      if (shouldInsert) {
-        const itemData: Record<string, unknown> = { ...item, rfq_id: qd.rfq_id };
-        if (itemId) itemData.item_id = itemId;
-        const payload = buildQuotationItemsPayload(itemData, false);
-        await insertData('rfqItems', {}, payload, workspace);
-        console.log(`[DB] Item inserted ${itemId ? `(id: ${itemId})` : '(auto-ID)'}`);
+      // Layer 3: Insert (skip if updateOnly)
+      if (config.updateOnly) continue;
+
+      const insertPayload = config.builder(item, false);
+      if (Object.keys(insertPayload).length === 0) continue; // empty payload → skip
+      const result = await insertData(config.table, {}, insertPayload, workspace);
+      console.log(`[DB] ${config.table} inserted`);
+
+      if (config.onInsert && result) {
+        config.onInsert(result, input);
       }
-    }
-  }
-
-  // --- STEP 4: QUOTATION_PRICING table (per-item pricing) ---
-  if (input.calculatedPricing?.calculated_pricing && input.calculatedPricing.calculated_pricing.length > 0 && qd.quotation_id) {
-    for (const pricingItem of input.calculatedPricing.calculated_pricing) {
-      const itemId = pricingItem.item_id ? parseInt(String(pricingItem.item_id), 10) : null;
-      let shouldInsert = true;
-
-      // Match pricing variables for this item
-      let itemPricingVars: Record<string, unknown> = {};
-      if (Array.isArray(input.pricing_variables) && itemId) {
-        const matched = input.pricing_variables.find((v) => Number(v.item_id) === itemId);
-        itemPricingVars = (matched || {}) as Record<string, unknown>;
-      }
-
-      // Build shared payload data
-      const payloadData: Record<string, unknown> = {
-        quotation_id: qd.quotation_id,
-        pricingVariables: itemPricingVars,
-        calculatedPricing: { calculated_pricing: [pricingItem] },
-        exchange_currency: input.exchange_currency || 'VND',
-      };
-
-      // Check existence (composite key: quotation_id + item_id)
-      if (itemId) {
-        const existingPricing = await getData(
-          'quotationPricing',
-          { quotationId: qd.quotation_id!, itemId },
-          workspace
-        );
-
-        if (existingPricing.length > 0) {
-          const payload = buildPricingPayload(payloadData, true);
-          await updateData(
-            'quotationPricing',
-            { quotationId: qd.quotation_id!, itemId },
-            payload,
-            workspace
-          );
-          console.log(`[DB] Pricing item ${itemId} updated`);
-          shouldInsert = false;
-        }
-      }
-
-      if (shouldInsert) {
-        if (itemId) payloadData.item_id = itemId;
-        const payload = buildPricingPayload(payloadData, false);
-        await insertData('quotationPricing', {}, payload, workspace);
-        console.log(`[DB] Pricing inserted ${itemId ? `(id: ${itemId})` : '(auto-ID)'}`);
-      }
-    }
-
-    // Update total_amount in quotations table
-    if (input.calculatedPricing.total_amount !== undefined && qd.quotation_id) {
-      await updateData(
-        'quotations',
-        { quotationId: qd.quotation_id },
-        { totalAmount: String(input.calculatedPricing.total_amount) },
-        workspace
-      );
-      console.log(`[DB] Total amount updated: ${input.calculatedPricing.total_amount}`);
     }
   }
 }
@@ -666,38 +654,18 @@ async function handleQuotationWrite(
 // MAIN ENTRY POINT — modifyDatabase
 // =============================================
 
-/**
- * Unified database modification function.
- * Routes by data_type:
- *   - 'quotation' → handleQuotationWrite (multi-table, explicit ordering)
- *   - all others  → TABLE_REGISTRY lookup → handleSingleTableWrite (generic)
- *
- * All DB operations go through queries.ts for workspace isolation.
- */
 export async function modifyDatabase(
   input: ModifyDatabaseInput,
   workspace: WorkspaceContext
 ): Promise<void> {
-  try {
-    console.log(`[DB] Starting modification for data_type: ${input.data_type}`);
+  const { data_type } = input;
 
-    // Multi-table type: quotation (dedicated handler with dependency ordering)
-    if (input.data_type === 'quotation' && input.quotationData) {
-      await handleQuotationWrite(input, workspace);
-      console.log('[DB] Database modification completed');
-      return;
-    }
-
-    // Single-table types: registry-driven generic handler
-    const config = TABLE_REGISTRY[input.data_type];
-    if (!config) {
-      throw new Error(`[DB] Unknown data_type: "${input.data_type}". Available: ${Object.keys(TABLE_REGISTRY).join(', ')}, quotation`);
-    }
-
-    await handleSingleTableWrite(config, input, workspace);
-    console.log('[DB] Database modification completed');
-  } catch (error) {
-    console.error('[DB] Error in modifyDatabase:', error);
-    throw error; // Re-throw for caller to handle
+  const configs = WRITE_MAP[data_type];
+  if (!configs) {
+    throw new Error(`[DB] Unknown data_type: "${data_type}". Available: ${Object.keys(WRITE_MAP).join(', ')}`);
   }
+
+  console.log(`[DB] Writing ${data_type} → ${configs.map(c => c.table).join(', ')}`);
+  await handleWrite(configs, input, workspace);
+  console.log('[DB] Database modification completed');
 }
