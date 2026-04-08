@@ -1,8 +1,8 @@
 // =============================================
-// ANALYSIS ACTIONS - RFQ Analysis Processor
+// ANALYSIS ACTIONS - RFQ Analysis Processor (Two-Pass)
 // =============================================
 // Internal server module (called by data-processor, NOT a server action)
-// Flow: ProcessorInput → route by action_type → AI API call → save to DB → return ProcessorResult
+// Flow: ProcessorInput → Pass 1 (deterministic extraction) → Pass 2 (AI) → merge → DB → result
 // Supports: analyze | reanalyze | handleRFQ (incoming_email routed)
 
 import { hfChatCompletion, ANALYSIS_SYSTEM_PROMPT } from '@/lib/ai-agent/hf-client';
@@ -10,9 +10,11 @@ import { ANALYZE_RFQ_PROMPT, buildAnalyzeUserMessage, buildReanalyzeUserMessage 
 import { modifyDatabase } from '@/lib/utils/databaseHandler';
 import { getData } from '@/lib/db/queries';
 import { getLocalModel } from '@/lib/ai-agent/local-model';
+import { extractAll, type ExtractionResult } from '@/lib/utils/rfq-extractor';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
-import type { AnalysisData } from '@/types/ai-agent';
+import type { AnalysisData, MergedAnalysisData } from '@/types/ai-agent';
 import { getServerActionWorkspace } from '@/lib/middleware/get-workspace';
+import type { WorkspaceContext } from '@/lib/middleware/workspace-context';
 
 // ---------------------------------------------
 // Configuration
@@ -31,66 +33,105 @@ const FUNCTION_MAP: Record<string, typeof buildAnalyzeUserMessage | typeof build
 };
 
 // ---------------------------------------------
-// Main Processor: Process Analysis
+// Main Processor: Process Analysis (Two-Pass)
 // ---------------------------------------------
 
 /**
- * Process RFQ analysis based on action_type.
- * Handles both direct rfq_analysis input and incoming_email routed via handleRFQ.
+ * Process RFQ analysis using two-pass extraction:
+ *   Pass 1: Deterministic pattern extraction (rfq_reference, items, contact, currency, deadline)
+ *   Pass 2: AI generates only unstructured fields (subject, analysis_content, company_name, address)
+ *   Merge: Combine both passes into MergedAnalysisData for DB save + result
+ *
  * @param input - Validated ProcessorInput (data_type: 'rfq_analysis' or 'incoming_email')
- * @returns ProcessorResult with analysis data
+ * @returns ProcessorResult with merged analysis data
  */
 export async function processAnalysis(input: ProcessorInput): Promise<ProcessorResult> {
   const startTime = Date.now();
   const timestamp = new Date().toISOString();
 
   try {
-    const { action_type, rfq_id, rfq_reference, analysis } = input;
-    // SECURITY: Prefer cookie-based workspace; fallback to input.workspace only in non-production
-    const cookieWs = await getServerActionWorkspace();
+    const { action_type, rfq_id } = input;
+    // SECURITY: Prefer cookie-based workspace; fallback to input.workspace for test/CLI
+    let cookieWs: WorkspaceContext | null = null;
+    try { cookieWs = await getServerActionWorkspace(); } catch { /* outside Next.js server action context */ }
     const workspace = cookieWs ?? input.workspace;
     if (!workspace) {
       throw new Error('Missing workspace context — not authenticated');
     }
 
+    // ── PASS 1: Deterministic extraction (handleRFQ / analyze with incoming_email) ──
+    let extracted: ExtractionResult | null = null;
+    const ie = input.incoming_email;
+    if (ie && (action_type === 'handleRFQ' || action_type === 'analyze')) {
+      extracted = extractAll({
+        from_email: ie.from_email || '',
+        from_name: ie.from_name || '',
+        cc: ie.cc || [],
+        subject: ie.subject || '',
+        email_body_text: ie.email_body_text || '',
+        attachments_parsed: ie.attachments_parsed,
+      });
+    }
+
+    // Resolve rfq_reference: extracted pattern > input override > empty
+    const rfqRef = extracted?.rfq_reference || input.rfq_reference || '';
+
     // For reanalyze: load previous analysis from DB if not provided in input
-    // (UI sends minimal payload with only rfq_id + ai_comments)
-    let rfqRef = rfq_reference || '';
     let subjectOverride = '';
     let analysisContentOverride = '';
-    if (action_type === 'reanalyze' && rfq_id && (!analysis || !analysis.analysis_content)) {
+    if (action_type === 'reanalyze' && rfq_id && (!input.analysis || !input.analysis.analysis_content)) {
       const rows = await getData('rfqAnalysis', { rfqId: rfq_id }, workspace) as Array<Record<string, unknown>>;
       if (rows.length) {
-        rfqRef = String(rows[0].rfqReference || rfqRef);
         subjectOverride = String(rows[0].subject || '');
         analysisContentOverride = String(rows[0].analysisContent || '');
       }
     }
 
-    // Detect if input is incoming_email (routed from handleRFQ) vs direct rfq_analysis
-    const isFromIncomingEmail = input.data_type === 'incoming_email';
-    const ie = input.incoming_email;
+    // ── PASS 2: AI call (reduced scope — only subject, analysis_content, company_name, address) ──
+    const subject = ie?.subject || subjectOverride || input.analysis?.subject || '(no subject)';
+    const analysisContent = ie
+      ? buildIncomingAnalysisContent(ie)
+      : (analysisContentOverride || input.analysis?.analysis_content || '');
 
-    // Build subject and analysis content based on input source
-    const subject = isFromIncomingEmail
-      ? (ie?.subject || '(no subject)')
-      : (subjectOverride || analysis?.subject || '');
-    const analysisContent = isFromIncomingEmail
-      ? buildIncomingAnalysisContent(ie!)
-      : (analysisContentOverride || analysis?.analysis_content || '');
-
-    // Route by action_type: analyze | reanalyze | handleRFQ → all call AI API
     const aiResponse = await callAIAnalysis(input, subject, analysisContent, workspace);
 
-    // Build result — always report as rfq_analysis/analyze for downstream consumers
+    // ── MERGE: deterministic + AI → complete MergedAnalysisData ──
+    const merged: MergedAnalysisData = extracted
+      ? mergeExtractionWithAI(extracted, aiResponse)
+      : {
+          // Fallback for reanalyze or non-email inputs (AI handles everything)
+          rfq_analysis: aiResponse.rfq_analysis,
+          customer_info: {
+            company_name: aiResponse.customer_partial?.company_name || '',
+            attention_person: '',
+            carbon_copy_person: [],
+            email: '',
+            phone: '',
+            fax_number: '',
+            customer_address: aiResponse.customer_partial?.customer_address || '',
+          },
+          rfq_items: [],
+          required_currency: 'USD',
+          deadline_period: null,
+          rfq_reference: rfqRef || null,
+        };
+
+    // ── NEW vs EXISTING RFQ resolution ──
+    // If rfq_id not provided, determine by customer email + rfq_reference lookup
+    let resolvedRfqId = rfq_id;
+    if (!resolvedRfqId && merged.customer_info.email && rfqRef) {
+      resolvedRfqId = await resolveRfqId(merged.customer_info.email, rfqRef, workspace);
+    }
+
+    // Build result — always report as rfq_analysis for downstream consumers
     const result: ProcessorResult = {
       success: true,
       data_type: 'rfq_analysis',
-      action_type: isFromIncomingEmail ? 'analyze' : action_type,
+      action_type,
       status: 'completed',
       session_id: '',
       processing_time_ms: Date.now() - startTime,
-      data: aiResponse,
+      data: merged,
       timestamp,
     };
 
@@ -98,13 +139,15 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
     try {
       await modifyDatabase({
         data_type: 'rfq_analysis',
-        rfq_id,
+        rfq_id: resolvedRfqId,
         rfq_reference: rfqRef,
         rfq_analysis: {
-          subject: subject,
-          analysis_content: aiResponse.summary || analysisContent,
-          analysis_status: 'completed',
+          ...merged.rfq_analysis,
+          required_currency: merged.required_currency,    // New column from deterministic extraction
+          deadline_period: merged.deadline_period,         // New column from deterministic extraction
         },
+        rfq_items: merged.rfq_items,
+        customer_info: merged.customer_info,              // Now part of rfq_analysis WRITE_MAP
       }, workspace);
     } catch (dbError) {
       console.error('[Analysis] DB save failed (non-blocking):', dbError);
@@ -130,19 +173,97 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
 }
 
 // ---------------------------------------------
+// Merge: Deterministic + AI
+// ---------------------------------------------
+
+/**
+ * Merge deterministic extraction with AI output into complete MergedAnalysisData.
+ * Deterministic fields always win over AI for contact/items (higher reliability).
+ * AI wins for company_name and customer_address (unstructured extraction).
+ */
+function mergeExtractionWithAI(
+  extracted: ExtractionResult,
+  aiResponse: AnalysisData
+): MergedAnalysisData {
+  return {
+    rfq_analysis: aiResponse.rfq_analysis,
+    customer_info: {
+      company_name: aiResponse.customer_partial?.company_name || '',      // AI: unstructured
+      attention_person: extracted.customer.attention_person,               // Deterministic: from_name / signature
+      carbon_copy_person: extracted.customer.carbon_copy_person,           // Deterministic: CC header
+      email: extracted.customer.email,                                    // Deterministic: from_email
+      phone: extracted.customer.phone,                                    // Deterministic: signature pattern
+      fax_number: extracted.customer.fax_number,                          // Deterministic: signature pattern
+      customer_address: aiResponse.customer_partial?.customer_address || '', // AI: unstructured
+    },
+    rfq_items: extracted.rfq_items.map(item => ({
+      item_id: item.item_id,
+      currency_code: item.currency_code,
+      company_requirement: {
+        company_description: item.company_description,
+        qty: item.qty,
+        uom: item.uom,
+      },
+    })),
+    required_currency: extracted.required_currency,
+    deadline_period: extracted.deadline_period,
+    rfq_reference: extracted.rfq_reference,
+  };
+}
+
+// ---------------------------------------------
+// RFQ ID Resolution
+// ---------------------------------------------
+
+/**
+ * Determine if this is a new or existing RFQ.
+ * Lookup: customers table by (company_id, email) → matching rfq_id with same rfq_reference.
+ * Returns existing rfq_id if found, undefined if new (let DB auto-increment).
+ */
+async function resolveRfqId(
+  customerEmail: string,
+  rfqReference: string,
+  workspace: WorkspaceContext
+): Promise<number | undefined> {
+  try {
+    // 1. Find existing customers with this email in this company
+    const existingCustomers = await getData('customers', {
+      companyId: workspace.company_id,
+      email: customerEmail,
+    }, workspace) as Array<Record<string, unknown>>;
+
+    if (!existingCustomers.length) return undefined; // New customer → new RFQ
+
+    // 2. Check if any of their RFQs have this rfq_reference
+    for (const cust of existingCustomers) {
+      const custRfqId = cust.rfqId as number;
+      if (!custRfqId) continue;
+
+      const rfqs = await getData('rfqAnalysis', { rfqId: custRfqId }, workspace) as Array<Record<string, unknown>>;
+      if (rfqs.length && rfqs[0].rfqReference === rfqReference) {
+        return custRfqId; // Existing RFQ → update
+      }
+    }
+
+    return undefined; // Known customer, new RFQ reference → new RFQ
+  } catch {
+    return undefined; // On error, treat as new
+  }
+}
+
+// ---------------------------------------------
 // AI API Call
 // ---------------------------------------------
 
 /**
  * Call AI for RFQ analysis — routes to local model or remote API based on AI_MODE.
+ * AI now returns only: rfq_analysis + customer_partial (reduced scope).
  * Uses FUNCTION_MAP to select the correct prompt builder for the action_type.
- * Local mode: runs model in-process via @xenova/transformers
- * Remote mode: calls HuggingFace Inference API via hfChatCompletion
  */
-async function callAIAnalysis(input: ProcessorInput, subject: string, analysisContent: string, workspace: import('@/lib/middleware/workspace-context').WorkspaceContext): Promise<AnalysisData> {
+async function callAIAnalysis(input: ProcessorInput, subject: string, analysisContent: string, workspace: WorkspaceContext): Promise<AnalysisData> {
   const { action_type } = input;
 
-  // Build the user message using the appropriate prompt builder from FUNCTION_MAP
+  // Build the user message using the appropriate prompt builder
   let userMessage: string;
 
   if (action_type === 'reanalyze' && input.rfq_id) {
@@ -188,7 +309,6 @@ async function callAIAnalysis(input: ProcessorInput, subject: string, analysisCo
   // Route: local model inference (no network required)
   if (AI_MODE === 'local') {
     console.log('[Analysis] Using local AI model');
-    // Generic chatCompletion<T> matches hf-client pattern
     return await getLocalModel().chatCompletion<AnalysisData>(ANALYZE_RFQ_PROMPT, userMessage);
   }
 

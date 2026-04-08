@@ -82,9 +82,9 @@ async function loadRfqAnalysisAnalyzeInput(
 }
 
 /**
- * rfq_analysis + reanalyze: Load from rfqAnalysis + rfqItems + quotations.
+ * rfq_analysis + reanalyze: Load from rfqAnalysis + rfqItems.
  * Builds the exact JSON shape of rfq-analysis.json Input_2.
- * Sources: rfqAnalysis (subject, analysis_content), rfqItems (item list), quotations (rfq_reference)
+ * Sources: rfqAnalysis (subject, analysis_content, rfq_reference), rfqItems (item list)
  */
 async function loadRfqAnalysisReanalyzeInput(
   params: LoaderParams
@@ -102,9 +102,8 @@ async function loadRfqAnalysisReanalyzeInput(
   // Fetch RFQ items linked to this analysis
   const itemRows = await getData('rfqItems', { rfqId: rfq_id }, workspace);
 
-  // Fetch quotation for rfq_reference
-  const quotationRows = await getData('quotations', { rfqId: rfq_id }, workspace);
-  const rfqReference = quotationRows[0]?.rfqReference ?? analysis.rfqReference ?? '';
+  // rfq_reference lives on rfq_analysis table (single source of truth)
+  const rfqReference = String(analysis.rfqReference ?? '');
 
   // Build rfq_items array matching rfq-analysis.json Input_2 shape
   const rfqItems = itemRows.map((item: any) => ({
@@ -133,9 +132,9 @@ async function loadRfqAnalysisReanalyzeInput(
 // =============================================
 
 /**
- * supplier_search + search: Load from quotations (rfq_reference) + rfqAnalysis (subject, analysis_content).
+ * supplier_search + search: Load from rfqAnalysis (rfq_reference, subject, analysis_content).
  * Builds the exact JSON shape of supplier-search.json Input_1.
- * Sources: quotations (rfq_reference), rfqAnalysis (subject, analysis_content)
+ * Sources: rfqAnalysis (rfq_reference, subject, analysis_content)
  */
 async function loadSupplierSearchSearchInput(
   params: LoaderParams
@@ -150,9 +149,8 @@ async function loadSupplierSearchSearchInput(
   }
   const analysis = analysisRows[0];
 
-  // Fetch quotation for rfq_reference (fallback to analysis.rfqReference)
-  const quotationRows = await getData('quotations', { rfqId: rfq_id }, workspace);
-  const rfqReference = quotationRows[0]?.rfqReference ?? analysis.rfqReference ?? '';
+  // rfq_reference lives on rfq_analysis table (single source of truth)
+  const rfqReference = String(analysis.rfqReference ?? '');
 
   return {
     rfq_id,
@@ -165,9 +163,9 @@ async function loadSupplierSearchSearchInput(
 }
 
 /**
- * supplier_search + research: Load from supplierSearch + supplierItemStatus + quotations.
+ * supplier_search + research: Load from supplierSearch + supplierItemStatus + rfqAnalysis.
  * Builds the exact JSON shape of supplier-search.json Input_2.
- * Sources: supplierSearch (search_id, subject, search_content), supplierItemStatus (items_source), quotations (rfq_reference)
+ * Sources: supplierSearch (search_id, subject, search_content), supplierItemStatus (items_source), rfqAnalysis (rfq_reference)
  */
 async function loadSupplierSearchResearchInput(
   params: LoaderParams
@@ -185,9 +183,9 @@ async function loadSupplierSearchResearchInput(
   // Fetch all supplier item statuses for this RFQ
   const itemRows = await getData('supplierItemStatus', { rfqId: rfq_id }, workspace);
 
-  // Fetch quotation for rfq_reference
-  const quotationRows = await getData('quotations', { rfqId: rfq_id }, workspace);
-  const rfqReference = quotationRows[0]?.rfqReference ?? searchRecord.rfqReference ?? '';
+  // rfq_reference lives on rfq_analysis table (single source of truth)
+  const analysisRows = await getData('rfqAnalysis', { rfqId: rfq_id }, workspace);
+  const rfqReference = String(analysisRows[0]?.rfqReference ?? '');
 
   // Build items_source array matching supplier-search.json Input_2 shape
   const itemsSource = itemRows.map((item: any) => ({
@@ -219,11 +217,11 @@ async function loadSupplierSearchResearchInput(
 // =============================================
 
 /**
- * quotation + generate/update: Load from quotations + rfqItems + supplierItemStatus(ordered) + customers.
+ * quotation + generate/update: Load from quotations + rfqItems + supplierItemStatus(ordered) + customers + rfqAnalysis.
  * Builds the exact JSON shape of quotation_Inpt.json.
  * Uses quotation_id (not rfq_id) to identify the quotation.
- * Sources: quotations (quotation_id, rfq_reference), rfqItems (company_requirement),
- *          supplierItemStatus (rfq_id + status=ordered), customers (customer_info)
+ * Sources: quotations (quotation_id), rfqItems (company_requirement),
+ *          supplierItemStatus (rfq_id + status=ordered), customers (customer_info), rfqAnalysis (rfq_reference)
  */
 async function loadQuotationGenerateInput(
   params: LoaderParams
@@ -266,6 +264,10 @@ async function loadQuotationGenerateInput(
   const customerRows = await getData('customers', { rfqId: resolvedRfqId }, workspace);
   const customer = customerRows[0];
 
+  // rfq_reference lives on rfq_analysis (single source of truth)
+  const analysisRows = await getData('rfqAnalysis', { rfqId: resolvedRfqId }, workspace);
+  const rfqReference = String(analysisRows[0]?.rfqReference ?? '');
+
   // Build quotation_items array matching quotation_Inpt.json shape
   const quotationItems = itemRows.map((item: any) => {
     const supplier = supplierByItem.get(item.itemId); // Matching ordered supplier
@@ -291,7 +293,7 @@ async function loadQuotationGenerateInput(
     quotation_id: quotation.quotationId,
     quotation_data: {
       quotation_id: quotation.quotationId,                   // Quotation PK
-      rfq_reference: quotation.rfqReference ?? '',           // RFQ reference string
+      rfq_reference: rfqReference,                           // RFQ reference string
       customer_info: {
         company_name: customer?.companyName ?? '',            // Customer company name
         attention_person: customer?.attentionPerson ?? '',    // Primary contact
@@ -308,11 +310,11 @@ async function loadQuotationGenerateInput(
 }
 
 /**
- * quotation + manual_update: Load from quotationPricing + userCompany + supplierItemStatus + userInfo + customers + rfqItems + quotations.
+ * quotation + manual_update: Load from quotationPricing + userCompany + supplierItemStatus + userInfo + customers + rfqItems + quotations + rfqAnalysis.
  * Builds the exact JSON shape of quotation_ui_manual.json.
  * Uses rfq_id for quotationPricing and quotations lookups.
  * Sources: quotations, quotationPricing (pricing data), userCompany (seller_info),
- *          supplierItemStatus (bidder proposals), userInfo, customers, rfqItems
+ *          supplierItemStatus (bidder proposals), userInfo, customers, rfqItems, rfqAnalysis (rfq_reference)
  */
 async function loadQuotationManualUpdateInput(
   params: LoaderParams
@@ -367,6 +369,10 @@ async function loadQuotationManualUpdateInput(
   // Fetch RFQ items
   const itemRows = await getData('rfqItems', { rfqId: resolvedRfqId }, workspace);
 
+  // rfq_reference lives on rfq_analysis (single source of truth)
+  const analysisRows = await getData('rfqAnalysis', { rfqId: resolvedRfqId }, workspace);
+  const rfqReference = String(analysisRows[0]?.rfqReference ?? '');
+
   // Build quotation_items with pricing + bidder info matching quotation_ui_manual.json
   const quotationItems = itemRows.map((item: any) => {
     const pricing = pricingByItem.get(item.itemId);
@@ -394,7 +400,7 @@ async function loadQuotationManualUpdateInput(
     quotation_data: {
       quotation_id: resolvedQuotationId,                   // Quotation PK
       quotation_name: quotation.quotationName ?? '',       // Display name
-      rfq_reference: quotation.rfqReference ?? '',         // RFQ reference
+      rfq_reference: rfqReference,                         // RFQ reference
       total_amount: quotation.totalAmount ? Number(quotation.totalAmount) : 0, // Total amount
       quotation_date: quotation.generatedDay ?? '',        // Generation date
       page_number: '1',                                    // Default page 1
@@ -647,11 +653,11 @@ async function loadEmailRegenerateInput(
 const PAYLOAD_LOADERS: Record<string, Record<string, BuilderFn>> = {
   rfq_analysis: {
     analyze:   loadRfqAnalysisAnalyzeInput,    // incoming_emails -> rfq-analysis.json Input_1
-    reanalyze: loadRfqAnalysisReanalyzeInput,  // rfqAnalysis + rfqItems + quotations -> Input_2
+    reanalyze: loadRfqAnalysisReanalyzeInput,  // rfqAnalysis + rfqItems -> Input_2
   },
   supplier_search: {
-    search:   loadSupplierSearchSearchInput,   // quotations + rfqAnalysis -> supplier-search.json Input_1
-    research: loadSupplierSearchResearchInput,  // supplierSearch + supplierItemStatus + quotations -> Input_2
+    search:   loadSupplierSearchSearchInput,   // rfqAnalysis -> supplier-search.json Input_1
+    research: loadSupplierSearchResearchInput,  // supplierSearch + supplierItemStatus + rfqAnalysis -> Input_2
   },
   quotation: {
     generate:      loadQuotationGenerateInput,      // quotations + rfqItems + supplierItemStatus(ordered) + customers

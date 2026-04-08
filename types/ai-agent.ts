@@ -19,24 +19,69 @@ export interface AICallInput {
   actionType: AnalysisActionType;      // 'analyze' | 'reanalyze'
 }
 
-/** Structured analysis output returned by AI model */
+/** AI-generated analysis output (reduced scope — deterministic fields extracted separately) */
 export interface AnalysisData {
-  summary: string;         // Brief summary of the RFQ
-  items: Array<{
-    description: string;   // Item description
-    quantity?: number;      // Requested quantity
-    unit?: string;          // Unit of measure (pcs, sets, kg, etc.)
-    specifications?: string; // Technical specs
-  }>;
-  customerInfo: {
-    name: string;           // Contact person name
-    email: string;          // Contact email
-    company?: string;       // Company name
-    phone?: string;         // Phone number
+  rfq_analysis: {
+    subject: string;           // "RFQ Analysis - [topic]"
+    analysis_content: string;  // Summary of requirements, deadlines, clarifications
+    analysis_status: string;   // "completed"
   };
-  deadlines?: string[];           // Deadline dates (YYYY-MM-DD)
-  specialRequirements?: string[]; // Special conditions
-  confidence: number;             // 0.0 - 1.0 confidence score
+  // AI extracts only unstructured fields that resist pattern matching
+  customer_partial: {
+    company_name: string;
+    customer_address: string;
+  };
+}
+
+/** Deterministic extraction output (from rfq-extractor.ts) */
+export interface DeterministicData {
+  rfq_reference: string | null;
+  customer: {
+    email: string;
+    attention_person: string;
+    carbon_copy_person: string[];
+    phone: string;
+    fax_number: string;
+  };
+  rfq_items: Array<{
+    item_id: number;
+    company_description: string;
+    qty: number;
+    uom: string;
+    currency_code: string;
+  }>;
+  required_currency: string;
+  deadline_period: string | null;
+}
+
+/** Merged output: deterministic + AI = complete RFQ data */
+export interface MergedAnalysisData {
+  rfq_analysis: {
+    subject: string;
+    analysis_content: string;
+    analysis_status: string;
+  };
+  customer_info: {
+    company_name: string;
+    attention_person: string;
+    carbon_copy_person: string[];
+    email: string;
+    phone: string;
+    fax_number: string;
+    customer_address: string;
+  };
+  rfq_items: Array<{
+    item_id: number;
+    currency_code: string;
+    company_requirement: {
+      company_description: string;
+      qty: number;
+      uom: string;
+    };
+  }>;
+  required_currency: string;
+  deadline_period: string | null;
+  rfq_reference: string | null;
 }
 
 // ---------------------------------------------

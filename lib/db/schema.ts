@@ -104,6 +104,10 @@ export const rfqAnalysis = pgTable('rfq_analysis', {
   // Analysis status
   analysisStatus: varchar('analysis_status', { length: 30 }).default('completed'),
 
+  // RFQ commercial metadata (extracted from email by pattern, not AI)
+  requiredCurrency: varchar('required_currency', { length: 3 }),
+  deadlinePeriod: timestamp('deadline_period', { withTimezone: false }),
+
   // Timestamps
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false })
@@ -126,7 +130,6 @@ export const quotations = pgTable('quotations', {
   userId: integer('user_id'),  // renamed from client_id
 
   // Quotation identification
-  rfqReference: varchar('rfq_reference', { length: 100 }),
   quotationName: text('quotation_name'),
 
   // REMOVED: quotation_html (JSON-as-Source-of-Truth replaces HTML rendering)
@@ -207,7 +210,6 @@ export const emailTable = pgTable('email_table', {
   userId: integer('user_id'),  // renamed from client_id
 
   // Email metadata
-  rfqReference: varchar('rfq_reference', { length: 100 }),
   recipientEmail: varchar('recipient_email', { length: 255 }),
   subject: text('subject'),
 
@@ -403,7 +405,6 @@ export const supplierSearch = pgTable('supplier_search', {
   userId: integer('user_id'),  // renamed from client_id
 
   // Search identification
-  rfqReference: varchar('rfq_reference', { length: 100 }),
   subject: text('subject'),
 
   // Search content
@@ -482,6 +483,9 @@ export const userSessions = pgTable(
     lastViewedType: varchar('last_viewed_type', { length: 50 }).default('quotation'),
     lastViewedTypeId: integer('last_viewed_type_id'),
     lastViewedTimestamp: timestamp('last_viewed_timestamp', { withTimezone: false }).defaultNow(),
+
+    // Location tracking for session redirect
+    prevLocation: varchar('prev_location', { length: 500 }),
 
     // Timestamps
     createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),

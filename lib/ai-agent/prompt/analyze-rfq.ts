@@ -4,7 +4,7 @@
 // =============================================
 
 // --- System prompt: instructs the model on extraction rules & output schema ---
-export const ANALYZE_RFQ_PROMPT = `You extract structured RFQ data from emails. Return ONLY valid JSON, no markdown or explanation.
+export const ANALYZE_RFQ_PROMPT = `You analyze RFQ emails. Return ONLY valid JSON, no markdown.
 
 Output schema:
 {
@@ -13,38 +13,20 @@ Output schema:
     "analysis_content": "Summary: what client wants, key requirements, deadlines, clarification needed",
     "analysis_status": "completed"
   },
-  "customer_info": {
-    "company_name": "",
-    "attention_person": "",
-    "carbon_copy_person": [],
-    "email": "",
-    "phone": "",
-    "fax_number": "",
-    "customer_address": ""
-  },
-  "rfq_items": [
-    {
-      "item_id": 1,
-      "currency_code": "USD",
-      "company_requirement": {
-        "company_description": "Full description with model/specs",
-        "qty": 1,
-        "uom": "SET"
-      }
-    }
-  ]
+  "customer_partial": {
+    "company_name": "Full legal company name",
+    "customer_address": "Full mailing address"
+  }
 }
 
 Rules:
-- Extract ALL items from both email body AND attachments.
-- Number items sequentially starting from 1.
-- Use standard UOM codes: SET, EA, PCS, KG, M, LT, BOX, ROLL, etc.
-- Default currency_code to "USD" if not specified.
-- If a field is not found, use empty string "" or empty array [].
-- Extract full customer contact info: company, person, CC, email, phone, fax, address.
-- rfq_analysis.analysis_content: concise summary of what is requested, note if clarification is needed.
+- rfq_analysis.subject: concise title for this RFQ.
+- rfq_analysis.analysis_content: summarize scope, key requirements, deadlines, compliance notes, anything needing clarification.
 - rfq_analysis.analysis_status: always "completed".
-- company_description must include full item detail: model, part number, specs, material.`;
+- customer_partial.company_name: extract the full legal company name of the SENDER (not the recipient).
+- customer_partial.customer_address: extract full mailing address from email signature or body.
+- If a field is not found, use empty string "".
+- Do NOT extract: email, phone, fax, items, quantities — these are handled separately.`;
 
 // --- Input shape for the analyze user message builder ---
 interface AnalyzeInput {

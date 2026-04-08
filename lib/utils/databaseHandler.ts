@@ -69,6 +69,8 @@ export interface ModifyDatabaseInput {
   // Incoming Email-specific
   incoming_email?: Record<string, unknown>;
   incoming_email_id?: number;
+  // Customer info (merged deterministic + AI data from analysis flow)
+  customer_info?: Record<string, unknown>;
   // Multi-table support
   rfq_items?: Array<Record<string, unknown>>;
   items_source?: Array<Record<string, unknown>>;
@@ -88,7 +90,6 @@ export function buildQuotationPayload(data: Record<string, unknown>, update = fa
 
   if (!update && data.quotation_id != null) payload.quotationId = data.quotation_id;
   if (data.rfq_id != null) payload.rfqId = data.rfq_id;
-  if (data.rfq_reference != null) payload.rfqReference = String(data.rfq_reference);
   if (data.quotation_name != null) payload.quotationName = String(data.quotation_name);
   if (data.commercial_terms != null) payload.commercialTerms = String(data.commercial_terms);
   if (data.quotation_status != null) payload.quotationStatus = String(data.quotation_status);
@@ -204,7 +205,6 @@ export function buildEmailPayload(data: Record<string, unknown>, update = false)
   if (!update && data.quotation_id != null) payload.quotationId = data.quotation_id;
   if (!update && data.email_id != null) payload.emailId = data.email_id;
   if (data.rfq_id != null) payload.rfqId = data.rfq_id;
-  if (data.rfq_reference != null) payload.rfqReference = String(data.rfq_reference);
   if (data.recipient_email != null) payload.recipientEmail = String(data.recipient_email);
   if (data.subject != null) payload.subject = String(data.subject);
   if (data.email_content != null) payload.emailContent = String(data.email_content);
@@ -225,6 +225,9 @@ export function buildRfqAnalysisPayload(data: Record<string, unknown>, update = 
   if (data.subject != null) payload.subject = String(data.subject);
   if (data.analysis_content != null) payload.analysisContent = String(data.analysis_content);
   if (data.analysis_status != null) payload.analysisStatus = String(data.analysis_status);
+  // Deterministic extraction columns (added in schema Step 2)
+  if (data.required_currency != null) payload.requiredCurrency = String(data.required_currency);
+  if (data.deadline_period != null) payload.deadlinePeriod = new Date(String(data.deadline_period));
 
   return payload;
 }
@@ -237,7 +240,6 @@ export function buildSupplierSearchPayload(data: Record<string, unknown>, update
 
   if (!update && data.rfq_id != null) payload.rfqId = data.rfq_id;
   if (!update && data.search_id != null) payload.searchId = data.search_id;
-  if (data.rfq_reference != null) payload.rfqReference = String(data.rfq_reference);
   if (data.subject != null) payload.subject = String(data.subject);
   if (data.search_content != null) payload.searchContent = String(data.search_content);
   if (data.search_status != null) payload.searchStatus = String(data.search_status);
@@ -349,6 +351,17 @@ const WRITE_MAP: Record<string, TableWriteConfig[]> = {
       getExistsId: (data) => data.item_id ? Number(data.item_id) : null,
       getUpdateFilter: (data, input) => ({ rfqId: input.rfq_id, itemId: parseInt(String(data.item_id)) }),
     },
+    {
+      table: 'customers',
+      existsTable: 'customers',
+      builder: buildCustomerPayload,
+      extract: (input) => {
+        if (!input.customer_info) return null;
+        return { customer_info: input.customer_info, rfq_id: input.rfq_id };
+      },
+      getExistsId: (_data, input) => input.rfq_id ?? null,
+      getUpdateFilter: (_data, input) => ({ rfqId: input.rfq_id }),
+    },
   ],
 
   // ─── SUPPLIER SEARCH ───────────────────────────
@@ -359,7 +372,7 @@ const WRITE_MAP: Record<string, TableWriteConfig[]> = {
       builder: buildSupplierSearchPayload,
       extract: (input) => {
         if (!input.suppliers_search) return null;
-        return { ...input.suppliers_search, rfq_id: input.rfq_id, rfq_reference: input.rfq_reference };
+        return { ...input.suppliers_search, rfq_id: input.rfq_id };
       },
       getExistsId: (_data, input) => input.rfq_id ?? null,
       getUpdateFilter: (_data, input) => ({ searchId: input.search_id }),
@@ -520,7 +533,7 @@ const WRITE_MAP: Record<string, TableWriteConfig[]> = {
       builder: buildEmailPayload,
       extract: (input) => {
         if (!input.email) return null;
-        return { ...input.email, quotation_id: input.quotation_id, rfq_id: input.rfq_id, rfq_reference: input.rfq_reference };
+        return { ...input.email, quotation_id: input.quotation_id, rfq_id: input.rfq_id };
       },
       getExistsId: (_data, input) => (input.email_id && input.quotation_id) ? input.quotation_id! : null,
       getUpdateFilter: (_data, input) => ({ emailId: input.email_id }),

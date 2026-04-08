@@ -248,6 +248,19 @@ export interface ProcessorInput {
   analysis?: AnalysisData;                    // rfq_analysis/reanalyze, supplier_search/search
   incoming_email?: IncomingEmailData;          // rfq_analysis/analyze, respond_service, incoming_email
 
+  // Deterministic extraction output (populated by rfq-extractor after analysis)
+  required_currency?: string;                    // ISO 4217 currency code (e.g., "VND")
+  deadline_period?: string;                      // ISO 8601 deadline timestamp
+  customer_info?: {                              // Merged customer data (deterministic + AI)
+    company_name?: string;
+    attention_person?: string;
+    carbon_copy_person?: string[];
+    email?: string;
+    phone?: string;
+    fax_number?: string;
+    customer_address?: string;
+  };
+
   // Supplier search payloads
   search?: SearchData;                        // supplier_search/research
   items_source?: SupplierItemSource[];         // supplier_search/research, respond_service/supplier_respond
