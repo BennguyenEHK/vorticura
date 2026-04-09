@@ -21,6 +21,7 @@ const PUBLIC_ROUTES = [
   '/api/health',      // Health check endpoints
   '/api/webhooks',    // Email webhook endpoints (Gmail Pub/Sub, Microsoft Graph — self-authenticated)
   '/api/cron',        // Vercel cron jobs (authenticated via CRON_SECRET bearer token)
+  '/api/preview-stream', // SSE stream + emit bridge (internal/test use)
   '/_next',           // Next.js internal routes
   '/favicon.ico',     // Favicon
 ];

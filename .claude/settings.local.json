@@ -74,7 +74,15 @@
       "Bash(rm:*)",
       "Bash(node:*)",
       "Bash(npx next:*)",
-      "Bash(npm list:*)"
+      "Bash(npm list:*)",
+      "Bash(echo '{\"model\":{\"display_name\":\"Claude Opus 4.6\"},\"workspace\":{\"current_dir\":\"C:\\\\\\\\Users\\\\\\\\LENOVO\\\\\\\\OneDrive\\\\\\\\Máy tính\\\\\\\\make_sales_agent\\\\\\\\quoteflow_ai\"},\"context_window\":{\"used_percentage\":42,\"used_tokens\":84000,\"max_tokens\":200000}}')",
+      "Bash(bash ~/.claude/statusline-command.sh)",
+      "Bash(bash ~/.claude/statusline-command.sh --compact)",
+      "Bash(bash ~/.claude/statusline-command.sh --json)",
+      "Bash(bash -c 'INPUT=$\\(cat\\); echo \"GOT: $INPUT\"; echo \"$INPUT\" | jq -r \".model.display_name // empty\"')",
+      "Bash(echo '{\"model\":{\"display_name\":\"Claude Opus 4.6\"},\"workspace\":{\"current_dir\":\"C:\\\\\\\\Users\\\\\\\\LENOVO\\\\\\\\OneDrive\\\\\\\\Máy tính\\\\\\\\make_sales_agent\\\\\\\\quoteflow_ai\"},\"context_window\":{\"used_percentage\":42,\"used_tokens\":84000,\"max_tokens\":200000},\"usage\":{\"percentage\":78,\"reset_at\":\"1775325600\"}}')",
+      "WebFetch(domain:claudefa.st)",
+      "Read(//c/Users/LENOVO/.claude/**)"
     ]
   },
   "prefersReducedMotion": false

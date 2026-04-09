@@ -1,0 +1,65 @@
+[
+  {
+    "item_id": 1,
+    "company_description": "217382 | Check valve, swing, 2\", 150#, RF (JVPC Spec A5R), CAPS order #155107, Crane 147XU 50NB Swing Check Valve. Tag: ACV1, ACV2 in drawing CCP-2898 for NULQ-SK-6111A/B",
+    "qty": 4,
+    "uom": "EA",
+    "currency_code": "VND"
+  },
+  {
+    "item_id": 2,
+    "company_description": "217376 | Valve, with Bettis CB415 actuator on Crane KF941, 2\", 150#, RF, for NULQ-SK-6111A/B",
+    "qty": 4,
+    "uom": "EA",
+    "currency_code": "VND"
+  },
+  {
+    "item_id": 3,
+    "company_description": "204985 | Valve, Ball, 2\", 150#, RF, Carbon Steel, Full Bore, ANSI B16-34, TVC KF941",
+    "qty": 4,
+    "uom": "EA",
+    "currency_code": "VND"
+  },
+  {
+    "item_id": 4,
+    "company_description": "217377 | Repair kit for Bettis CB415 actuator, for NULQ-SK-6111A/B",
+    "qty": 6,
+    "uom": "EA",
+    "currency_code": "VND"
+  },
+  {
+    "item_id": 5,
+    "company_description": "217378 | Auto Drain Valve, CAPS order number 156091, for NULQ-SK6111A/B",
+    "qty": 2,
+    "uom": "EA",
+    "currency_code": "VND"
+  },
+  {
+    "item_id": 6,
+    "company_description": "217375 | Valve, ball, 1-1/2inch,FB, 150#, RF, FV-1B, Outlet tower Left/Right, for NULQ- SK-6111C",
+    "qty": 1,
+    "uom": "EA",
+    "currency_code": "VND"
+  },
+  {
+    "item_id": 7,
+    "company_description": "217379 | Pressure safety Valve, Hydroseal Model: 4FRVOL, 1\" inlet/outlet, for NULQ-SK-6111C",
+    "qty": 2,
+    "uom": "EA",
+    "currency_code": "VND"
+  },
+  {
+    "item_id": 8,
+    "company_description": "215840 | Repair Kit for Metal Diaphragm Valve size 1-1/2\", Ingersoll Rand, P/N: 630392, Tower inlet valve (FV-1A), for Air Dryer",
+    "qty": 1,
+    "uom": "EA",
+    "currency_code": "VND"
+  },
+  {
+    "item_id": 9,
+    "company_description": "| Deliverables: CO, CQ, cert of compliance and other applicable certs by MFR",
+    "qty": 1,
+    "uom": "EA",
+    "currency_code": "VND"
+  }
+]

@@ -79,10 +79,19 @@ export const loginSchema = z.object({
   password: passwordSchema,
 })
 
+// Full name validation (required, for Attn: self-exclusion)
+const fullNameSchema = z
+  .string()
+  .min(1, { message: "Full name is required" })
+  .min(2, { message: "Full name must be at least 2 characters" })
+  .max(150, { message: "Full name must be less than 150 characters" })
+  .regex(/^[\p{L}\s\-'.]+$/u, { message: "Full name can only contain letters, spaces, hyphens, and apostrophes" })
+
 // Signup form schema - user info + company info
 export const signupSchema = z.object({
   // User credentials
   username: usernameSchema,
+  fullName: fullNameSchema,
   email: emailSchema,
   password: passwordSchema,
   confirmPassword: z.string().min(1, { message: "Please confirm your password" }),
@@ -117,6 +126,7 @@ export {
   emailSchema,
   passwordSchema,
   usernameSchema,
+  fullNameSchema,
   companyNameSchema,
   phoneSchema,
   faxSchema,

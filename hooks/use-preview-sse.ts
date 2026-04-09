@@ -144,11 +144,12 @@ function transformResultToDocument(result: ProcessorResult): DocumentData | null
     }
 
     case 'rfq_analysis': {
-      // analysis-actions.ts returns: { summary, items, customerInfo, ... }
+      // analysis-actions.ts returns: { rfq_analysis: { subject, analysis_content }, rfq_items, customer_info }
+      const rfqAnalysis = (data.rfq_analysis as Record<string, unknown>) || {};
       const analysisData: RfqAnalysisDocumentData = {
         rfq_id: null,
-        subject: (data.summary as string)?.substring(0, 100) || 'RFQ Analysis',
-        analysis_content: (data.summary as string) || '',
+        subject: (rfqAnalysis.subject as string) || 'RFQ Analysis',
+        analysis_content: (rfqAnalysis.analysis_content as string) || '',
       };
       return { type: 'rfq_analysis', data: analysisData };
     }

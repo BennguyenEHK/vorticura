@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "dev:tunnel": "concurrently \"next dev\" \"ngrok http 3000\""
+    "dev:tunnel": "concurrently \"next dev\" \"ngrok http 3000\"",
+    "test": "tsx --env-file=.env.local tests/test_unit",
+    "test:rfq": "tsx --env-file=.env.local tests/test_sequence/test-analyze-rfq.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -177,14 +177,12 @@ export async function handleHTTPRequest(input: ProcessorInput): Promise<Processo
     // Step 2.5: Resolve workspace from auth cookie (server action context)
     // SECURITY: Always prefer cookie-based auth to prevent tenant impersonation
     // Only allow input.workspace passthrough in non-production (test/dev scripts)
-    const cookieWorkspace = await getServerActionWorkspace();
+    let cookieWorkspace: import('./middleware/workspace-context').WorkspaceContext | null = null;
+    try { cookieWorkspace = await getServerActionWorkspace(); } catch { /* outside Next.js server action context */ }
     if (cookieWorkspace) {
       validatedInput.workspace = cookieWorkspace; // cookie always wins over input
     } else if (!validatedInput.workspace) {
-      // No cookie AND no input workspace — only acceptable in test/dev context
-      if (process.env.NODE_ENV === 'production') {
-        throw new Error('Authentication required — no workspace context');
-      }
+      throw new Error('Authentication required — no workspace context');
     }
 
     // Step 3: Handle 'proceed' action — pipeline chain to next step
@@ -366,26 +364,12 @@ async function executePipelineChain(input: ProcessorInput): Promise<ProcessorRes
 // data-processor handles all SSE emission centrally after receiving the result.
 
 /**
- * Emit SSE events based on processor result and input context.
- * Handles: preview-update for all results, comms-update for incoming_email routing
- * and respond_service all-items-available notifications.
+ * Emit SSE events based on processor result.
+ * Handles: preview-update for all results, comms-update for all-items-available.
  */
-function emitProcessorResult(result: ProcessorResult, dataType: DataType, input: ProcessorInput): void {
+function emitProcessorResult(result: ProcessorResult, _dataType: DataType, _input: ProcessorInput): void {
   // Always emit preview-update for UI real-time rendering
   eventBus.emit('preview-update', result);
-
-  // Emit comms-update for incoming_email routing notifications
-  if (dataType === 'incoming_email' && input.incoming_email) {
-    const ie = input.incoming_email;
-    const routeType = 'incoming-email-routed';
-    eventBus.emit('comms-update', {
-      type: routeType,
-      routedTo: result.data_type, // effective data_type after routing
-      from: ie.from_email,
-      subject: ie.subject,
-      timestamp: new Date().toISOString(),
-    });
-  }
 
   // Emit all-items-available when respond_service indicates readiness for quotation
   const resultData = result.data as Record<string, unknown> | undefined;

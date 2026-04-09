@@ -20,10 +20,9 @@ type BuilderFn = (data: Record<string, unknown>, update?: boolean) => Payload;
 
 interface TableWriteConfig {
   table: string;
-  existsTable: string;
   builder: BuilderFn;
   extract: (input: ModifyDatabaseInput) => Record<string, unknown> | Record<string, unknown>[] | null;
-  getExistsId: (data: Record<string, unknown>, input: ModifyDatabaseInput) => number | null;
+  getExistsComposite: (data: Record<string, unknown>, input: ModifyDatabaseInput) => Record<string, unknown> | null;
   getUpdateFilter: (data: Record<string, unknown>, input: ModifyDatabaseInput) => Record<string, unknown>;
   updateOnly?: boolean;
   onInsert?: (result: Record<string, unknown>, input: ModifyDatabaseInput) => void;
@@ -225,9 +224,10 @@ export function buildRfqAnalysisPayload(data: Record<string, unknown>, update = 
   if (data.subject != null) payload.subject = String(data.subject);
   if (data.analysis_content != null) payload.analysisContent = String(data.analysis_content);
   if (data.analysis_status != null) payload.analysisStatus = String(data.analysis_status);
-  // Deterministic extraction columns (added in schema Step 2)
+  // Deterministic extraction columns
   if (data.required_currency != null) payload.requiredCurrency = String(data.required_currency);
-  if (data.deadline_period != null) payload.deadlinePeriod = new Date(String(data.deadline_period));
+  if (data.deadline_period != null) payload.deadlinePeriod = String(data.deadline_period);
+  if (data.closing_time != null) payload.closingTime = new Date(String(data.closing_time));
 
   return payload;
 }
@@ -321,299 +321,264 @@ export function buildIncomingEmailPayload(data: Record<string, unknown>, update 
 }
 
 // =============================================
+// TABLE CONFIGS — named per-table write configurations
+// Referenced by name inside WRITE_MAP below.
+// getExistsComposite returns a filter object: primary key (rfqId or quotationId) required,
+// secondary key (itemId, supplierId, etc.) included when present.
+// =============================================
+
+// ─── RFQ ANALYSIS ──────────────────────────────
+
+const TC_rfqAnalysis: TableWriteConfig = {
+  table: 'rfqAnalysis',
+  builder: buildRfqAnalysisPayload,
+  extract: (input) => {
+    if (!input.rfq_analysis) return null;
+    return { ...input.rfq_analysis, rfq_id: input.rfq_id, rfq_reference: input.rfq_reference };
+  },
+  getExistsComposite: (_data, input) => {
+    return input.rfq_id ? { rfqId: input.rfq_id } : null;
+  },
+  getUpdateFilter: (_data, input) => ({ rfqId: input.rfq_id }),
+  onInsert: (result, input) => {
+    if (result?.rfqId) {
+      input.rfq_id = result.rfqId as number;
+    }
+  },
+};
+
+// ─── RFQ ITEMS (unified: analysis + quotation) ─
+
+const TC_rfqItems: TableWriteConfig = {
+  table: 'rfqItems',
+  builder: buildRfqItemsPayload,
+  extract: (input) => {
+    const qd = input.quotationData || input;
+    const items = (qd as Record<string, unknown>).rfq_items as Array<Record<string, unknown>> | undefined
+      || (qd as Record<string, unknown>).quotation_items as Array<Record<string, unknown>> | undefined;
+    if (!items?.length) return null;
+    const rfqId = (qd as Record<string, unknown>).rfq_id ?? input.rfq_id;
+    if (!rfqId) return null;
+    return items.map((item) => ({ ...item, rfq_id: rfqId }));
+  },
+  getExistsComposite: (data, input) => {
+    const rfqId = input.quotationData?.rfq_id ?? input.rfq_id;
+    if (!rfqId || !data.item_id) return null;
+    return { rfqId, itemId: parseInt(String(data.item_id)) };
+  },
+  getUpdateFilter: (data, input) => ({
+    rfqId: input.quotationData?.rfq_id ?? input.rfq_id,
+    itemId: parseInt(String(data.item_id)),
+  }),
+};
+
+// ─── CUSTOMERS (unified: analysis + quotation) ─
+
+const TC_customers: TableWriteConfig = {
+  table: 'customers',
+  builder: buildCustomerPayload,
+  extract: (input) => {
+    const qd = input.quotationData || input;
+    if (!qd?.customer_info || !qd.rfq_id) return null;
+    return { customer_info: qd.customer_info, rfq_id: qd.rfq_id } as Record<string, unknown>;
+  },
+  getExistsComposite: (_data, input) => {
+    const rfqId = input.quotationData?.rfq_id ?? input.rfq_id;
+    return rfqId ? { rfqId } : null;
+  },
+  getUpdateFilter: (_data, input) => ({ rfqId: input.quotationData?.rfq_id ?? input.rfq_id }),
+};
+
+// ─── SUPPLIER SEARCH ───────────────────────────
+
+const TC_supplierSearch: TableWriteConfig = {
+  table: 'supplierSearch',
+  builder: buildSupplierSearchPayload,
+  extract: (input) => {
+    if (!input.suppliers_search) return null;
+    return { ...input.suppliers_search, rfq_id: input.rfq_id };
+  },
+  getExistsComposite: (_data, input) => {
+    return input.rfq_id ? { rfqId: input.rfq_id } : null;
+  },
+  getUpdateFilter: (_data, input) => ({ searchId: input.search_id }),
+};
+
+// ─── SUPPLIER ITEM STATUS (unified: search + quotation) ─
+
+const TC_supplierItemStatus: TableWriteConfig = {
+  table: 'supplierItemStatus',
+  builder: buildSupplierItemStatusPayload,
+  extract: (input) => {
+    // Source 1: direct items_source (supplier_search flow)
+    if (input.items_source?.length) {
+      return input.items_source.map(item => ({ ...item, rfq_id: input.rfq_id }));
+    }
+    // Source 2: bidder proposals from rfq_items (quotation flow)
+    const qd = input.quotationData;
+    const items = qd?.rfq_items || qd?.quotation_items;
+    if (!items?.length) return null;
+    const withBidder = items.filter((item) => item.bidder_proposal && item.supplier_id);
+    if (!withBidder.length) return null;
+    return withBidder.map((item) => ({
+      rfq_id: qd?.rfq_id || input.rfq_id,
+      item_id: item.item_id,
+      supplier_id: item.supplier_id,
+      ...(item.bidder_proposal as Record<string, unknown>),
+    }));
+  },
+  getExistsComposite: (data) => {
+    const rfqId = data.rfq_id ? Number(data.rfq_id) : null;
+    if (!rfqId) return null;
+    const filter: Record<string, unknown> = { rfqId };
+    if (data.item_id) filter.itemId = Number(data.item_id);
+    if (data.supplier_id) filter.supplierId = Number(data.supplier_id);
+    return filter;
+  },
+  getUpdateFilter: (data) => ({
+    rfqId: Number(data.rfq_id),
+    itemId: Number(data.item_id),
+    supplierId: Number(data.supplier_id),
+  }),
+};
+
+// ─── QUOTATION ─────────────────────────────────
+
+const TC_quotations: TableWriteConfig = {
+  table: 'quotations',
+  builder: buildQuotationPayload,
+  extract: (input) => {
+    if (!input.quotationData) return null;
+    return input.quotationData as unknown as Record<string, unknown>;
+  },
+  getExistsComposite: (_data, input) => {
+    const quotationId = input.quotationData?.quotation_id;
+    return quotationId ? { quotationId } : null;
+  },
+  getUpdateFilter: (_data, input) => ({ quotationId: input.quotationData!.quotation_id }),
+  onInsert: (result, input) => {
+    if (result?.quotationId && input.quotationData) {
+      input.quotationData.quotation_id = result.quotationId as number;
+    }
+  },
+};
+
+const TC_userCompany: TableWriteConfig = {
+  table: 'userCompany',
+  builder: buildUserCompanyPayload,
+  extract: (input) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const si = (input.quotationData as any)?.seller_info;
+    if (!si) return null;
+    return { company_name: si.company_name, company_address: si.address, company_fax: si.fax_number, company_email: si.email };
+  },
+  getExistsComposite: (_data, input) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const qd = input.quotationData as any;
+    const companyId = qd?.seller_info?.company_id ?? qd?.company_id;
+    return companyId ? { companyId: Number(companyId) } : null;
+  },
+  getUpdateFilter: (_data, input) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const qd = input.quotationData as any;
+    const companyId = qd?.seller_info?.company_id ?? qd?.company_id;
+    return companyId ? { companyId: Number(companyId) } : {};
+  },
+  updateOnly: true,
+};
+
+const TC_quotationPricing: TableWriteConfig = {
+  table: 'quotationPricing',
+  builder: buildPricingPayload,
+  extract: (input) => {
+    const cp = input.calculatedPricing?.calculated_pricing;
+    if (!cp?.length || !input.quotationData?.quotation_id) return null;
+    return cp.map(pricingItem => {
+      const itemId = pricingItem.item_id ? Number(pricingItem.item_id) : null;
+      let vars: Record<string, unknown> = {};
+      if (Array.isArray(input.pricing_variables) && itemId) {
+        vars = (input.pricing_variables.find(v => Number(v.item_id) === itemId) || {}) as Record<string, unknown>;
+      }
+      return {
+        quotation_id: input.quotationData!.quotation_id,
+        item_id: pricingItem.item_id,
+        pricingVariables: vars,
+        calculatedPricing: { calculated_pricing: [pricingItem] },
+        exchange_currency: input.exchange_currency || 'VND',
+      };
+    });
+  },
+  getExistsComposite: (data) => {
+    const quotationId = data.quotation_id ? Number(data.quotation_id) : null;
+    if (!quotationId) return null;
+    const filter: Record<string, unknown> = { quotationId };
+    if (data.item_id) filter.itemId = parseInt(String(data.item_id));
+    return filter;
+  },
+  getUpdateFilter: (data) => ({
+    quotationId: Number(data.quotation_id),
+    itemId: parseInt(String(data.item_id)),
+  }),
+};
+
+const TC_quotationsTotal: TableWriteConfig = {
+  table: 'quotations',
+  builder: (_data) => ({ totalAmount: String(_data.total_amount) }),
+  extract: (input) => {
+    if (input.calculatedPricing?.total_amount == null || !input.quotationData?.quotation_id) return null;
+    return { quotation_id: input.quotationData.quotation_id, total_amount: input.calculatedPricing.total_amount };
+  },
+  getExistsComposite: (data) => {
+    const quotationId = Number(data.quotation_id);
+    return quotationId ? { quotationId } : null;
+  },
+  getUpdateFilter: (data) => ({ quotationId: Number(data.quotation_id) }),
+  updateOnly: true,
+};
+
+// ─── EMAIL ─────────────────────────────────────
+
+const TC_email: TableWriteConfig = {
+  table: 'emailTable',
+  builder: buildEmailPayload,
+  extract: (input) => {
+    if (!input.email) return null;
+    return { ...input.email, quotation_id: input.quotation_id, rfq_id: input.rfq_id };
+  },
+  getExistsComposite: (_data, input) => {
+    if (!input.email_id || !input.quotation_id) return null;
+    return { quotationId: input.quotation_id };
+  },
+  getUpdateFilter: (_data, input) => ({ emailId: input.email_id }),
+};
+
+// ─── INCOMING EMAIL ────────────────────────────
+
+const TC_incomingEmail: TableWriteConfig = {
+  table: 'incomingEmails',
+  builder: buildIncomingEmailPayload,
+  extract: (input) => {
+    if (!input.incoming_email) return null;
+    return { ...input.incoming_email, rfq_id: input.rfq_id };
+  },
+  getExistsComposite: (_data, input) => {
+    return input.incoming_email_id ? { id: input.incoming_email_id } : null;
+  },
+  getUpdateFilter: (_data, input) => ({ id: input.incoming_email_id }),
+};
+
+// =============================================
 // WRITE_MAP — data-driven table routing [data_type] → TableWriteConfig[]
 // Each extract() self-gates on input presence — no action_type routing needed.
 // =============================================
 
 const WRITE_MAP: Record<string, TableWriteConfig[]> = {
-
-  // ─── RFQ ANALYSIS ──────────────────────────────
-  rfq_analysis: [
-    {
-      table: 'rfqAnalysis',
-      existsTable: 'rfq_analysis',
-      builder: buildRfqAnalysisPayload,
-      extract: (input) => {
-        if (!input.rfq_analysis) return null;
-        return { ...input.rfq_analysis, rfq_id: input.rfq_id, rfq_reference: input.rfq_reference };
-      },
-      getExistsId: (_data, input) => input.rfq_id ?? null,
-      getUpdateFilter: (_data, input) => ({ rfqId: input.rfq_id }),
-    },
-    {
-      table: 'rfqItems',
-      existsTable: 'rfq_items',
-      builder: buildRfqItemsPayload,
-      extract: (input) => {
-        if (!input.rfq_items?.length) return null;
-        return input.rfq_items.map(item => ({ ...item, rfq_id: input.rfq_id }));
-      },
-      getExistsId: (data) => data.item_id ? Number(data.item_id) : null,
-      getUpdateFilter: (data, input) => ({ rfqId: input.rfq_id, itemId: parseInt(String(data.item_id)) }),
-    },
-    {
-      table: 'customers',
-      existsTable: 'customers',
-      builder: buildCustomerPayload,
-      extract: (input) => {
-        if (!input.customer_info) return null;
-        return { customer_info: input.customer_info, rfq_id: input.rfq_id };
-      },
-      getExistsId: (_data, input) => input.rfq_id ?? null,
-      getUpdateFilter: (_data, input) => ({ rfqId: input.rfq_id }),
-    },
-  ],
-
-  // ─── SUPPLIER SEARCH ───────────────────────────
-  supplier_search: [
-    {
-      table: 'supplierSearch',
-      existsTable: 'supplier_search',
-      builder: buildSupplierSearchPayload,
-      extract: (input) => {
-        if (!input.suppliers_search) return null;
-        return { ...input.suppliers_search, rfq_id: input.rfq_id };
-      },
-      getExistsId: (_data, input) => input.rfq_id ?? null,
-      getUpdateFilter: (_data, input) => ({ searchId: input.search_id }),
-    },
-    {
-      table: 'supplierItemStatus',
-      existsTable: 'supplier_item_status',
-      builder: buildSupplierItemStatusPayload,
-      extract: (input) => {
-        if (!input.items_source?.length) return null;
-        return input.items_source.map(item => ({ ...item, rfq_id: input.rfq_id }));
-      },
-      getExistsId: (data) => data.rfq_id ? Number(data.rfq_id) : null,
-      getUpdateFilter: (data) => ({
-        rfqId: Number(data.rfq_id),
-        itemId: Number(data.item_id),
-        supplierId: Number(data.supplier_id),
-      }),
-    },
-  ],
-
-  // ─── QUOTATION (all actions: generate/update/manual_update/calculate) ───
-  // Each extract self-gates: quotationData fields → quotations/customers/items,
-  // calculatedPricing → quotationPricing. No action_type split needed.
-  quotation: [
-    {
-      table: 'quotations',
-      existsTable: 'quotations',
-      builder: buildQuotationPayload,
-      extract: (input) => {
-        if (!input.quotationData) return null;
-        return input.quotationData as unknown as Record<string, unknown>;
-      },
-      getExistsId: (_data, input) => input.quotationData?.quotation_id ?? null,
-      getUpdateFilter: (_data, input) => ({ quotationId: input.quotationData!.quotation_id }),
-      onInsert: (result, input) => {
-        if (result?.quotationId && input.quotationData) {
-          input.quotationData.quotation_id = result.quotationId as number;
-        }
-      },
-    },
-    {
-      table: 'customers',
-      existsTable: 'customers',
-      builder: buildCustomerPayload,
-      extract: (input) => {
-        const qd = input.quotationData;
-        if (!qd?.customer_info || !qd.rfq_id) return null;
-        return { customer_info: qd.customer_info, rfq_id: qd.rfq_id } as Record<string, unknown>;
-      },
-      getExistsId: (_data, input) => input.quotationData?.rfq_id ?? null,
-      getUpdateFilter: (_data, input) => ({ rfqId: input.quotationData!.rfq_id }),
-    },
-    {
-      table: 'userCompany',
-      existsTable: 'user_company',
-      builder: buildUserCompanyPayload,
-      extract: (input) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const si = (input.quotationData as any)?.seller_info;
-        if (!si) return null;
-        return { company_name: si.company_name, company_address: si.address, company_fax: si.fax_number, company_email: si.email };
-      },
-      getExistsId: () => 1,
-      getUpdateFilter: () => ({}),
-      updateOnly: true,
-    },
-    {
-      table: 'rfqItems',
-      existsTable: 'rfq_items',
-      builder: buildRfqItemsPayload,
-      extract: (input) => {
-        const qd = input.quotationData;
-        const items = qd?.rfq_items || qd?.quotation_items;
-        if (!items?.length || !qd?.rfq_id) return null;
-        return items.map((item) => ({ ...item, rfq_id: qd.rfq_id }));
-      },
-      getExistsId: (data, input) => {
-        const itemId = data.item_id ? parseInt(String(data.item_id), 10) : null;
-        return itemId && input.quotationData?.rfq_id ? input.quotationData.rfq_id : null;
-      },
-      getUpdateFilter: (data, input) => ({
-        rfqId: input.quotationData!.rfq_id,
-        itemId: parseInt(String(data.item_id)),
-      }),
-    },
-    {
-      table: 'supplierItemStatus',
-      existsTable: 'supplier_item_status',
-      builder: buildSupplierItemStatusPayload,
-      extract: (input) => {
-        const qd = input.quotationData;
-        const items = qd?.rfq_items || qd?.quotation_items;
-        if (!items?.length) return null;
-        const withBidder = items.filter((item) => item.bidder_proposal && item.supplier_id);
-        if (!withBidder.length) return null;
-        return withBidder.map((item) => ({
-          rfq_id: qd?.rfq_id || input.rfq_id,
-          item_id: item.item_id,
-          supplier_id: item.supplier_id,
-          ...(item.bidder_proposal as Record<string, unknown>),
-        }));
-      },
-      getExistsId: (data) => data.rfq_id ? Number(data.rfq_id) : null,
-      getUpdateFilter: (data) => ({
-        rfqId: Number(data.rfq_id),
-        itemId: Number(data.item_id),
-        supplierId: Number(data.supplier_id),
-      }),
-    },
-    {
-      table: 'quotationPricing',
-      existsTable: 'quotation_pricing',
-      builder: buildPricingPayload,
-      extract: (input) => {
-        const cp = input.calculatedPricing?.calculated_pricing;
-        if (!cp?.length || !input.quotationData?.quotation_id) return null;
-        return cp.map(pricingItem => {
-          const itemId = pricingItem.item_id ? Number(pricingItem.item_id) : null;
-          let vars: Record<string, unknown> = {};
-          if (Array.isArray(input.pricing_variables) && itemId) {
-            vars = (input.pricing_variables.find(v => Number(v.item_id) === itemId) || {}) as Record<string, unknown>;
-          }
-          return {
-            quotation_id: input.quotationData!.quotation_id,
-            item_id: pricingItem.item_id,
-            pricingVariables: vars,
-            calculatedPricing: { calculated_pricing: [pricingItem] },
-            exchange_currency: input.exchange_currency || 'VND',
-          };
-        });
-      },
-      getExistsId: (data) => data.item_id ? Number(data.quotation_id) : null,
-      getUpdateFilter: (data) => ({
-        quotationId: Number(data.quotation_id),
-        itemId: parseInt(String(data.item_id)),
-      }),
-    },
-    {
-      table: 'quotations',
-      existsTable: 'quotations',
-      builder: (_data) => ({ totalAmount: String(_data.total_amount) }),
-      extract: (input) => {
-        if (input.calculatedPricing?.total_amount == null || !input.quotationData?.quotation_id) return null;
-        return { quotation_id: input.quotationData.quotation_id, total_amount: input.calculatedPricing.total_amount };
-      },
-      getExistsId: (data) => Number(data.quotation_id),
-      getUpdateFilter: (data) => ({ quotationId: Number(data.quotation_id) }),
-      updateOnly: true,
-    },
-  ],
-
-  // ─── EMAIL ─────────────────────────────────────
-  email: [
-    {
-      table: 'emailTable',
-      existsTable: 'email_table',
-      builder: buildEmailPayload,
-      extract: (input) => {
-        if (!input.email) return null;
-        return { ...input.email, quotation_id: input.quotation_id, rfq_id: input.rfq_id };
-      },
-      getExistsId: (_data, input) => (input.email_id && input.quotation_id) ? input.quotation_id! : null,
-      getUpdateFilter: (_data, input) => ({ emailId: input.email_id }),
-    },
-  ],
-
-  // ─── INCOMING EMAIL ────────────────────────────
-  incoming_email: [
-    {
-      table: 'incomingEmails',
-      existsTable: 'incoming_emails',
-      builder: buildIncomingEmailPayload,
-      extract: (input) => {
-        if (!input.incoming_email) return null;
-        return { ...input.incoming_email, rfq_id: input.rfq_id };
-      },
-      getExistsId: (_data, input) => input.incoming_email_id ?? null,
-      getUpdateFilter: (_data, input) => ({ id: input.incoming_email_id }),
-    },
-  ],
+  rfq_analysis:    [TC_rfqAnalysis, TC_rfqItems, TC_customers],
+  supplier_search: [TC_supplierSearch, TC_supplierItemStatus],
+  quotation:       [TC_quotations, TC_customers, TC_userCompany, TC_rfqItems, TC_supplierItemStatus, TC_quotationPricing, TC_quotationsTotal],
+  email:           [TC_email],
+  incoming_email:  [TC_incomingEmail],
 };
-
-// =============================================
-// CHECK DATA EXISTENCE
-// =============================================
-
-/**
- * Check if data exists in a table by primary/foreign key
- * Uses getData from queries.ts for workspace-isolated lookups
- */
-export async function checkDataExists(
-  table: string,
-  keysId: number,
-  workspace: WorkspaceContext
-): Promise<Record<string, unknown>[]> {
-  try {
-    const tableNameMap: Record<string, string> = {
-      'quotations': 'quotations',
-      'rfq_items': 'rfqItems',
-      'quotation_pricing': 'quotationPricing',
-      'customers': 'customers',
-      'email_table': 'emailTable',
-      'rfq_analysis': 'rfqAnalysis',
-      'supplier_search': 'supplierSearch',
-      'user_company': 'userCompany',
-      'supplier_item_status': 'supplierItemStatus',
-      'incoming_emails': 'incomingEmails',
-    };
-
-    const tableName = tableNameMap[table];
-    if (!tableName) {
-      console.warn(`checkDataExists: unknown table "${table}", falling back to quotations`);
-      return await getData('quotations', { quotationId: keysId }, workspace) as Record<string, unknown>[];
-    }
-
-    let filterColumn: string;
-    switch (table) {
-      case 'user_company':
-        filterColumn = 'companyId';
-        break;
-      case 'incoming_emails':
-        filterColumn = 'id';
-        break;
-      case 'rfq_analysis':
-      case 'supplier_search':
-      case 'customers':
-      case 'supplier_item_status':
-        filterColumn = 'rfqId';
-        break;
-      default:
-        filterColumn = 'quotationId';
-        break;
-    }
-
-    return await getData(tableName, { [filterColumn]: keysId }, workspace) as Record<string, unknown>[];
-  } catch (error) {
-    console.error(`Error checking data existence in ${table}:`, error);
-    return [];
-  }
-}
 
 // =============================================
 // UNIFIED HANDLER — 3 Layers
@@ -632,27 +597,27 @@ async function handleWrite(
     const items: Record<string, unknown>[] = Array.isArray(extracted) ? extracted : [extracted];
 
     for (const item of items) {
-      // Layer 2: Build payload + check existence
-      const existsId = config.getExistsId(item, input);
+      // Layer 2: Check existence via composite filter
+      let existing: Record<string, unknown>[] = [];
+      const filter = config.getExistsComposite(item, input);
+      if (filter !== null) {
+        existing = await getData(config.table, filter, workspace) as Record<string, unknown>[];
+      }
 
-      if (existsId !== null) {
-        const existing = await checkDataExists(config.existsTable, existsId, workspace);
-
-        if (existing.length > 0) {
-          const updatePayload = config.builder(item, true);
-          if (Object.keys(updatePayload).length === 0) continue; // empty payload → skip
-          const filter = config.getUpdateFilter(item, input);
-          await updateData(config.table, filter, updatePayload, workspace);
-          console.log(`[DB] ${config.table} updated`);
-          continue;
-        }
+      if (existing.length > 0) {
+        const updatePayload = config.builder(item, true);
+        if (Object.keys(updatePayload).length === 0) continue;
+        const updateFilter = config.getUpdateFilter(item, input);
+        await updateData(config.table, updateFilter, updatePayload, workspace);
+        console.log(`[DB] ${config.table} updated`);
+        continue;
       }
 
       // Layer 3: Insert (skip if updateOnly)
       if (config.updateOnly) continue;
 
       const insertPayload = config.builder(item, false);
-      if (Object.keys(insertPayload).length === 0) continue; // empty payload → skip
+      if (Object.keys(insertPayload).length === 0) continue;
       const result = await insertData(config.table, {}, insertPayload, workspace);
       console.log(`[DB] ${config.table} inserted`);
 

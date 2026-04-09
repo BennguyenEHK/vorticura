@@ -25,6 +25,9 @@ import { AIChatProvider, useAIChat, AIChatFab, AIChatPopover } from "@/component
 // Import Workboard provider for panel management
 import { WorkboardProvider, useWorkboard } from "@/components/app/workboard";
 
+// Import LocationTracker for session navigation tracking
+import { LocationTracker } from "@/components/app/LocationTracker";
+
 // =============================================
 // DnD Handler Component
 // =============================================
@@ -182,6 +185,7 @@ export default function AppLayout({
       <AIChatProvider>
         <WorkboardProvider>
           <DndHandler>
+            <LocationTracker />
             <AppLayoutContent>{children}</AppLayoutContent>
           </DndHandler>
         </WorkboardProvider>

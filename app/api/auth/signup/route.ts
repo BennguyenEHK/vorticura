@@ -18,6 +18,7 @@ import { generateJWT } from '@/lib/middleware/auth-helpers';
  */
 interface SignupRequest {
   username: string;        // Required: unique username (3-50 chars)
+  full_name: string;       // Required: user's full name for Attn: self-exclusion
   password: string;        // Required: minimum 8 characters
   email?: string;          // Optional: user email
   company_name: string;    // Required: company name for new company creation
@@ -40,9 +41,9 @@ export async function POST(request: NextRequest) {
     const body: SignupRequest = await request.json();
 
     // Validate required fields
-    if (!body.username || !body.password || !body.company_name) {
+    if (!body.username || !body.password || !body.company_name || !body.full_name) {
       return NextResponse.json(
-        { error: 'Username, password, and company name are required' },
+        { error: 'Username, full name, password, and company name are required' },
         { status: 400 }
       );
     }
@@ -104,6 +105,7 @@ export async function POST(request: NextRequest) {
           .values({
             companyId: company.companyId,
             username: body.username,
+            fullName: body.full_name,
             passwordHash: passwordHash,
             email: body.email || null,
             userRole: 'admin', // First user of company is admin

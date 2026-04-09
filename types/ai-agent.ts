@@ -52,6 +52,7 @@ export interface DeterministicData {
   }>;
   required_currency: string;
   deadline_period: string | null;
+  closing_time: string | null;
 }
 
 /** Merged output: deterministic + AI = complete RFQ data */
@@ -81,6 +82,7 @@ export interface MergedAnalysisData {
   }>;
   required_currency: string;
   deadline_period: string | null;
+  closing_time: string | null;
   rfq_reference: string | null;
 }
 

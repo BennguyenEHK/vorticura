@@ -63,6 +63,13 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
     let extracted: ExtractionResult | null = null;
     const ie = input.incoming_email;
     if (ie && (action_type === 'handleRFQ' || action_type === 'analyze')) {
+      // Fetch user's full name for Attn: self-exclusion
+      let userFullName = '';
+      try {
+        const userRows = await getData('userInfo', { userId: workspace.user_id }, workspace) as Array<Record<string, unknown>>;
+        if (userRows.length) userFullName = String(userRows[0].fullName || '');
+      } catch { /* non-critical — extraction still works without exclusion */ }
+
       extracted = extractAll({
         from_email: ie.from_email || '',
         from_name: ie.from_name || '',
@@ -70,6 +77,7 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
         subject: ie.subject || '',
         email_body_text: ie.email_body_text || '',
         attachments_parsed: ie.attachments_parsed,
+        user_full_name: userFullName,
       });
     }
 
@@ -113,14 +121,16 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
           rfq_items: [],
           required_currency: 'USD',
           deadline_period: null,
+          closing_time: null,
           rfq_reference: rfqRef || null,
         };
 
     // ── NEW vs EXISTING RFQ resolution ──
-    // If rfq_id not provided, determine by customer email + rfq_reference lookup
+    // Always run dedup when we have email + reference (catches duplicate SEQ3-style inputs)
     let resolvedRfqId = rfq_id;
-    if (!resolvedRfqId && merged.customer_info.email && rfqRef) {
-      resolvedRfqId = await resolveRfqId(merged.customer_info.email, rfqRef, workspace);
+    if (merged.customer_info.email && rfqRef) {
+      const existingId = await resolveRfqId(merged.customer_info.email, rfqRef, workspace);
+      resolvedRfqId = existingId ?? rfq_id;
     }
 
     // Build result — always report as rfq_analysis for downstream consumers
@@ -143,11 +153,12 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
         rfq_reference: rfqRef,
         rfq_analysis: {
           ...merged.rfq_analysis,
-          required_currency: merged.required_currency,    // New column from deterministic extraction
-          deadline_period: merged.deadline_period,         // New column from deterministic extraction
+          required_currency: merged.required_currency,
+          deadline_period: merged.deadline_period,
+          closing_time: merged.closing_time,
         },
         rfq_items: merged.rfq_items,
-        customer_info: merged.customer_info,              // Now part of rfq_analysis WRITE_MAP
+        customer_info: merged.customer_info,
       }, workspace);
     } catch (dbError) {
       console.error('[Analysis] DB save failed (non-blocking):', dbError);
@@ -207,6 +218,7 @@ function mergeExtractionWithAI(
     })),
     required_currency: extracted.required_currency,
     deadline_period: extracted.deadline_period,
+    closing_time: extracted.closing_time,
     rfq_reference: extracted.rfq_reference,
   };
 }

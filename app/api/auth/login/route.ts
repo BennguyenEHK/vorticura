@@ -7,8 +7,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { compare } from 'bcryptjs';
 import { db } from '@/lib/db/client';
-import { userInfo, userCompany } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { userInfo, userCompany, userSessions } from '@/lib/db/schema';
+import { eq, and } from 'drizzle-orm';
 import { generateJWT } from '@/lib/middleware/auth-helpers';
 import { workspaceConfig } from '@/config/workspace.config';
 // Validation helper (relocated from lib/utils/validation)
@@ -115,6 +115,23 @@ export async function POST(request: NextRequest) {
       .set({ lastLogin: new Date() })
       .where(eq(userInfo.userId, user.userId));
 
+    // Query previous location from user_sessions
+    const sessions = await db
+      .select({
+        prevLocation: userSessions.prevLocation,
+      })
+      .from(userSessions)
+      .where(
+        and(
+          eq(userSessions.companyId, user.companyId),
+          eq(userSessions.userId, user.userId)
+        )
+      )
+      .limit(1);
+
+    const prevLocation = sessions[0]?.prevLocation;
+    const redirectTo = prevLocation ?? '/dashboard';
+
     // Generate JWT token with workspace context
     const token = await generateJWT({
       user_id: user.userId,
@@ -127,6 +144,7 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({
       success: true,
       message: 'Login successful',
+      redirect_to: redirectTo,
       user: {
         user_id: user.userId,
         company_id: user.companyId,

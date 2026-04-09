@@ -63,6 +63,7 @@ const AuthForm = ({ type }: AuthFormProps) => {
       ? { identifier: "", password: "" }
       : {
           username: "",
+          fullName: "",
           email: "",
           password: "",
           confirmPassword: "",
@@ -89,6 +90,7 @@ const AuthForm = ({ type }: AuthFormProps) => {
         const signupData = data as SignupFormData
         apiData = {
           username: signupData.username,
+          full_name: signupData.fullName,
           email: signupData.email,
           password: signupData.password,
           company_name: signupData.companyName,
@@ -125,8 +127,8 @@ const AuthForm = ({ type }: AuthFormProps) => {
 
       // Redirect on success
       if (type === "login") {
-        // Redirect to dashboard after login
-        router.push("/")
+        // Redirect to previous location or dashboard after login
+        router.push(result.redirect_to ?? '/dashboard')
         router.refresh() // Refresh to update auth state
       } else {
         // Redirect to login after signup
@@ -285,6 +287,26 @@ const AuthForm = ({ type }: AuthFormProps) => {
                         <Input
                           placeholder="johndoe"
                           autoComplete="username"
+                          disabled={isLoading}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Full Name Field */}
+                <FormField
+                  control={form.control}
+                  name="fullName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Full Name *</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Nguyen Quang Huy"
+                          autoComplete="name"
                           disabled={isLoading}
                           {...field}
                         />

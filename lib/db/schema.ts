@@ -59,6 +59,7 @@ export const userInfo = pgTable('user_info', {
 
   // Authentication credentials
   username: varchar('username', { length: 50 }).notNull(),
+  fullName: varchar('full_name', { length: 150 }),
   passwordHash: varchar('password_hash', { length: 255 }), // Nullable for OAuth-only users
   email: varchar('email', { length: 255 }),
 
@@ -106,7 +107,8 @@ export const rfqAnalysis = pgTable('rfq_analysis', {
 
   // RFQ commercial metadata (extracted from email by pattern, not AI)
   requiredCurrency: varchar('required_currency', { length: 3 }),
-  deadlinePeriod: timestamp('deadline_period', { withTimezone: false }),
+  deadlinePeriod: varchar('deadline_period', { length: 50 }),
+  closingTime: timestamp('closing_time', { withTimezone: false }),
 
   // Timestamps
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
