@@ -456,6 +456,10 @@ export const supplierItemStatus = pgTable('supplier_item_status', {
   // Supplier notes/comments about this item
   notes: text('notes'),
 
+  // Supplier contact information
+  contactEmail: varchar('contact_email', { length: 255 }),  // Supplier's contact email
+  contactPhone: varchar('contact_phone', { length: 50 }),   // Supplier's contact phone
+
   // When the supplier responded
   respondedAt: timestamp('responded_at', { withTimezone: false }),
 

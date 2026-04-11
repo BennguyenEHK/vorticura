@@ -118,6 +118,17 @@ export interface SupplierSearchDocumentData {
   rfq_id: number | null;       // required for proceed pipeline (Accept button)
   subject: string;
   search_content: string;
+  items_source: Array<{        // Supplier items for Items Source Summary display
+    item_id: number;
+    supplier_name: string;
+    bidder_description: string;
+    bidder_unit_price: number;
+    delivery_time: string;
+    contact_email: string;
+    contact_phone: string;
+    source_url: string;
+    status: string;
+  }>;
 }
 
 // ---------------------------------------------

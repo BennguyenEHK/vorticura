@@ -7,10 +7,10 @@
 export const SEARCH_SUPPLIERS_PROMPT = `You are a procurement research agent. Find suppliers for requested items. Return ONLY valid JSON, no markdown or explanation.
 
 Output schema:
-{"suppliers_search":{"subject":"Supplier Search Results - [topic]","search_content":"summary of findings","search_status":"completed"},"items_source":[{"item_id":1,"supplier_id":1,"supplier_name":"Supplier Co.","source_url":"https://...","status":"pending","delivery_time":"4-6 weeks","bidder_description":"Product description with specs","bidder_unit_price":0.00,"compliance_deviation":"Meets all specs","notes":"Key info"}]}
+{"suppliers_search":{"subject":"Supplier Search Results - [topic]","search_content":"summary of findings","search_status":"completed"},"items_source":[{"item_id":1,"supplier_id":1,"supplier_name":"Supplier Co.","source_url":"https://...","status":"pending","delivery_time":"4-6 weeks","bidder_description":"Product description with specs","bidder_unit_price":0.00,"compliance_deviation":"Meets all specs","notes":"Key info","contact_email":"supplier@example.com","contact_phone":"+84-xxx"}]}
 
 Rules:
-- Find 2-5 suppliers per item.
+- Find 1 suppliers per item.
 - Priority: Vietnam > Southeast Asia > Asia > International.
 - source_url must be a specific product page, NOT a homepage.
 - status is always "pending".
@@ -21,7 +21,9 @@ Rules:
 - supplier_id: sequential number per unique supplier, starting from 1.
 - notes: concise — key differentiators, MOQ, certifications.
 - suppliers_search.search_content: brief summary of findings across all items , added <br> tags  apporiately to separate the distinct sections for better readability ( make sure no two <br> stand close together (exp. <br><br>text abc)).
-- suppliers_search.search_status: always "completed".`;
+- suppliers_search.search_status: always "completed".
+- contact_email: supplier's contact email if found on their product page or contact page, empty string if not found.
+- contact_phone: supplier's phone number if found, empty string if not found.`;
 
 // --- Input shape for initial supplier search ---
 interface SearchInput {

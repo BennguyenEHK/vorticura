@@ -169,12 +169,24 @@ function transformResultToDocument(result: ProcessorResult): DocumentData | null
     case 'supplier_search': {
       // supplier-search-actions returns: { rfq_id, suppliers_search, items_source }
       const suppliersSearch = (data.suppliers_search as Record<string, unknown>) || {};
+      const rawItems = (data.items_source as Array<Record<string, unknown>>) || [];
 
       const searchData: SupplierSearchDocumentData = {
         search_id: null,
         rfq_id: (data.rfq_id as number) || null,  // needed for Accept → proceed pipeline
         subject: (suppliersSearch.subject as string) || 'Supplier Search Results',
         search_content: (suppliersSearch.search_content as string) || '',
+        items_source: rawItems.map((item) => ({
+          item_id: (item.item_id as number) || 0,
+          supplier_name: (item.supplier_name as string) || '',
+          bidder_description: (item.bidder_description as string) || '',
+          bidder_unit_price: (item.bidder_unit_price as number) || 0,
+          delivery_time: (item.delivery_time as string) || '',
+          contact_email: (item.contact_email as string) || '',
+          contact_phone: (item.contact_phone as string) || '',
+          source_url: (item.source_url as string) || '',
+          status: (item.status as string) || 'pending',
+        })),
       };
       return { type: 'supplier_search', data: searchData };
     }

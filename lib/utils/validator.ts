@@ -149,6 +149,8 @@ export interface SupplierItemSource {
   bidder_unit_price: number;
   compliance_deviation: string;
   notes: string;
+  contact_email?: string;  // Supplier contact email (optional — AI may not find it)
+  contact_phone?: string;  // Supplier contact phone (optional — AI may not find it)
 }
 
 /** Previous email for email/re_generate (email-actions-json.json Input_2) */

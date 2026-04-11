@@ -266,6 +266,8 @@ export function buildSupplierItemStatusPayload(data: Record<string, unknown>, up
   if (data.bidder_description != null) payload.bidderDescription = String(data.bidder_description);
   if (data.compliance_deviation != null) payload.complianceDeviation = String(data.compliance_deviation);
   if (data.notes != null) payload.notes = String(data.notes);
+  if (data.contact_email != null) payload.contactEmail = String(data.contact_email);   // Map to DB column
+  if (data.contact_phone != null) payload.contactPhone = String(data.contact_phone);   // Map to DB column
   if (data.responded_at != null) payload.respondedAt = data.responded_at;
 
   return payload;

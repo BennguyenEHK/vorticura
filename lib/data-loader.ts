@@ -199,6 +199,8 @@ async function loadSupplierSearchResearchInput(
     bidder_unit_price: item.bidderUnitPrice ? Number(item.bidderUnitPrice) : 0, // Unit price (numeric -> number)
     compliance_deviation: item.complianceDeviation ?? '',  // Spec compliance notes
     notes: item.notes ?? '',                               // Supplier notes
+    contact_email: item.contactEmail ?? '',                // Supplier contact email
+    contact_phone: item.contactPhone ?? '',                // Supplier contact phone
   }));
 
   return {
@@ -500,6 +502,8 @@ async function loadRespondSupplierInput(
     bidder_unit_price: item.bidderUnitPrice ? Number(item.bidderUnitPrice) : 0, // Unit price
     compliance_deviation: item.complianceDeviation ?? '',  // Compliance notes
     notes: item.notes ?? '',                               // Supplier notes
+    contact_email: item.contactEmail ?? '',                // Supplier contact email
+    contact_phone: item.contactPhone ?? '',                // Supplier contact phone
   }));
 
   return {
