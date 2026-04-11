@@ -20,7 +20,7 @@ Rules:
 - compliance_deviation: note any deviations from RFQ specs, or "Meets all specs" if compliant.
 - supplier_id: sequential number per unique supplier, starting from 1.
 - notes: concise — key differentiators, MOQ, certifications.
-- suppliers_search.search_content: brief summary of findings across all items , added <br> tags to separate the distinct sections for better readability.
+- suppliers_search.search_content: brief summary of findings across all items , added <br> tags  apporiately to separate the distinct sections for better readability ( make sure no two <br> stand close together (exp. <br><br>text abc)).
 - suppliers_search.search_status: always "completed".`;
 
 // --- Input shape for initial supplier search ---

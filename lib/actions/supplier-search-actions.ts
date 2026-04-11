@@ -112,6 +112,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
       aiResult = await hfChatCompletion<SupplierSearchAIResult>(
         SEARCH_SUPPLIERS_PROMPT,
         userMessage,
+        4096  // ← supplier search generates large items_source arrays
       );
     }
 

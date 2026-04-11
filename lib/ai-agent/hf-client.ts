@@ -67,7 +67,8 @@ export function getHFClient(): InferenceClient {
  */
 export async function hfChatCompletion<T>(
   systemPrompt: string,
-  userMessage: string
+  userMessage: string,
+  maxTokens = 1024  // ← default for existing callers (analysis, email)
 ): Promise<T> {
   const client = getHFClient();
   const startTime = Date.now();
@@ -81,7 +82,7 @@ export async function hfChatCompletion<T>(
       { role: 'system', content: systemPrompt },  // System prompt defines output schema
       { role: 'user', content: userMessage },      // User content to analyze
     ],
-    max_tokens: 1024,       // Max output tokens
+    max_tokens: maxTokens,       // Max output tokens
     temperature: 0.3,       // Low temperature for deterministic JSON output
   });
 
@@ -127,5 +128,13 @@ function parseJSON<T>(raw: string): T {
   }
 
   const jsonStr = cleaned.slice(start, end);
+
+  // Detect truncated output before attempting parse
+  const openCount = (jsonStr.match(/\[/g) || []).length;
+  const closeCount = (jsonStr.match(/\]/g) || []).length;
+  if (openCount !== closeCount) {
+    throw new Error(`[hf-client] Truncated JSON output detected (${openCount} '[' vs ${closeCount} ']'). Increase max_tokens.`);
+  }
+
   return JSON.parse(jsonStr) as T;
 }

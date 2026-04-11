@@ -166,10 +166,10 @@ async function main() {
   console.log('=== Analyze-RFQ Prompt Integration Test (3 Sequences) ===\n');
 
   // ── Test Sequence 1 ──
-  // console.log('\n>>> TEST 1: SEQ_1_1_EMAIL (PR 25-10337, Original Deadline)\n');
-  // const t1 = await handleHTTPRequest(SEQ_1_1_EMAIL);
-  // logResult(t1, 'Test 1', { rfq_ref: 'RFQ PR-25-10337', email: 'hoanghuyco.sales@gmail.com', items: 9, currency: 'VND', deadline: '2025-06-19' });
-  // if (t1.success) await emitToPreview(t1 as unknown as Record<string, unknown>);
+  console.log('\n>>> TEST 1: SEQ_1_1_EMAIL (PR 25-10337, Original Deadline)\n');
+  const t1 = await handleHTTPRequest(SEQ_1_1_EMAIL);
+  logResult(t1, 'Test 1', { rfq_ref: 'RFQ PR-25-10337', email: 'hoanghuyco.sales@gmail.com', items: 9, currency: 'VND', deadline: '2025-06-19' });
+  if (t1.success) await emitToPreview(t1 as unknown as Record<string, unknown>);
 
   // ── Test Sequence 2 ──
   // console.log('\n>>> TEST 2: SEQ_2_2_EMAIL (PR 26-77902, GlobalTech Solutions)\n');
@@ -178,22 +178,22 @@ async function main() {
   // if (t2.success) await emitToPreview(t2 as unknown as Record<string, unknown>);
 
   // ── Test Sequence 3 ──
-  console.log('\n>>> TEST 3: SEQ_3_3_EMAIL (PR 25-10337, Amended Deadline + Item 1 Revised)\n');
-  const t3 = await handleHTTPRequest(SEQ_3_3_EMAIL);
-  logResult(t3, 'Test 3', { rfq_ref: 'RFQ PR-25-10337', email: 'hoanghuyco.sales@gmail.com', items: 9, currency: 'VND', deadline: '2025-06-12' });
-  if (t3.success) await emitToPreview(t3 as unknown as Record<string, unknown>);
+  // console.log('\n>>> TEST 3: SEQ_3_3_EMAIL (PR 25-10337, Amended Deadline + Item 1 Revised)\n');
+  // const t3 = await handleHTTPRequest(SEQ_3_3_EMAIL);
+  // logResult(t3, 'Test 3', { rfq_ref: 'RFQ PR-25-10337', email: 'hoanghuyco.sales@gmail.com', items: 9, currency: 'VND', deadline: '2025-06-12' });
+  // if (t3.success) await emitToPreview(t3 as unknown as Record<string, unknown>);
 
   // ── Summary ──
   console.log('\n========================================');
   console.log('SUMMARY');
   console.log('========================================');
-  // console.log(`  Test 1 (original):        ${t1.success ? 'PASSED ✓' : 'FAILED ✗'}`);
+  console.log(`  Test 1 (original):        ${t1.success ? 'PASSED ✓' : 'FAILED ✗'}`);
   // console.log(`  Test 2 (new PR):          ${t2.success ? 'PASSED ✓' : 'FAILED ✗'}`);
-  console.log(`  Test 3 (amended deadline): ${t3.success ? 'PASSED ✓' : 'FAILED ✗'}`);
+  // console.log(`  Test 3 (amended deadline): ${t3.success ? 'PASSED ✓' : 'FAILED ✗'}`);
   console.log('========================================\n');
 
   await pool.end();
-  if (!t3.success ) process.exit(1);
+  if (!t1.success ) process.exit(1);
 }
 
 /** Helper: Log result with validation */

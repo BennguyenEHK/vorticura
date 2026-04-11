@@ -225,9 +225,10 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
     const TOOLTIP_HEIGHT = 40;
     const PADDING = 8;
     const spaceAbove = rect.top - contentRect.top;
+    const scrollTop = contentRef.current.scrollTop;
     const top = spaceAbove > TOOLTIP_HEIGHT + PADDING
-      ? rect.top - contentRect.top - TOOLTIP_HEIGHT - PADDING
-      : rect.bottom - contentRect.top + PADDING;
+      ? rect.top - contentRect.top + scrollTop - TOOLTIP_HEIGHT - PADDING
+      : rect.bottom - contentRect.top + scrollTop + PADDING;
     const left = Math.max(PADDING, Math.min(
       rect.left - contentRect.left + (rect.width / 2) - 55,
       contentRect.width - 110 - PADDING
@@ -302,6 +303,7 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
 
   // Reject: send feedback + regenerate action
   const handleReject = useCallback(async () => {
+    if (!hasFeedback) return;
     if (!state.activeDocument) return;
     const docType = state.activeDocument.type;
     const mapping = ACCEPT_REJECT_MAP[docType];
@@ -335,7 +337,7 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
     } catch (err) {
       actions.setError(err instanceof Error ? err.message : 'Regenerate failed');
     }
-  }, [state.activeDocument, generalFeedback, inlineNotes, actions]);
+  }, [state.activeDocument, generalFeedback, inlineNotes, hasFeedback, actions]);
 
   // Determine active tab from current document type
   const activeType = state.activeDocument?.type || null;
@@ -566,14 +568,17 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
               </span>
             )}
             <div className="flex-1" />
-            <Button variant="outline" size="sm" onClick={handleReject} disabled={!hasFeedback} className="gap-1.5">
-              <RefreshCw className="w-3.5 h-3.5" />
-              Regenerate
-            </Button>
-            <Button size="sm" onClick={handleAccept} className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700">
-              <Check className="w-3.5 h-3.5" />
-              Accept
-            </Button>
+            {hasFeedback ? (
+              <Button variant="outline" size="sm" onClick={handleReject} className="gap-1.5">
+                <RefreshCw className="w-3.5 h-3.5" />
+                Regenerate
+              </Button>
+            ) : (
+              <Button size="sm" onClick={handleAccept} className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700">
+                <Check className="w-3.5 h-3.5" />
+                Accept
+              </Button>
+            )}
           </div>
         </div>
       )}
