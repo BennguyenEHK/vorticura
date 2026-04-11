@@ -2,14 +2,19 @@
 // SUPPLIER SEARCH ACTIONS - Supplier Discovery Processor
 // =============================================
 // Internal server module (called by data-processor, NOT a server action)
-// Flow: ProcessorInput → route by action_type → AI API call → save to DB → return ProcessorResult
+// Flow: ProcessorInput → fetch rfq_items from DB → build AI message → AI call → save to DB → return ProcessorResult
 // Supports: search | research
 
-import { hfChatCompletion, SUPPLIER_SEARCH_SYSTEM_PROMPT } from '@/lib/ai-agent/hf-client';
+import { hfChatCompletion } from '@/lib/ai-agent/hf-client';
+import {
+  SEARCH_SUPPLIERS_PROMPT,
+  buildSearchUserMessage,
+  buildResearchUserMessage,
+} from '@/lib/ai-agent/prompt/search-suppliers';
+import { getData } from '@/lib/db/queries';
 import { modifyDatabase } from '@/lib/utils/databaseHandler';
 import { getLocalModel } from '@/lib/ai-agent/local-model';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
-import type { SearchAPIInput, SupplierResult } from '@/types/ai-agent';
 
 // ---------------------------------------------
 // Configuration
@@ -18,13 +23,39 @@ import type { SearchAPIInput, SupplierResult } from '@/types/ai-agent';
 /** AI inference mode: 'local' = run model locally, anything else = call remote API */
 const AI_MODE = process.env.AI_MODE || 'remote';
 
+// ---------------------------------------------
+// AI Output Type (matches SEARCH_SUPPLIERS_PROMPT schema)
+// ---------------------------------------------
+
+/** AI-generated supplier search result — matches the prompt's output schema */
+interface SupplierSearchAIResult {
+  suppliers_search: {
+    subject: string;
+    search_content: string;   // HTML-safe summary with <br> separators
+    search_status: string;    // always "completed"
+  };
+  items_source: Array<{
+    item_id: number;
+    supplier_id: number;
+    supplier_name: string;
+    source_url: string;
+    status: string;
+    delivery_time: string;
+    bidder_description: string;
+    bidder_unit_price: number;
+    compliance_deviation: string;
+    notes: string;
+  }>;
+}
 
 // ---------------------------------------------
 // Main Processor: Process Supplier Search
 // ---------------------------------------------
 
 /**
- * Process supplier search based on action_type
+ * Process supplier search based on action_type.
+ * - search:   fetches rfq_items from DB → builds structured AI message → AI finds suppliers
+ * - research: re-searches with user feedback on previous results
  * @param input - Validated ProcessorInput (data_type: 'supplier_search')
  * @returns ProcessorResult with supplier data
  */
@@ -35,14 +66,56 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
   try {
     const { action_type, rfq_id, rfq_reference, search, workspace } = input;
 
-    // Route by action_type: search | research → both call AI API
-    const suppliers = await callSupplierSearchAPI({
-      subject: search?.subject || '',
-      searchContent: search?.search_content || '',
-      actionType: action_type,
-    });
+    if (!workspace) throw new Error('Missing workspace context');
 
-    // Build result
+    // Build AI user message based on action_type
+    let userMessage: string;
+
+    if (action_type === 'search') {
+      // Fetch rfq_items from DB for structured per-item AI input
+      const itemRows = rfq_id
+        ? (await getData('rfqItems', { rfqId: rfq_id }, workspace)) as Array<Record<string, unknown>>
+        : [];
+
+      userMessage = buildSearchUserMessage({
+        rfqReference: rfq_reference || '',
+        subject: search?.subject || '',
+        items: itemRows.map((i) => ({
+          itemId: Number(i.itemId),
+          description: String(i.companyDescription || ''),
+          qty: Number(i.qty || 0),
+          uom: String(i.uom || 'EA'),
+        })),
+      });
+    } else {
+      // research: re-search with user inline notes + general feedback
+      userMessage = buildResearchUserMessage({
+        rfqReference: rfq_reference || '',
+        previousSearch: search?.search_content || '',
+        generalFeedback: input.ai_comments?.general_feedback || '',
+        inlineNotes: (input.ai_comments?.inline_notes || []).map((n) => ({
+          selectedText: n.selected_text,
+          comment: n.comment,
+        })),
+      });
+    }
+
+    // Call AI — local or remote based on AI_MODE
+    let aiResult: SupplierSearchAIResult;
+    if (AI_MODE === 'local') {
+      console.log('[Supplier Search] Using local AI model');
+      aiResult = await getLocalModel().chatCompletion<SupplierSearchAIResult>(
+        SEARCH_SUPPLIERS_PROMPT,
+        userMessage,
+      );
+    } else {
+      aiResult = await hfChatCompletion<SupplierSearchAIResult>(
+        SEARCH_SUPPLIERS_PROMPT,
+        userMessage,
+      );
+    }
+
+    // Build result — include rfq_id so SSE preview panel can run proceed pipeline
     const result: ProcessorResult = {
       success: true,
       data_type: 'supplier_search',
@@ -51,29 +124,28 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
       session_id: '',
       processing_time_ms: Date.now() - startTime,
       data: {
-        suppliers,
-        searchTimestamp: timestamp,
+        rfq_id: rfq_id ?? null,                   // required by preview-panel-content.tsx for Accept action
+        suppliers_search: aiResult.suppliers_search,
+        items_source: aiResult.items_source || [],
       },
       timestamp,
     };
 
-    // Save to database (non-blocking, errors don't fail the response)
-    // Note: DB handler uses `suppliers_search` (with 's'), not `supplier_search`
+    // Save to database (non-blocking — errors don't fail the response)
     try {
-      if (workspace) {
-        await modifyDatabase({
+      await modifyDatabase(
+        {
           data_type: 'supplier_search',
           rfq_id,
           rfq_reference,
-          suppliers_search: {
-            subject: search?.subject || '',
-            search_content: search?.search_content || '',
-            search_status: 'completed',
-          },
-        }, workspace);
-      } else {
-        console.warn('[Supplier Search] Skipping DB save because workspace is missing');
-      }
+          suppliers_search: aiResult.suppliers_search,  // AI-generated summary
+          items_source: (aiResult.items_source || []).map((item) => ({
+            ...item,
+            rfq_id,  // inject rfq_id for FK linkage in supplierItemStatus table
+          })),
+        },
+        workspace,
+      );
     } catch (dbError) {
       console.error('[Supplier Search] DB save failed (non-blocking):', dbError);
     }
@@ -82,7 +154,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
   } catch (error) {
     console.error('[Supplier Search] Error:', error);
 
-    const errorResult: ProcessorResult = {
+    return {
       success: false,
       data_type: 'supplier_search',
       action_type: input.action_type,
@@ -90,36 +162,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
       session_id: '',
       processing_time_ms: Date.now() - startTime,
       error: error instanceof Error ? error.message : 'Supplier search failed',
-      timestamp,
+      timestamp: new Date().toISOString(),
     };
-
-    return errorResult;
   }
-}
-
-// ---------------------------------------------
-// AI API Call
-// ---------------------------------------------
-
-// SupplierResult and SearchAPIInput types imported from '@/types/ai-agent'
-
-/**
- * Call AI for supplier search — routes to local model or remote API based on AI_MODE.
- * Local mode: runs model in-process via @xenova/transformers
- * Remote mode: calls HuggingFace Inference API via hfChatCompletion
- * Errors propagate to the caller (no mock fallback).
- */
-async function callSupplierSearchAPI(input: SearchAPIInput): Promise<SupplierResult[]> {
-  // Build user message from input fields
-  const userMessage = `Subject: ${input.subject}\n\nRequirements:\n${input.searchContent}`;
-
-  // Route: local model inference (no network required)
-  if (AI_MODE === 'local') {
-    console.log('[Supplier Search] Using local AI model');
-    // Generic chatCompletion<T> matches hf-client pattern
-    return await getLocalModel().chatCompletion<SupplierResult[]>(SUPPLIER_SEARCH_SYSTEM_PROMPT, userMessage);
-  }
-
-  // Route: remote API call via HuggingFace Inference SDK
-  return await hfChatCompletion<SupplierResult[]>(SUPPLIER_SEARCH_SYSTEM_PROMPT, userMessage);
 }

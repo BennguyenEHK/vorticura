@@ -100,6 +100,13 @@ export interface RfqAnalysisDocumentData {
   rfq_id: number | null;
   subject: string;
   analysis_content: string;
+  rfq_items: Array<{           // extracted RFQ line items for display in analysis panel
+    item_id: number;
+    company_description: string;
+    qty: number;
+    uom: string;
+    currency_code: string;
+  }>;
 }
 
 // ---------------------------------------------
@@ -108,6 +115,7 @@ export interface RfqAnalysisDocumentData {
 
 export interface SupplierSearchDocumentData {
   search_id: number | null;
+  rfq_id: number | null;       // required for proceed pipeline (Accept button)
   subject: string;
   search_content: string;
 }

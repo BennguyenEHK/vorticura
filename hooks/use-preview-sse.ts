@@ -144,27 +144,37 @@ function transformResultToDocument(result: ProcessorResult): DocumentData | null
     }
 
     case 'rfq_analysis': {
-      // analysis-actions.ts returns: { rfq_analysis: { subject, analysis_content }, rfq_items, customer_info }
+      // analysis-actions returns: { rfq_analysis, rfq_items, customer_info, ..., rfq_id }
       const rfqAnalysis = (data.rfq_analysis as Record<string, unknown>) || {};
+      const rawItems = (data.rfq_items as Array<Record<string, unknown>>) || [];
+
       const analysisData: RfqAnalysisDocumentData = {
-        rfq_id: null,
+        rfq_id: (data.rfq_id as number) || null,  // needed for Accept → proceed pipeline
         subject: (rfqAnalysis.subject as string) || 'RFQ Analysis',
         analysis_content: (rfqAnalysis.analysis_content as string) || '',
+        rfq_items: rawItems.map((item) => {
+          const req = (item.company_requirement as Record<string, unknown>) || {};
+          return {
+            item_id: Number(item.item_id) || 0,
+            company_description: (req.company_description as string) || '',
+            qty: Number(req.qty) || 0,
+            uom: (req.uom as string) || 'EA',
+            currency_code: (item.currency_code as string) || 'USD',
+          };
+        }),
       };
       return { type: 'rfq_analysis', data: analysisData };
     }
 
     case 'supplier_search': {
-      // supplier-search-actions.ts returns: { suppliers, searchTimestamp }
-      const suppliers = (data.suppliers as Array<Record<string, unknown>>) || [];
-      const content = suppliers
-        .map((s, i) => `${i + 1}. ${s.name} (${s.email}) — Match: ${((s.matchScore as number) * 100).toFixed(0)}%`)
-        .join('\n');
+      // supplier-search-actions returns: { rfq_id, suppliers_search, items_source }
+      const suppliersSearch = (data.suppliers_search as Record<string, unknown>) || {};
 
       const searchData: SupplierSearchDocumentData = {
         search_id: null,
-        subject: 'Supplier Search Results',
-        search_content: content,
+        rfq_id: (data.rfq_id as number) || null,  // needed for Accept → proceed pipeline
+        subject: (suppliersSearch.subject as string) || 'Supplier Search Results',
+        search_content: (suppliersSearch.search_content as string) || '',
       };
       return { type: 'supplier_search', data: searchData };
     }

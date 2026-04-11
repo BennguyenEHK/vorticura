@@ -10,18 +10,18 @@ Output schema:
 {
   "rfq_analysis": {
     "subject": "RFQ Analysis - [topic]",
-    "analysis_content": "Summary: what client wants, key requirements, deadlines, clarification needed",
+    "analysis_content": "Summary: what client wants, key requirements, deadlines, closing_time, clarification needed",
     "analysis_status": "completed"
   },
   "customer_partial": {
-    "company_name": "Full legal company name",
+    "company_name": "Full legal company name",/
     "customer_address": "Full mailing address"
   }
 }
 
 Rules:
 - rfq_analysis.subject: concise title for this RFQ.
-- rfq_analysis.analysis_content: summarize scope, key requirements, deadlines, compliance notes, anything needing clarification.
+- rfq_analysis.analysis_content: summarize scope, key requirements, deadlines, compliance notes, anything needing clarification, added <br> tags to separate the distinct sections for better readability.
 - rfq_analysis.analysis_status: always "completed".
 - customer_partial.company_name: extract the full legal company name of the SENDER (not the recipient).
 - customer_partial.customer_address: extract full mailing address from email signature or body.

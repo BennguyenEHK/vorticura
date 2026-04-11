@@ -5,7 +5,7 @@
 // Flow: ProcessorInput → Pass 1 (deterministic extraction) → Pass 2 (AI) → merge → DB → result
 // Supports: analyze | reanalyze | handleRFQ (incoming_email routed)
 
-import { hfChatCompletion, ANALYSIS_SYSTEM_PROMPT } from '@/lib/ai-agent/hf-client';
+import { hfChatCompletion} from '@/lib/ai-agent/hf-client';
 import { ANALYZE_RFQ_PROMPT, buildAnalyzeUserMessage, buildReanalyzeUserMessage } from '@/lib/ai-agent/prompt';
 import { modifyDatabase } from '@/lib/utils/databaseHandler';
 import { getData } from '@/lib/db/queries';
@@ -141,7 +141,7 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
       status: 'completed',
       session_id: '',
       processing_time_ms: Date.now() - startTime,
-      data: merged,
+      data: { ...merged, rfq_id: resolvedRfqId ?? null }, // include rfq_id for SSE preview panel
       timestamp,
     };
 
