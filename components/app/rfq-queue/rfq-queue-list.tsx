@@ -17,20 +17,19 @@ import { getQueuedRFQs } from "@/lib/services/rfq-queue/queue-manager";
 
 // Props interface
 interface RFQQueueListProps {
-  isCollapsed?: boolean;     // Sidebar collapsed state
-  activeRFQId?: string;      // Currently active RFQ ID
-  workspaceId?: string;      // Filter by workspace
-  initialLimit?: number;     // Initial visible items (default: 3)
+  isCollapsed?: boolean;           // Sidebar collapsed state
+  activeRfqReference?: string;     // Currently active RFQ reference (decoded from URL)
+  initialLimit?: number;           // Initial visible items (default: 3)
 }
 
 /**
  * RFQQueueList - Scrollable list of queued RFQs
- * Calls queue-manager service directly instead of API
+ * Calls the `getQueuedRFQs` server action directly.
+ * Workspace context is resolved server-side from the auth cookie — no IDs passed from client.
  */
 export function RFQQueueList({
   isCollapsed = false,
-  activeRFQId,
-  workspaceId,
+  activeRfqReference,
   initialLimit = 3,
 }: RFQQueueListProps) {
   // State for RFQ list
@@ -40,13 +39,11 @@ export function RFQQueueList({
   const [total, setTotal] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // Fetch RFQs using queue-manager service directly
+  // Fetch RFQs via server action (workspace resolved server-side)
   const fetchQueue = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Call getQueuedRFQs service directly (no API route needed)
       const result = await getQueuedRFQs({
-        workspaceId,
         limit: isExpanded ? 20 : initialLimit,
       });
 
@@ -59,7 +56,7 @@ export function RFQQueueList({
     } finally {
       setIsLoading(false);
     }
-  }, [workspaceId, initialLimit, isExpanded]);
+  }, [initialLimit, isExpanded]);
 
   // Fetch on mount and when dependencies change
   useEffect(() => {
@@ -127,10 +124,10 @@ export function RFQQueueList({
       >
         {rfqs.map((rfq) => (
           <RFQQueueItem
-            key={rfq.id}
+            key={rfq.rfqId}
             rfq={rfq}
             isCollapsed={isCollapsed}
-            isActive={rfq.id === activeRFQId}
+            isActive={rfq.rfqReference === activeRfqReference}
           />
         ))}
       </div>

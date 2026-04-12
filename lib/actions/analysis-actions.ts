@@ -146,6 +146,10 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
     };
 
     // Save to database (non-blocking, errors don't fail the response)
+    // Note: updated_at auto-bumps on any UPDATE via $onUpdate — that is what
+    // pushes the RFQ to priority 1 in the sidebar queue. current_stage /
+    // unread_count are set ONLY for new RFQs so reanalyze never regresses them.
+    const isNewRfq = resolvedRfqId == null;
     try {
       await modifyDatabase({
         data_type: 'rfq_analysis',
@@ -156,6 +160,9 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
           required_currency: merged.required_currency,
           deadline_period: merged.deadline_period,
           closing_time: merged.closing_time,
+          // Newly-created rows land at Gate 1 (user_validation); existing rows keep their stage
+          current_stage: isNewRfq ? 'user_validation' : undefined,
+          unread_count: isNewRfq ? 1 : undefined,
         },
         rfq_items: merged.rfq_items,
         customer_info: merged.customer_info,

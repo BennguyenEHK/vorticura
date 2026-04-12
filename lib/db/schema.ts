@@ -110,6 +110,10 @@ export const rfqAnalysis = pgTable('rfq_analysis', {
   deadlinePeriod: varchar('deadline_period', { length: 50 }),
   closingTime: timestamp('closing_time', { withTimezone: false }),
 
+  // Workflow queue state — drives the sidebar RFQ queue rendering
+  currentStage: varchar('current_stage', { length: 40 }).default('user_validation'),  // 11-stage workflow cursor
+  unreadCount: integer('unread_count').default(0),                                     // unseen updates badge
+
   // Timestamps
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false })

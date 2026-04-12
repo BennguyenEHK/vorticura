@@ -32,32 +32,41 @@ export type QueueStatus =
   | "error";    // Has issues that need attention (red)
 
 /**
- * Queued RFQ item - Represents a single RFQ in the sidebar queue
+ * Queued RFQ item — single row in the sidebar queue.
+ *
+ * Visible (rendered in UI): rfqReference, clientName, clientEmail, subject, stage, stageLabel, unreadCount
+ * Internal (not rendered): rfqId, userId, companyId, status, priority, createdAt, updatedAt
+ *
+ * Tenant isolation is enforced server-side via WorkspaceContext.
+ * `rfqReference` is the user-facing + URL identifier (e.g. "RFQ PK 22501").
  */
 export interface QueuedRFQ {
-  id: string;                    // Unique RFQ identifier (e.g., "RFQ-005")
-  clientName: string;            // Customer/company name
-  clientEmail: string;           // Customer email address
-  subject: string;               // RFQ subject/title
-  stage: RFQStage;               // Current workflow stage
-  status: QueueStatus;           // Visual status indicator
-  priority: number;              // Queue position (lower = higher priority)
-  createdAt: Date;               // When RFQ was received
-  updatedAt: Date;               // Last activity timestamp
-  workspaceId: string;           // Associated workspace
-  quotationId?: string;          // Linked quotation if created
-  stageLabel?: string;           // Human-readable stage description
-  unreadCount?: number;          // New messages/updates count
+  // ───── Visible ─────
+  rfqReference: string;          // Primary user-facing identifier from incoming email
+  clientName: string;            // customers.company_name
+  clientEmail: string;           // customers.email
+  subject: string;               // rfq_analysis.subject
+  stage: RFQStage;               // rfq_analysis.current_stage
+  stageLabel: string;            // STAGE_CONFIGS[stage].label
+  unreadCount: number;           // rfq_analysis.unread_count
+
+  // ───── Internal ─────
+  rfqId: number;                 // rfq_analysis.rfq_id — DB primary key
+  userId: number;                // workspace isolation (user_id)
+  companyId: number;             // workspace isolation (company_id)
+  status: QueueStatus;           // derived from stage (isGate/isAsync)
+  priority: number;              // 1 = top; derived from updated_at DESC row index
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 /**
- * Queue filters for fetching RFQs
+ * Queue filters — workspace is NOT a filter (always from WorkspaceContext).
  */
 export interface QueueFilters {
-  workspaceId?: string;          // Filter by workspace
   status?: QueueStatus[];        // Filter by status(es)
   stage?: RFQStage[];            // Filter by stage(s)
-  limit?: number;                // Max items to return (default: 4)
+  limit?: number;                // Max items to return (default: 3)
   offset?: number;               // Pagination offset
   includeCompleted?: boolean;    // Include completed RFQs (default: false)
 }

@@ -1,9 +1,9 @@
 // =============================================
-// Workspace Page - Quotation Editor
+// Workspace Page — RFQ-keyed editor
 // =============================================
-// Dynamic route for editing a specific quotation
-// URL: /workspace/[quotationId] (e.g., /workspace/Q-2024-001)
-// Uses dynamic WorkboardGrid for resizable/repositionable panels
+// Dynamic route for editing a specific RFQ by its rfq_reference (from incoming email).
+// URL: /workspace/[rfq_reference]  (e.g. /workspace/RFQ%20PK%2022501)
+// Uses dynamic WorkboardGrid for resizable/repositionable panels.
 
 "use client";
 
@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 
 interface WorkspacePageProps {
   params: Promise<{
-    quotationId: string;  // Dynamic segment from URL
+    rfq_reference: string;       // Dynamic URL segment — URL-encoded form
   }>;
 }
 
@@ -26,7 +26,7 @@ interface WorkspacePageProps {
 // Panel Toggle Configuration
 // =============================================
 
-/** Config for panel toggle buttons - maps panel id to icon */
+/** Config for panel toggle buttons — maps panel id to icon */
 const PANEL_TOGGLES = [
   { id: "workflow", icon: GitBranch, label: "Workflow" },
   { id: "pricing", icon: DollarSign, label: "Pricing" },
@@ -41,16 +41,16 @@ const PANEL_TOGGLES = [
  * WorkspaceHeader - Header with title and layout controls
  * Includes panel toggle buttons for hiding/showing individual panels
  */
-function WorkspaceHeader({ quotationId }: { quotationId: string }) {
-  // Get workboard state and actions (including panel visibility controls)
+function WorkspaceHeader({ rfqReference }: { rfqReference: string }) {
+  // Workboard state (layout lock + panel visibility)
   const { isLocked, setLocked, resetLayout, togglePanelVisibility, isPanelVisible } = useWorkboard();
 
   return (
     <div className="flex items-center justify-between mb-6">
-      {/* Page title */}
+      {/* Page title — renders the human-friendly rfq_reference */}
       <div>
         <h1 className="text-2xl font-semibold text-foreground">
-          Workspace: {quotationId}
+          Workspace: {rfqReference}
         </h1>
         <p className="text-body">
           Drag panel edges to resize, drag headers to reposition
@@ -59,7 +59,7 @@ function WorkspaceHeader({ quotationId }: { quotationId: string }) {
 
       {/* Layout controls */}
       <div className="flex items-center gap-2">
-        {/* Panel toggle buttons - circular buttons to hide/show panels */}
+        {/* Panel toggle buttons — circular buttons to hide/show panels */}
         {PANEL_TOGGLES.map(({ id, icon: Icon, label }) => {
           const isVisible = isPanelVisible(id);
           return (
@@ -83,21 +83,16 @@ function WorkspaceHeader({ quotationId }: { quotationId: string }) {
           );
         })}
 
-        {/* Separator between toggles and actions */}
+        {/* Separator */}
         <div className="h-6 w-px bg-border mx-1" />
 
-        {/* Reset layout button */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={resetLayout}
-          className="gap-2"
-        >
+        {/* Reset layout */}
+        <Button variant="outline" size="sm" onClick={resetLayout} className="gap-2">
           <RotateCcw className="w-4 h-4" />
           Reset Layout
         </Button>
 
-        {/* Lock/Unlock toggle */}
+        {/* Lock/Unlock */}
         <Button
           variant={isLocked ? "default" : "outline"}
           size="sm"
@@ -126,8 +121,7 @@ function WorkspaceHeader({ quotationId }: { quotationId: string }) {
 // =============================================
 
 /**
- * WorkspacePage - Main quotation editing workspace
- * Contains: Dynamic WorkboardGrid with resizable/repositionable panels
+ * WorkspacePage - Main RFQ editing workspace keyed on rfq_reference
  * Features:
  * - Drag edges to resize panels
  * - Drag headers to reposition panels
@@ -135,16 +129,17 @@ function WorkspaceHeader({ quotationId }: { quotationId: string }) {
  * - Lock/unlock layout editing
  * - Reset to default layout
  *
- * @param params - Route params containing quotationId
+ * @param params - Route params containing rfq_reference (URL-encoded)
  */
 export default function WorkspacePage({ params }: WorkspacePageProps) {
-  // Unwrap params Promise using React.use()
-  const { quotationId } = use(params);
+  // Unwrap params Promise using React.use(); decode spaces/slashes in rfq_reference
+  const { rfq_reference } = use(params);
+  const rfqReference = decodeURIComponent(rfq_reference);
 
   return (
     <div className="space-y-4">
       {/* Page header with controls */}
-      <WorkspaceHeader quotationId={quotationId} />
+      <WorkspaceHeader rfqReference={rfqReference} />
 
       {/* Dynamic panel grid */}
       <WorkboardGrid className="min-h-[calc(100vh-200px)]" />

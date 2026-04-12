@@ -207,15 +207,17 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
 
   // Text selection handler for inline feedback
   const handleTextSelection = useCallback(() => {
+    // While the popover is open, don't mutate selection — user is interacting with the note input
+    if (showNotePopover) return;
     const windowSelection = window.getSelection();
     const selectedText = windowSelection?.toString().trim();
     if (!selectedText || !contentRef.current) {
-      if (!showNotePopover) setSelection(null);
+      setSelection(null);
       return;
     }
     const anchorNode = windowSelection?.anchorNode;
     if (!anchorNode || !contentRef.current.contains(anchorNode)) {
-      if (!showNotePopover) setSelection(null);
+      setSelection(null);
       return;
     }
     const range = windowSelection?.getRangeAt(0);
@@ -418,9 +420,16 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
           <div
             className="absolute z-10 animate-in fade-in-0 zoom-in-95 duration-150"
             style={{ top: Math.max(0, selection.position.top), left: Math.max(0, selection.position.left) }}
+            // Block mousedown from collapsing the text selection before click fires
+            onMouseDown={(e) => e.preventDefault()}
           >
-            <Button size="sm" className="h-8 gap-1.5 bg-primary text-primary-foreground shadow-lg"
-              onClick={() => setShowNotePopover(true)}>
+            <Button
+              size="sm"
+              className="h-8 gap-1.5 bg-primary text-primary-foreground shadow-lg"
+              // preventDefault on mousedown keeps the selection alive — browser would otherwise collapse it on button press
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setShowNotePopover(true)}
+            >
               <MessageSquarePlus className="w-3.5 h-3.5" />
               Add Note
             </Button>
@@ -429,8 +438,12 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
 
         {/* Note input popover */}
         {showNotePopover && selection && (
-          <div className="absolute z-20 w-64 bg-popover border border-border rounded-lg shadow-xl p-3 animate-in fade-in-0 zoom-in-95 duration-150"
-            style={{ top: Math.max(0, selection.position.top), left: Math.max(0, Math.min(selection.position.left, 200)) }}>
+          <div
+            className="absolute z-20 w-64 bg-popover border border-border rounded-lg shadow-xl p-3 animate-in fade-in-0 zoom-in-95 duration-150"
+            style={{ top: Math.max(0, selection.position.top), left: Math.max(0, Math.min(selection.position.left, 200)) }}
+            // Keep selection alive for popover chrome clicks — textarea still receives focus normally
+            onMouseDown={(e) => { if (e.target === e.currentTarget) e.preventDefault(); }}
+          >
             <div className="mb-2">
               <p className="text-xs text-muted-foreground mb-1">Selected:</p>
               <p className="text-xs text-foreground bg-muted/50 px-2 py-1 rounded border-l-2 border-primary truncate">

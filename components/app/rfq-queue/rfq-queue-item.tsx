@@ -53,14 +53,12 @@ export function RFQQueueItem({
   isCollapsed = false,
   isActive = false,
 }: RFQQueueItemProps) {
-  // Get status icon and styling
+  // Get status icon and styling (derived from stage)
   const statusConfig = STATUS_ICONS[rfq.status];
   const StatusIcon = statusConfig.icon;
 
-  // Build href to workspace (uses quotationId if available, otherwise rfq.id)
-  const workspaceHref = rfq.quotationId
-    ? `/workspace/${rfq.quotationId}`
-    : `/workspace/${rfq.id}`;
+  // URL-encode rfq_reference to survive spaces / slashes (e.g. "RFQ PK 22501")
+  const workspaceHref = `/workspace/${encodeURIComponent(rfq.rfqReference)}`;
 
   return (
     <Link
@@ -73,7 +71,7 @@ export function RFQQueueItem({
           : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         }
       `}
-      title={isCollapsed ? `${rfq.id}: ${rfq.clientName}` : undefined}
+      title={isCollapsed ? `${rfq.rfqReference}: ${rfq.clientName}` : undefined}
     >
       {/* Status indicator icon */}
       <StatusIcon className={`h-4 w-4 flex-shrink-0 ${statusConfig.className}`} />
@@ -81,13 +79,12 @@ export function RFQQueueItem({
       {/* Content - hidden when collapsed */}
       {!isCollapsed && (
         <div className="flex-1 min-w-0">
-          {/* RFQ ID and client name */}
+          {/* RFQ reference + unread badge */}
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium truncate">
-              {rfq.id}
+              {rfq.rfqReference}
             </span>
-            {/* Unread badge */}
-            {rfq.unreadCount && rfq.unreadCount > 0 && (
+            {rfq.unreadCount > 0 && (
               <span className="flex-shrink-0 h-4 min-w-4 px-1 rounded-full bg-brand text-brand-foreground text-xs flex items-center justify-center">
                 {rfq.unreadCount}
               </span>
@@ -95,14 +92,17 @@ export function RFQQueueItem({
           </div>
 
           {/* Client name */}
-          <p className="text-xs text-muted-foreground truncate">
-            {rfq.clientName}
+          <p className="text-xs text-muted-foreground truncate">{rfq.clientName}</p>
+          {/* Client email */}
+          <p className="text-xs text-muted-foreground truncate" title={rfq.clientEmail}>
+            {rfq.clientEmail}
           </p>
-
+          {/* RFQ subject */}
+          <p className="text-xs text-muted-foreground truncate" title={rfq.subject}>
+            {rfq.subject}
+          </p>
           {/* Stage label */}
-          <p className="text-xs text-muted-foreground truncate">
-            {rfq.stageLabel}
-          </p>
+          <p className="text-xs text-muted-foreground truncate italic">{rfq.stageLabel}</p>
         </div>
       )}
 

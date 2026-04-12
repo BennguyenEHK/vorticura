@@ -228,6 +228,9 @@ export function buildRfqAnalysisPayload(data: Record<string, unknown>, update = 
   if (data.required_currency != null) payload.requiredCurrency = String(data.required_currency);
   if (data.deadline_period != null) payload.deadlinePeriod = String(data.deadline_period);
   if (data.closing_time != null) payload.closingTime = new Date(String(data.closing_time));
+  // Workflow queue state (only set when caller explicitly provides — reanalyze passes undefined to avoid regressing stage)
+  if (data.current_stage != null) payload.currentStage = String(data.current_stage);
+  if (data.unread_count != null) payload.unreadCount = Number(data.unread_count);
 
   return payload;
 }

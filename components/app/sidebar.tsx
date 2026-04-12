@@ -11,7 +11,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  Kanban,
   FolderOpen,
   Upload,
   Settings,
@@ -45,12 +44,12 @@ interface NavSection {
 }
 
 // Navigation menu structure with sections
+// Workspace link dropped — the RFQ Queue below is the entry point to each workspace
 const NAVIGATION_SECTIONS: NavSection[] = [
   {
     title: "Workspace",
     items: [
       { name: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
-      { name: "Workboard", icon: Kanban, href: "/workspace/RFQ005" },
     ],
   },
   {
@@ -152,10 +151,14 @@ export function DashboardSidebar({ className = "" }: SidebarProps) {
               </div>
             )}
 
-            {/* RFQ Queue list component - shows top 3 RFQs */}
+            {/* RFQ Queue list — active item is derived from the URL segment (decoded) */}
             <RFQQueueList
               isCollapsed={collapsed}
-              activeRFQId={pathname.includes("/workspace/") ? pathname.split("/workspace/")[1] : undefined}
+              activeRfqReference={
+                pathname.startsWith("/workspace/")
+                  ? decodeURIComponent(pathname.split("/workspace/")[1] ?? "")
+                  : undefined
+              }
               initialLimit={3}
             />
           </div>
