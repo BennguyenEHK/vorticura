@@ -160,13 +160,18 @@ export async function getUnreadCount(): Promise<number> {
  * Emit a single queue upsert for the given rfq_id on the 'rfq-queue' channel.
  * Optionally updates rfq_analysis.current_stage before emitting.
  * Server-internal — called from processActions after DB writes. Never called from the UI.
+ *
+ * SECURITY: `workspace` MUST be the cookie-validated context resolved at the HTTP
+ * boundary (data-processor.ts enforces this at line ~181). We do NOT re-resolve
+ * from cookies here because this function runs in non-request contexts too
+ * (tests, cron, IMAP watcher) where `cookies()` throws outside a request scope.
  */
 export async function emitQueuedRFQs(
   rfqId: number,
+  workspace: WorkspaceContext,
   currentStage?: RFQStage
 ): Promise<void> {
-  // Resolve workspace from auth cookie — return silently if not authenticated (e.g. cron/webhook path)
-  const workspace = await getServerActionWorkspace();
+  // Defensive guard — a missing workspace here indicates a caller bug, not a silent skip
   if (!workspace) return;
 
   // Optional stage transition — log failure and continue so a stale stage never blocks emit

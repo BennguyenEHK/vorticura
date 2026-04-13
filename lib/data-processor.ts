@@ -371,7 +371,7 @@ async function executePipelineChain(input: ProcessorInput): Promise<ProcessorRes
  * Emit SSE events based on processor result.
  * Handles: preview-update for all results, comms-update for all-items-available.
  */
-function emitProcessorResult(result: ProcessorResult, _dataType: DataType, _input: ProcessorInput): void {
+function emitProcessorResult(result: ProcessorResult, _dataType: DataType, input: ProcessorInput): void {
   // Always emit preview-update for UI real-time rendering
   eventBus.emit('preview-update', result);
 
@@ -387,19 +387,21 @@ function emitProcessorResult(result: ProcessorResult, _dataType: DataType, _inpu
   }
 
   // Sidebar queue push — fire-and-forget so a queue-emit failure cannot break the main pipeline.
-  // Guarded by try/catch + rfqId type check; currentStage is forwarded only if it's a valid RFQStage.
+  // Workspace is the cookie-validated context from the HTTP boundary (line ~181 above); reusing
+  // it here avoids a second cookies() call, which would throw when the processor runs outside a
+  // request scope (tests, cron, IMAP watcher). `.catch()` prevents unhandled promise rejections.
   try {
     const rfqIdRaw = resultData?.rfq_id;
-    if (typeof rfqIdRaw === 'number' && rfqIdRaw > 0) {
+    if (typeof rfqIdRaw === 'number' && rfqIdRaw > 0 && input.workspace) {
       const stageRaw = resultData?.current_stage;
-      // Pass stage only when it's a non-empty string; emit helper treats it as opaque RFQStage
       const currentStage =
         typeof stageRaw === 'string' && stageRaw.length > 0 ? (stageRaw as RFQStage) : undefined;
-      // `void` => intentional fire-and-forget; emitter logs its own errors
-      void emitQueuedRFQs(rfqIdRaw, currentStage);
+      void emitQueuedRFQs(rfqIdRaw, input.workspace, currentStage).catch((err) => {
+        console.warn('[data-processor] emitQueuedRFQs failed:', err);
+      });
     }
   } catch (err) {
-    // Never let a queue-emit issue surface to the caller — log and swallow
+    // Synchronous guard — never let a queue-emit issue surface to the caller
     console.warn('[data-processor] emitQueuedRFQs dispatch failed:', err);
   }
 }
