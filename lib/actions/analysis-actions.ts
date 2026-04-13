@@ -9,6 +9,8 @@ import { hfChatCompletion} from '@/lib/ai-agent/hf-client';
 import { ANALYZE_RFQ_PROMPT, buildAnalyzeUserMessage, buildReanalyzeUserMessage } from '@/lib/ai-agent/prompt';
 import { modifyDatabase } from '@/lib/utils/databaseHandler';
 import { getData } from '@/lib/db/queries';
+// Sidebar queue push — emits a QueuedRFQ upsert on the 'rfq-queue' SSE channel
+import { emitQueuedRFQs } from '@/lib/services/rfq-queue/queue-manager';
 import { getLocalModel } from '@/lib/ai-agent/local-model';
 import { extractAll, type ExtractionResult } from '@/lib/utils/rfq-extractor';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
@@ -167,6 +169,21 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
         rfq_items: merged.rfq_items,
         customer_info: merged.customer_info,
       }, workspace);
+
+      // Post-insert: for NEW rfqs, the id is assigned by the DB — re-resolve so we can emit
+      let finalRfqId: number | undefined = resolvedRfqId;
+      if (finalRfqId == null && merged.customer_info.email && rfqRef) {
+        finalRfqId = await resolveRfqId(merged.customer_info.email, rfqRef, workspace);
+      }
+
+      // Push sidebar upsert so the RFQ appears immediately (new) or refreshes (reanalyze)
+      if (finalRfqId != null) {
+        // Backfill result.data.rfq_id so downstream consumers (pipeline, preview) see the new id
+        (result.data as Record<string, unknown>).rfq_id = finalRfqId;
+        void emitQueuedRFQs(finalRfqId, workspace).catch((err) =>
+          console.warn('[Analysis] emitQueuedRFQs failed:', err)
+        );
+      }
     } catch (dbError) {
       console.error('[Analysis] DB save failed (non-blocking):', dbError);
     }
