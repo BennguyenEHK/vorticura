@@ -32,6 +32,10 @@ import { processSupplierSearch } from './actions/supplier-search-actions';
 import { processAnalysis } from './actions/analysis-actions';
 import { processRespond } from './actions/respond-actions';
 import { eventBus } from './event-bus';
+// Queue-sidebar push emitter — called after every successful processor result
+// so all connected clients see the sidebar row update without re-fetching.
+import { emitQueuedRFQs } from './services/rfq-queue/queue-manager';
+import type { RFQStage } from '@/types/rfq-queue';
 
 // ========== WORKSPACE RESOLUTION ==========
 import { getServerActionWorkspace } from './middleware/get-workspace';
@@ -380,6 +384,23 @@ function emitProcessorResult(result: ProcessorResult, _dataType: DataType, _inpu
       message: 'All supplier items are now available. Ready for quotation pricing.',
       timestamp: new Date().toISOString(),
     });
+  }
+
+  // Sidebar queue push — fire-and-forget so a queue-emit failure cannot break the main pipeline.
+  // Guarded by try/catch + rfqId type check; currentStage is forwarded only if it's a valid RFQStage.
+  try {
+    const rfqIdRaw = resultData?.rfq_id;
+    if (typeof rfqIdRaw === 'number' && rfqIdRaw > 0) {
+      const stageRaw = resultData?.current_stage;
+      // Pass stage only when it's a non-empty string; emit helper treats it as opaque RFQStage
+      const currentStage =
+        typeof stageRaw === 'string' && stageRaw.length > 0 ? (stageRaw as RFQStage) : undefined;
+      // `void` => intentional fire-and-forget; emitter logs its own errors
+      void emitQueuedRFQs(rfqIdRaw, currentStage);
+    }
+  } catch (err) {
+    // Never let a queue-emit issue surface to the caller — log and swallow
+    console.warn('[data-processor] emitQueuedRFQs dispatch failed:', err);
   }
 }
 

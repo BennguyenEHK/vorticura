@@ -2,14 +2,20 @@
 // RFQ Queue Manager — live, workspace-isolated
 // =============================================
 // Reads rfq_analysis ⨝ customers for the sidebar queue.
-// Priority is derived from updated_at DESC (most recent = priority 1).
+// Priority is derived from rfq_id DESC (largest rfq_id = priority 1).
 // All DB access goes through lib/db/queries.ts (no raw Drizzle) and
 // all workspace isolation goes through getServerActionWorkspace().
 
 'use server';
 
-import { getData, getCount } from '@/lib/db/queries';
+// Generic CRUD + join helpers for Drizzle (all workspace-scoped)
+import { getData, getCount, updateData } from '@/lib/db/queries';
+// Resolves authenticated workspace from the server action cookie context
 import { getServerActionWorkspace } from '@/lib/middleware/get-workspace';
+// In-process pub/sub — steady-state deltas are pushed to SSE subscribers via this bus
+import { eventBus } from '@/lib/event-bus';
+// Workspace context type — passed to shapeRow so fallbacks (user_id / company_id) are available
+import type { WorkspaceContext } from '@/lib/middleware/workspace-context';
 import {
   STAGE_CONFIGS,
   type QueuedRFQ,
@@ -40,6 +46,40 @@ interface JoinedRow {
 }
 
 // ---------------------------------------------
+// Row shaper — single source of truth for JoinedRow → QueuedRFQ
+// ---------------------------------------------
+// Used by getQueuedRFQs (bulk) and emitQueuedRFQs (single upsert).
+// Keeps priority at 0 — callers assign the real priority after sorting.
+function shapeRow(row: JoinedRow, workspace: WorkspaceContext): QueuedRFQ {
+  const rfq = row.rfq_analysis ?? {};
+  const cust = row.customers ?? {};
+  // Default to user_validation when DB row has no stage (rare — only for legacy rows)
+  const stage = (rfq.currentStage ?? 'user_validation') as RFQStage;
+  // Coerce date columns — leftJoin may return ISO strings depending on driver settings
+  const updatedAt = rfq.updatedAt ? new Date(rfq.updatedAt as string | Date) : new Date(0);
+  const createdAt = rfq.createdAt ? new Date(rfq.createdAt as string | Date) : new Date(0);
+
+  return {
+    // Visible
+    rfqReference: String(rfq.rfqReference ?? ''),
+    clientName: String(cust.companyName ?? '(unknown)'),
+    clientEmail: String(cust.email ?? ''),
+    subject: String(rfq.subject ?? '(no subject)'),
+    stage,
+    stageLabel: STAGE_CONFIGS[stage]?.label ?? String(stage),
+    unreadCount: Number(rfq.unreadCount ?? 0),
+    // Internal
+    rfqId: Number(rfq.rfqId ?? 0),
+    userId: Number(rfq.userId ?? workspace.user_id),
+    companyId: Number(rfq.companyId ?? workspace.company_id),
+    status: statusFromStage(stage),
+    priority: 0,            // assigned after sort (or overridden to 1 for push payloads)
+    createdAt,
+    updatedAt,
+  } satisfies QueuedRFQ;
+}
+
+// ---------------------------------------------
 // Primary query — returns the workspace's queue
 // ---------------------------------------------
 /**
@@ -47,7 +87,7 @@ interface JoinedRow {
  * Workspace is pulled from the auth cookie — the client never passes workspace IDs.
  *
  * @param filters optional stage/status/limit/offset filters (applied in-memory; list is small)
- * @returns QueueResponse with priority derived from updated_at DESC
+ * @returns QueueResponse with priority derived from rfq_id DESC
  */
 export async function getQueuedRFQs(filters?: QueueFilters): Promise<QueueResponse> {
   // Derive workspace from auth cookie — tenant isolation is enforced inside queries.ts
@@ -68,36 +108,12 @@ export async function getQueuedRFQs(filters?: QueueFilters): Promise<QueueRespon
     { joinColumn: 'rfqId' },   // rfq_analysis.rfq_id = customers.rfq_id
   )) as JoinedRow[];
 
-  // Shape join rows into QueuedRFQ[] + sort by updated_at DESC (priority = row index + 1)
+  // Shape join rows into QueuedRFQ[] + sort by rfq_id DESC (priority = row index + 1)
+  // Largest rfq_id → priority 1 (newest record always at top of queue)
   const shaped: QueuedRFQ[] = rows
-    .map((row) => {
-      const rfq = row.rfq_analysis ?? {};
-      const cust = row.customers ?? {};
-      const stage = (rfq.currentStage ?? 'user_validation') as RFQStage;
-      const updatedAt = rfq.updatedAt ? new Date(rfq.updatedAt as string | Date) : new Date(0);
-      const createdAt = rfq.createdAt ? new Date(rfq.createdAt as string | Date) : new Date(0);
-
-      return {
-        // Visible
-        rfqReference: String(rfq.rfqReference ?? ''),
-        clientName: String(cust.companyName ?? '(unknown)'),
-        clientEmail: String(cust.email ?? ''),
-        subject: String(rfq.subject ?? '(no subject)'),
-        stage,
-        stageLabel: STAGE_CONFIGS[stage]?.label ?? String(stage),
-        unreadCount: Number(rfq.unreadCount ?? 0),
-        // Internal
-        rfqId: Number(rfq.rfqId ?? 0),
-        userId: Number(rfq.userId ?? workspace.user_id),
-        companyId: Number(rfq.companyId ?? workspace.company_id),
-        status: statusFromStage(stage),
-        priority: 0,            // assigned after sort
-        createdAt,
-        updatedAt,
-      } satisfies QueuedRFQ;
-    })
-    // Sort newest-first → the most recently touched RFQ lands at priority 1
-    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .map((row) => shapeRow(row, workspace))
+    // Sort by rfq_id DESC → the most recently created RFQ lands at priority 1
+    .sort((a, b) => b.rfqId - a.rfqId)
     .map((item, idx) => ({ ...item, priority: idx + 1 }));
 
   // Apply optional filters in-memory (small list — sidebar shows ≤20 rows)
@@ -135,4 +151,49 @@ export async function getUnreadCount(): Promise<number> {
   // Fetch all RFQs and sum unread_count in-memory (small dataset — avoids adding a SUM helper to queries.ts)
   const rows = (await getData('rfqAnalysis', {}, workspace)) as Array<Record<string, unknown>>;
   return rows.reduce((sum, r) => sum + Number(r.unreadCount ?? 0), 0);
+}
+
+// ---------------------------------------------
+// Push-style upsert — emits a single QueuedRFQ on the 'rfq-queue' channel
+// ---------------------------------------------
+/**
+ * Emit a single queue upsert for the given rfq_id on the 'rfq-queue' channel.
+ * Optionally updates rfq_analysis.current_stage before emitting.
+ * Server-internal — called from processActions after DB writes. Never called from the UI.
+ */
+export async function emitQueuedRFQs(
+  rfqId: number,
+  currentStage?: RFQStage
+): Promise<void> {
+  // Resolve workspace from auth cookie — return silently if not authenticated (e.g. cron/webhook path)
+  const workspace = await getServerActionWorkspace();
+  if (!workspace) return;
+
+  // Optional stage transition — log failure and continue so a stale stage never blocks emit
+  if (currentStage) {
+    try {
+      await updateData('rfqAnalysis', { rfqId }, { currentStage }, workspace);
+    } catch (err) {
+      console.warn(`[emitQueuedRFQs] current_stage update failed for rfq_id=${rfqId}:`, err);
+    }
+  }
+
+  // Fetch the single joined row for this rfq_id (workspace filter applied inside getData)
+  const rows = (await getData(
+    ['rfqAnalysis', 'customers'],
+    { rfqId },
+    workspace,
+    { joinColumn: 'rfqId' },
+  )) as JoinedRow[];
+
+  if (rows.length === 0) {
+    console.warn(`[emitQueuedRFQs] no joined row found for rfq_id=${rfqId}`);
+    return;
+  }
+
+  // Shape via the shared helper; force priority=1 as the "promoted" marker (client re-ranks anyway)
+  const payload: QueuedRFQ = { ...shapeRow(rows[0], workspace), priority: 1 };
+
+  // Broadcast to all SSE subscribers listening on 'rfq-queue'
+  eventBus.emit('rfq-queue', payload);
 }

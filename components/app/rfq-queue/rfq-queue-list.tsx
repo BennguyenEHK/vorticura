@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import type { QueuedRFQ } from "@/types/rfq-queue";
 // Import queue manager service directly
 import { getQueuedRFQs } from "@/lib/services/rfq-queue/queue-manager";
+// SSE hook — streams 'rfq-queue' upserts so the list refreshes without a server round-trip
+import { useRfqQueueSSE } from "@/hooks/use-rfq-queue-sse";
 
 // Props interface
 interface RFQQueueListProps {
@@ -59,9 +61,32 @@ export function RFQQueueList({
   }, [initialLimit, isExpanded]);
 
   // Fetch on mount and when dependencies change
+  // Covers triggers A (first load), B (F5), C (new session) per the SSE plan
   useEffect(() => {
     fetchQueue();
   }, [fetchQueue]);
+
+  // Upsert handler — receives a single QueuedRFQ from SSE and merges it into state
+  // Re-sorts by rfqId DESC and re-assigns priority so the list mirrors getQueuedRFQs semantics
+  const upsertRfq = useCallback((incoming: QueuedRFQ) => {
+    setRfqs((prev) => {
+      const idx = prev.findIndex((r) => r.rfqId === incoming.rfqId);
+      // Replace existing row in place, otherwise prepend (sort below re-orders regardless)
+      const merged =
+        idx >= 0
+          ? prev.map((r) => (r.rfqId === incoming.rfqId ? incoming : r))
+          : [incoming, ...prev];
+      // Keep largest rfq_id at priority 1
+      merged.sort((a, b) => b.rfqId - a.rfqId);
+      const ranked = merged.map((r, i) => ({ ...r, priority: i + 1 }));
+      // Only bump total when this is a genuinely new row — avoids double-counting on edits
+      if (idx < 0) setTotal((t) => t + 1);
+      return ranked;
+    });
+  }, []);
+
+  // Wire trigger D: SSE drop → auto-reconnect → onopen fires onReconnect → re-seed via fetchQueue
+  useRfqQueueSSE({ onUpsert: upsertRfq, onReconnect: fetchQueue });
 
   // Toggle expanded state
   const toggleExpanded = () => setIsExpanded(!isExpanded);
