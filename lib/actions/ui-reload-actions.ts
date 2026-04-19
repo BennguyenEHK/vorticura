@@ -19,12 +19,12 @@ import type {
  * Routes to workspace/dashboard/rfq_queue fetch logic
  *
  * @param uiType - UI page type: 'workspace' | 'dashboard' | 'rfq_queue'
- * @param rfqId - (workspace only) RFQ ID to fetch state for
+ * @param rfqReference - (workspace only) URL-decoded RFQ reference string; server resolves rfq_id
  * @returns UiReloadResult with data matching UiType
  */
 export async function uiReload(
   uiType: UiType,
-  rfqId?: number
+  rfqReference?: string
 ): Promise<UiReloadResult> {
   try {
     const workspace = await getServerActionWorkspace();
@@ -39,13 +39,13 @@ export async function uiReload(
 
     switch (uiType) {
       case 'workspace': {
-        if (!rfqId) {
+        if (!rfqReference) {
           return {
             success: false,
-            error: 'rfqId required for workspace UI reload',
+            error: 'rfqReference required for workspace UI reload',
           };
         }
-        const data = await fetchWorkspacePayload(company_id, user_id, rfqId);
+        const data = await fetchWorkspacePayload(company_id, user_id, rfqReference);
         return {
           success: true,
           data,
@@ -143,28 +143,31 @@ export async function uiSaved(
 // =============================================
 
 /**
- * Fetch workspace payload: RFQ state + panels based on stage
+ * Fetch workspace payload: RFQ state + panels based on stage.
+ * Resolves rfqId from rfqReference server-side — callers never pass raw numeric IDs.
  */
 async function fetchWorkspacePayload(
   companyId: number,
   userId: number,
-  rfqId: number
+  rfqReference: string,
 ): Promise<WorkspacePayload> {
-  // Fetch RFQ analysis and stage
+  // Look up RFQ by reference string with tenant isolation
   const rfq = await db
     .select()
     .from(rfqAnalysis)
     .where(
       and(
-        eq(rfqAnalysis.rfqId, rfqId),
+        eq(rfqAnalysis.rfqReference, rfqReference),
         eq(rfqAnalysis.companyId, companyId)
       )
     )
     .limit(1);
 
   if (!rfq.length) {
-    throw new Error(`RFQ ${rfqId} not found`);
+    throw new Error(`RFQ "${rfqReference}" not found`);
   }
+
+  const rfqId = rfq[0].rfqId;
 
   const rfqRecord = rfq[0];
   const stage = (rfqRecord.currentStage || 'user_validation') as RFQStage;

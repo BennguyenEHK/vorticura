@@ -96,18 +96,18 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
   // Ref to skip overlap resolution in grid after panel toggle-on
   const skipOverlapResolutionRef = useRef(false);
 
-  // Get current RFQ ID from context (available only in workspace pages)
+  // Get current RFQ reference from context (available only in workspace pages)
   const rfqCtx = useRFQContext();
-  const rfqId = rfqCtx?.rfqId;
+  const rfqReference = rfqCtx?.rfqReference; // string | undefined — undefined on dashboard/other pages
 
   // Hydrate state from uiReload DB (for workspace) or fallback to defaults
   // Client-side fetch after mount to prevent hydration mismatch
   useEffect(() => {
     const loadLayout = async () => {
-      if (rfqId) {
-        // Workspace context: fetch layout from DB via uiReload
+      if (rfqReference) {
+        // Workspace context: fetch layout from DB via uiReload (server resolves rfqId)
         try {
-          const result = await uiReload('workspace', rfqId);
+          const result = await uiReload('workspace', rfqReference);
           if (result.success && result.data && 'layoutPrefs' in result.data && result.data.layoutPrefs) {
             const layoutPrefs = result.data.layoutPrefs as Record<string, unknown>;
 
@@ -138,7 +138,7 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
     };
 
     loadLayout();
-  }, [rfqId]);
+  }, [rfqReference]);
 
   // =============================================
   // Actions
@@ -443,13 +443,13 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
       maximizedPanelOriginalLayout: state.maximizedPanelOriginalLayout,
     };
 
-    // Only persist to DB if we're in workspace context
-    if (rfqId) {
+    // Only persist to DB if we're in workspace context (rfqReference is set)
+    if (rfqReference) {
       uiSaved('workspace', layoutState).catch((err) => {
         console.warn('Failed to save workspace layout:', err);
       });
     }
-  }, [state.layout, state.panels, state.hiddenPanels, state.maximizedPanelId, state.savedGridHeight, state.maximizedPanelOriginalLayout, rfqId]);
+  }, [state.layout, state.panels, state.hiddenPanels, state.maximizedPanelId, state.savedGridHeight, state.maximizedPanelOriginalLayout, rfqReference]);
 
   /** Toggle panel visibility - hide/show panel while preserving its position */
   const togglePanelVisibility = useCallback((id: string) => {

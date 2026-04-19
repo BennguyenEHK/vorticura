@@ -17,24 +17,27 @@ export interface UseUiReloadReturn {
 /**
  * Hook for loading and persisting UI state via the ui_reload subsystem.
  *
- * - On mount, fetches the current UI state for the given uiType (and rfqId for workspace).
+ * - On mount (or rfqReference change), fetches UI state for the given uiType.
  * - saveState: debounced write (DEBOUNCE_MS ms), suitable for rapid layout drags.
  * - saveStateImmediate: fire-and-forget upsert with no debounce, for explicit user saves.
+ *
+ * @param uiType - 'workspace' | 'dashboard' | 'rfq_queue'
+ * @param rfqReference - (workspace only) URL-decoded RFQ reference string
  */
-export function useUiReload(uiType: UiType, rfqId?: number): UseUiReloadReturn {
+export function useUiReload(uiType: UiType, rfqReference?: string): UseUiReloadReturn {
   const [result, setResult] = useState<UiReloadResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Initial fetch on mount
+  // Fetch on mount; re-fetches when rfqReference changes (workspace navigation)
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    uiReload(uiType, rfqId).then((res) => {
+    uiReload(uiType, rfqReference).then((res) => {
       if (cancelled) return;
       setResult(res);
       if (!res.success) setError(res.error ?? 'Unknown error');
@@ -44,7 +47,7 @@ export function useUiReload(uiType: UiType, rfqId?: number): UseUiReloadReturn {
     return () => {
       cancelled = true;
     };
-  }, [uiType, rfqId]);
+  }, [uiType, rfqReference]);
 
   // Cleanup debounce timer on unmount
   useEffect(() => {

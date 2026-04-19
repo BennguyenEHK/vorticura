@@ -63,7 +63,6 @@ export function RFQQueueItem({
 
   // URL-encode rfq_reference to survive spaces / slashes (e.g. "RFQ PK 22501")
   const workspaceHref = `/workspace/${encodeURIComponent(rfq.rfqReference)}`;
-  const encodedReference = encodeURIComponent(rfq.rfqReference);
 
   return (
     <Link
@@ -78,8 +77,8 @@ export function RFQQueueItem({
       `}
       title={isCollapsed ? `${rfq.rfqReference}: ${rfq.clientName}` : undefined}
       onMouseEnter={() => {
-        // Prefetch workspace data on hover
-        prefetchWorkspace(encodedReference, rfq.rfqId);
+        // Prefetch workspace payload on hover — server resolves rfqId from reference
+        prefetchWorkspace(rfq.rfqReference);
       }}
     >
       {/* Status indicator icon */}

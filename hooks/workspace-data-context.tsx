@@ -22,8 +22,8 @@ interface CacheEntry {
 interface WorkspaceDataContextValue {
   // Prefetch dashboard data
   prefetchDashboard: () => void;
-  // Prefetch workspace data by rfq reference
-  prefetchWorkspace: (rfqReference: string, rfqId: number) => void;
+  // Prefetch workspace data by rfq reference (server resolves rfqId)
+  prefetchWorkspace: (rfqReference: string) => void;
   // Get cached data if available
   getCachedData: (uiType: UiType, key?: string) => UiReloadResult | null;
   // Clear cache entry
@@ -165,14 +165,14 @@ export function WorkspaceDataProvider({ children }: WorkspaceDataProviderProps) 
   }, [fetchAndCacheData]);
 
   /**
-   * Prefetch workspace data on RFQ item hover
-   * @param rfqReference - URL-encoded RFQ reference (e.g., "RFQ%20PK%2022501")
-   * @param rfqId - Numeric RFQ ID
+   * Prefetch workspace data on RFQ item hover.
+   * Server resolves rfqId from rfqReference — caller passes only the decoded reference string.
+   * @param rfqReference - URL-decoded RFQ reference (e.g., "RFQ PK 22501")
    */
   const prefetchWorkspace = useCallback(
-    (rfqReference: string, rfqId: number) => {
+    (rfqReference: string) => {
       fetchAndCacheData('workspace', rfqReference, () =>
-        uiReload('workspace', rfqId)
+        uiReload('workspace', rfqReference)
       ).catch((err) => console.error('Workspace prefetch error:', err));
     },
     [fetchAndCacheData]
