@@ -8,6 +8,7 @@
 
 import Link from "next/link";
 import { Circle, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
+import { useWorkspaceData } from "@/hooks/workspace-data-context";
 import type { QueuedRFQ, QueueStatus } from "@/types/rfq-queue";
 
 // Props interface
@@ -53,12 +54,16 @@ export function RFQQueueItem({
   isCollapsed = false,
   isActive = false,
 }: RFQQueueItemProps) {
+  // Get prefetch function from workspace data context
+  const { prefetchWorkspace } = useWorkspaceData();
+
   // Get status icon and styling (derived from stage)
   const statusConfig = STATUS_ICONS[rfq.status];
   const StatusIcon = statusConfig.icon;
 
   // URL-encode rfq_reference to survive spaces / slashes (e.g. "RFQ PK 22501")
   const workspaceHref = `/workspace/${encodeURIComponent(rfq.rfqReference)}`;
+  const encodedReference = encodeURIComponent(rfq.rfqReference);
 
   return (
     <Link
@@ -72,6 +77,10 @@ export function RFQQueueItem({
         }
       `}
       title={isCollapsed ? `${rfq.rfqReference}: ${rfq.clientName}` : undefined}
+      onMouseEnter={() => {
+        // Prefetch workspace data on hover
+        prefetchWorkspace(encodedReference, rfq.rfqId);
+      }}
     >
       {/* Status indicator icon */}
       <StatusIcon className={`h-4 w-4 flex-shrink-0 ${statusConfig.className}`} />

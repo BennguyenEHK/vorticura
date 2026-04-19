@@ -28,6 +28,9 @@ import { WorkboardProvider, useWorkboard } from "@/components/app/workboard";
 // Import LocationTracker for session navigation tracking
 import { LocationTracker } from "@/components/app/LocationTracker";
 
+// Import WorkspaceDataProvider for prefetch caching
+import { WorkspaceDataProvider } from "@/hooks/workspace-data-context";
+
 // =============================================
 // DnD Handler Component
 // =============================================
@@ -180,14 +183,16 @@ export default function AppLayout({
   children: React.ReactNode;
 }) {
   return (
-    // Provider hierarchy: Sidebar -> AIChat -> Workboard -> DnD -> Content
+    // Provider hierarchy: Sidebar -> AIChat -> Workboard -> Workspace Data -> DnD -> Content
     <SidebarProvider>
       <AIChatProvider>
         <WorkboardProvider>
-          <DndHandler>
-            <LocationTracker />
-            <AppLayoutContent>{children}</AppLayoutContent>
-          </DndHandler>
+          <WorkspaceDataProvider>
+            <DndHandler>
+              <LocationTracker />
+              <AppLayoutContent>{children}</AppLayoutContent>
+            </DndHandler>
+          </WorkspaceDataProvider>
         </WorkboardProvider>
       </AIChatProvider>
     </SidebarProvider>

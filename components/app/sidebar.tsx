@@ -25,6 +25,7 @@ import {
   SIDEBAR_WIDTH_CLASSES,
 } from "@/components/app/sidebar-provider";
 import { RFQQueueList } from "@/components/app/rfq-queue";
+import { useWorkspaceData } from "@/hooks/workspace-data-context";
 
 // =============================================
 // Navigation Configuration
@@ -200,6 +201,9 @@ function NavSectionComponent({
   collapsed,
   isActive,
 }: NavSectionComponentProps) {
+  // Get prefetch function from workspace data context
+  const { prefetchDashboard } = useWorkspaceData();
+
   return (
     <div>
       {/* Section title - hidden when collapsed */}
@@ -229,6 +233,12 @@ function NavSectionComponent({
               `}
               title={collapsed ? item.name : undefined}
               aria-current={active ? "page" : undefined}
+              onMouseEnter={() => {
+                // Prefetch dashboard data on hover
+                if (item.href === "/dashboard") {
+                  prefetchDashboard();
+                }
+              }}
             >
               {/* Active indicator bar - brand accent color */}
               {active && (
