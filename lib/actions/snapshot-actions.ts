@@ -39,6 +39,12 @@ interface SnapshotResult {
 // Server Actions
 // ---------------------------------------------
 
+// Snapshot policy:
+//   WRITE path — on workflow-step acceptance, capture a point-in-time view for audit.
+//   READ path  — WorkboardHistory renders snapshots as a read-only timeline; see
+//                preview-panel-content.tsx::handleRevert for the preview-only revert.
+//   NEVER cross-table restore from these JSONBs — see handleRevert comment for why.
+
 /**
  * Create a new workboard snapshot when user accepts a workflow step
  * Workspace is derived server-side from auth cookie for security.

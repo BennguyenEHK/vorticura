@@ -179,7 +179,12 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
     }
   }, [isHistoryOpen, state.activeDocument]);
 
-  // Revert to a specific snapshot
+  // Revert to a specific snapshot — PREVIEW-ONLY, by design.
+  // Snapshots are an audit/time-travel record, not a state-machine rollback. We do not
+  // restore rfq_analysis / rfq_items / suppliers_search / quotations from snapshot JSONB:
+  // irreversible side-effects (emails sent, quotes delivered) can't be undone, and schema
+  // drift makes older JSONB unsafe to re-apply. If users need a "go back" semantics,
+  // introduce a stage-reset action that re-runs a stage — do NOT expand this function.
   const handleRevert = useCallback(async (snapshotId: number) => {
     try {
       // Workspace auto-extracted from auth cookie in server action
