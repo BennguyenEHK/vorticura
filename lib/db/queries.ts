@@ -597,6 +597,33 @@ export async function getSnapshotById(
   }
 }
 
+/**
+ * Get RFQ by reference with workspace isolation
+ * Returns the rfq_analysis row (including rfq_id, current_stage, etc.)
+ */
+export async function getRfqByReference(
+  rfqReference: string,
+  workspace: WorkspaceContext
+): Promise<any> {
+  try {
+    const filter = workspace.getDatabaseFilter();
+    const results = await db
+      .select()
+      .from(rfqAnalysis)
+      .where(
+        and(
+          eq(rfqAnalysis.rfqReference, rfqReference),
+          eq(rfqAnalysis.companyId, filter.company_id)
+        )
+      );
+
+    return results[0] || null;
+  } catch (error) {
+    console.error('Failed to get RFQ by reference:', error);
+    throw new Error('Failed to get RFQ.');
+  }
+}
+
 // =============================================
 // EXPORT TABLE REFERENCES
 // =============================================
