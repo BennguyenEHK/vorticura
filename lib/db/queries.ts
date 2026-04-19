@@ -13,7 +13,7 @@
  * All functions enforce workspace isolation using WorkspaceContext directly
  */
 
-import { eq, SQL, and, count, desc, max } from 'drizzle-orm';
+import { eq, SQL, and, count, desc, max, sql } from 'drizzle-orm';
 import { PgTable } from 'drizzle-orm/pg-core';
 import { WorkspaceContext } from '@/lib/middleware/workspace-context'; // Direct usage, no helper wrapper
 import { db } from './client';
@@ -37,6 +37,8 @@ import {
   userSessions,
   workboardSnapshots,
   incomingEmails,
+  uiReload,
+  aiConversations,
 } from './schema';
 
 // =============================================
@@ -625,6 +627,130 @@ export async function getRfqByReference(
 }
 
 // =============================================
+// 6️⃣ UI_RELOAD QUERIES
+// =============================================
+
+/** Upsert UI layout prefs for (company, user, ui_type). Caller validates size < 512KB. */
+export async function upsertUiState(
+  uiType: string,
+  uiState: Record<string, unknown>,
+  workspace: WorkspaceContext,
+): Promise<void> {
+  const filter = workspace.getDatabaseFilter();
+  await db
+    .insert(uiReload)
+    .values({
+      companyId: filter.company_id,
+      userId: filter.user_id!,
+      uiType,
+      uiState,
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [uiReload.companyId, uiReload.userId, uiReload.uiType],
+      set: { uiState, updatedAt: new Date() },
+    });
+}
+
+/** Get saved UI layout prefs for (company, user, ui_type). Returns null if none. */
+export async function getUiState(
+  uiType: string,
+  workspace: WorkspaceContext,
+): Promise<Record<string, unknown> | null> {
+  const filter = workspace.getDatabaseFilter();
+  const rows = await db
+    .select({ uiState: uiReload.uiState })
+    .from(uiReload)
+    .where(
+      and(
+        eq(uiReload.companyId, filter.company_id),
+        eq(uiReload.userId, filter.user_id!),
+        eq(uiReload.uiType, uiType),
+      ),
+    )
+    .limit(1);
+  return (rows[0]?.uiState as Record<string, unknown>) ?? null;
+}
+
+// =============================================
+// 7️⃣ AI_CONVERSATIONS QUERIES
+// =============================================
+
+export async function insertAiConversation(
+  data: {
+    rfqId: number;
+    rfqReference?: string;
+    messages: Array<{ role: string; content: string; timestamp: string }>;
+    modelId?: string;
+    contextType: string;
+  },
+  workspace: WorkspaceContext,
+): Promise<{ id: number }> {
+  const filter = workspace.getDatabaseFilter();
+  const [row] = await db
+    .insert(aiConversations)
+    .values({
+      companyId: filter.company_id,
+      userId: filter.user_id!,
+      rfqId: data.rfqId,
+      rfqReference: data.rfqReference,
+      messages: data.messages,
+      modelId: data.modelId,
+      contextType: data.contextType,
+    })
+    .returning({ id: aiConversations.id });
+  return row;
+}
+
+/** Get AI conversations for an RFQ, excluding expired rows. Optionally filter by contextType. */
+export async function getAiConversations(
+  rfqId: number,
+  workspace: WorkspaceContext,
+  contextType?: string,
+): Promise<Array<typeof aiConversations.$inferSelect>> {
+  const filter = workspace.getDatabaseFilter();
+  const conditions: ReturnType<typeof eq>[] = [
+    eq(aiConversations.companyId, filter.company_id),
+    eq(aiConversations.rfqId, rfqId),
+  ];
+  if (contextType) conditions.push(eq(aiConversations.contextType, contextType));
+  return db
+    .select()
+    .from(aiConversations)
+    .where(and(...conditions, sql`${aiConversations.expiresAt} > now()`))
+    .orderBy(desc(aiConversations.createdAt));
+}
+
+export async function appendAiMessages(
+  conversationId: number,
+  newMessages: Array<{ role: string; content: string; timestamp: string }>,
+  workspace: WorkspaceContext,
+): Promise<void> {
+  const filter = workspace.getDatabaseFilter();
+  await db
+    .update(aiConversations)
+    .set({
+      messages: sql`${aiConversations.messages} || ${JSON.stringify(newMessages)}::jsonb`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(aiConversations.id, conversationId),
+        eq(aiConversations.companyId, filter.company_id),
+      ),
+    );
+}
+
+/** Cleanup helper for the cron route — deletes all expired conversations. Returns count deleted. */
+export async function deleteExpiredAiConversations(): Promise<number> {
+  const result = await db
+    .delete(aiConversations)
+    .where(sql`${aiConversations.expiresAt} <= now()`)
+    .returning({ id: aiConversations.id });
+  return result.length;
+}
+
+// =============================================
 // EXPORT TABLE REFERENCES
 // =============================================
 // Export all tables for direct access if needed
@@ -645,6 +771,8 @@ export {
   supplierItemStatus,
   userSessions,
   workboardSnapshots,
+  uiReload,
+  aiConversations,
 };
 
-// Functions are exported directly above (insertData, getData, getCount, updateData, deleteData, snapshot queries)
+// Functions are exported directly above (insertData, getData, getCount, updateData, deleteData, snapshot queries, ui-reload queries, ai-conversations queries)
