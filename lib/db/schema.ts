@@ -113,6 +113,9 @@ export const rfqAnalysis = pgTable('rfq_analysis', {
   // Workflow queue state — drives the sidebar RFQ queue rendering
   currentStage: varchar('current_stage', { length: 40 }).default('user_validation'),  // 11-stage workflow cursor
   unreadCount: integer('unread_count').default(0),                                     // unseen updates badge
+  // Manual queue priority override — lower = higher priority.
+  // Null = use natural order (rfq_id DESC). Admin or UI can stamp this to pin items.
+  queuePriority: integer('queue_priority'),
 
   // Timestamps
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
@@ -510,6 +513,57 @@ export const userSessions = pgTable(
 );
 
 // ============================================
+// UI_RELOAD TABLE — persistent UI layout preferences
+// (Layout/positioning state only; no domain data)
+// ============================================
+export const uiReload = pgTable(
+  'ui_reload',
+  {
+    id: serial('id').primaryKey(),
+    companyId: integer('company_id').notNull().references(() => userCompany.companyId),
+    userId: integer('user_id').notNull(),
+    uiType: varchar('ui_type', { length: 50 }).notNull(),
+    uiState: jsonb('ui_state').notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: false })
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => ({
+    uqUserUiType: unique('uq_ui_reload_user_type').on(table.companyId, table.userId, table.uiType),
+  }),
+);
+
+// ============================================
+// AI_CONVERSATIONS TABLE — AI chat history per RFQ, with TTL
+// expires_at defaults to now()+72h; cleanup cron removes expired rows.
+// ============================================
+export const aiConversations = pgTable(
+  'ai_conversations',
+  {
+    id: serial('id').primaryKey(),
+    companyId: integer('company_id').notNull().references(() => userCompany.companyId),
+    userId: integer('user_id').notNull(),
+    rfqId: integer('rfq_id').notNull().references(() => rfqAnalysis.rfqId, { onDelete: 'cascade' }),
+    rfqReference: varchar('rfq_reference', { length: 100 }),
+    messages: jsonb('messages').notNull().default([]),
+    modelId: varchar('model_id', { length: 100 }),
+    contextType: varchar('context_type', { length: 50 }),
+    createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: false })
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    expiresAt: timestamp('expires_at', { withTimezone: false })
+      .notNull()
+      .default(sql`now() + interval '72 hours'`),
+  },
+  (table) => ({
+    idxRfqContext: index('idx_ai_conversations_rfq_context').on(table.rfqId, table.contextType),
+    idxExpiresAt: index('idx_ai_conversations_expires_at').on(table.expiresAt),
+  }),
+);
+
+// ============================================
 // 14. WORKBOARD_SNAPSHOTS TABLE — persistent workboard versioning
 // ============================================
 export const workboardSnapshots = pgTable('workboard_snapshots', {
@@ -683,3 +737,9 @@ export type NewEmailConnection = typeof emailConnections.$inferInsert;
 
 export type IncomingEmail = typeof incomingEmails.$inferSelect;
 export type NewIncomingEmail = typeof incomingEmails.$inferInsert;
+
+export type UiReload = typeof uiReload.$inferSelect;
+export type NewUiReload = typeof uiReload.$inferInsert;
+
+export type AiConversation = typeof aiConversations.$inferSelect;
+export type NewAiConversation = typeof aiConversations.$inferInsert;
