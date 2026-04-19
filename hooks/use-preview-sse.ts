@@ -3,7 +3,8 @@
 // =============================================
 
 import { useEffect, useRef } from 'react';
-import type { ProcessorResult } from '@/lib/utils/validator';
+import type { ProcessorResult, DataType } from '@/lib/utils/validator';
+import type { PreviewType } from '@/types/ui-reload';
 import type { DocumentData, QuotationDocumentData, EmailDocumentData, RfqAnalysisDocumentData, SupplierSearchDocumentData } from '@/types/preview';
 
 interface UsePreviewSSEOptions {
@@ -61,7 +62,7 @@ export function usePreviewSSE({ onDocumentReceived, onError }: UsePreviewSSEOpti
  * Maps the `data` field from each processor's result to our typed DocumentData
  * Each processor returns different shapes — we normalize them here
  */
-function transformResultToDocument(result: ProcessorResult): DocumentData | null {
+export function transformResultToDocument(result: ProcessorResult): DocumentData | null {
   const data = result.data as Record<string, unknown> | undefined;
   if (!data) return null;
 
@@ -194,4 +195,30 @@ function transformResultToDocument(result: ProcessorResult): DocumentData | null
     default:
       return null;
   }
+}
+
+const PREVIEW_TYPE_TO_DATA_TYPE: Record<PreviewType, DataType> = {
+  analysis: 'rfq_analysis',
+  suppliers_search: 'supplier_search',
+  email: 'email',
+  quotation: 'quotation',
+};
+
+export function hydrateDocumentFromWorkspace(
+  previewType: PreviewType | null,
+  preview: unknown
+): DocumentData | null {
+  if (!previewType || !preview) return null;
+  const dataType = PREVIEW_TYPE_TO_DATA_TYPE[previewType];
+  if (!dataType) return null;
+  return transformResultToDocument({
+    success: true,
+    status: 'completed',
+    data_type: dataType,
+    data: preview as Record<string, unknown>,
+    action_type: 'proceed',
+    session_id: '',
+    processing_time_ms: 0,
+    timestamp: new Date().toISOString(),
+  } as ProcessorResult);
 }

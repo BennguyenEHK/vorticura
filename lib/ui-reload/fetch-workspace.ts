@@ -136,7 +136,9 @@ export async function fetchWorkspace(
 /**
  * Fetch preview content for the requested previewType.
  * - 'quotation' → delegate to data-loader.loadQuotationManualUpdateInput for the full shape.
- * - others → resolve table from PREVIEW_TABLE_MAP and return the row (defaults to rfq_analysis).
+ * - 'analysis' → return DocumentData-shaped payload with rfq_analysis + rfq_items.
+ * - 'suppliers_search' → return DocumentData-shaped payload with supplier_search + items_source.
+ * - 'email' → return DocumentData-shaped payload with email fields.
  */
 async function fetchPreviewByType(
   previewType: PreviewType,
@@ -159,14 +161,112 @@ async function fetchPreviewByType(
     }
   }
 
-  // Resolve descriptor; fall back to rfq_analysis when type is unknown (per spec).
-  const descriptor = PREVIEW_TABLE_MAP[previewType] ?? PREVIEW_TABLE_MAP.analysis;
+  // Analysis preview: fetch rfq_analysis + rfq_items in parallel
+  if (previewType === 'analysis') {
+    try {
+      const [analysisRows, itemRows] = await Promise.all([
+        getData('rfqAnalysis', { rfqId }, workspace),
+        getData('rfqItems', { rfqId }, workspace),
+      ]);
+      const analysis = analysisRows[0];
+      if (!analysis) return null;
+      return {
+        rfq_analysis: {
+          subject: analysis.subject,
+          analysis_content: analysis.analysisContent,
+        },
+        rfq_items: (itemRows || []).map((item: Record<string, unknown>) => ({
+          item_id: item.itemId,
+          company_requirement: {
+            company_description: item.companyDescription,
+            qty: item.qty,
+            uom: item.uom,
+          },
+          currency_code: item.currencyCode,
+        })),
+        rfq_id: rfqId,
+      };
+    } catch (err) {
+      console.warn(`[fetchWorkspace] analysis preview load failed:`, err);
+      return null;
+    }
+  }
 
+  // Suppliers search preview: fetch supplier_search + supplier items in parallel
+  if (previewType === 'suppliers_search') {
+    try {
+      const [searchRows, itemRows] = await Promise.all([
+        getData('supplierSearch', { rfqId }, workspace),
+        getData('supplierItemStatus', { rfqId }, workspace),
+      ]);
+      const search = searchRows[0];
+      if (!search) return null;
+      return {
+        suppliers_search: {
+          subject: search.subject,
+          search_content: search.searchContent,
+        },
+        items_source: (itemRows || []).map((item: Record<string, unknown>) => ({
+          item_id: item.itemId,
+          supplier_name: item.supplierName,
+          bidder_description: item.bidderDescription,
+          bidder_unit_price: item.bidderUnitPrice,
+          delivery_time: item.deliveryTime,
+          contact_email: item.contactEmail,
+          contact_phone: item.contactPhone,
+          source_url: item.sourceUrl,
+          status: item.status,
+        })),
+        rfq_id: rfqId,
+      };
+    } catch (err) {
+      console.warn(`[fetchWorkspace] suppliers_search preview load failed:`, err);
+      return null;
+    }
+  }
+
+  // Email preview: fetch email_table
+  if (previewType === 'email') {
+    try {
+      const rows = await getData('emailTable', { rfqId }, workspace);
+      const email = rows[0];
+      if (!email) return null;
+      return {
+        to: email.recipientEmail,
+        subject: email.subject,
+        body: email.emailContent,
+      };
+    } catch (err) {
+      console.warn(`[fetchWorkspace] email preview load failed:`, err);
+      return null;
+    }
+  }
+
+  // Fallback to rfq_analysis when type is unknown
+  const descriptor = PREVIEW_TABLE_MAP.analysis;
   try {
     const rows = await getData(descriptor.table, { [descriptor.idColumn]: rfqId }, workspace);
-    return rows[0] ?? null;
+    const analysis = rows[0];
+    if (!analysis) return null;
+    const itemRows = await getData('rfqItems', { rfqId }, workspace);
+    return {
+      rfq_analysis: {
+        subject: analysis.subject,
+        analysis_content: analysis.analysisContent,
+      },
+      rfq_items: (itemRows || []).map((item: Record<string, unknown>) => ({
+        item_id: item.itemId,
+        company_requirement: {
+          company_description: item.companyDescription,
+          qty: item.qty,
+          uom: item.uom,
+        },
+        currency_code: item.currencyCode,
+      })),
+      rfq_id: rfqId,
+    };
   } catch (err) {
-    console.warn(`[fetchWorkspace] preview load failed for type=${previewType}:`, err);
+    console.warn(`[fetchWorkspace] fallback analysis preview load failed:`, err);
     return null;
   }
 }
