@@ -1,22 +1,21 @@
 'use server'
 
 import { db } from '@/lib/db/client';
-import { uiReload as uiReloadTable, rfqAnalysis, aiConversations } from '@/lib/db/schema';
+import { uiReload as uiReloadTable } from '@/lib/db/schema';
 import { getServerActionWorkspace } from '@/lib/middleware/get-workspace';
-import { getFetchIntent } from '@/lib/ui-reload/stage-map';
+import { fetchWorkspace } from '@/lib/ui-reload/fetch-workspace';
 import { eq, and } from 'drizzle-orm';
 import type {
   UiType,
-  RFQStage,
-  WorkspacePayload,
   DashboardPayload,
   RfqQueuePayload,
   UiReloadResult,
 } from '@/types/ui-reload';
 
 /**
- * uiReload: Fetch UI state based on uiType
- * Routes to workspace/dashboard/rfq_queue fetch logic
+ * uiReload: Fetch UI state based on uiType.
+ * Workspace fetching is fully delegated to fetch-workspace.ts (single source of truth);
+ * dashboard / rfq_queue continue to read their layout prefs directly from ui_reload.
  *
  * @param uiType - UI page type: 'workspace' | 'dashboard' | 'rfq_queue'
  * @param rfqReference - (workspace only) URL-decoded RFQ reference string; server resolves rfq_id
@@ -27,56 +26,55 @@ export async function uiReload(
   rfqReference?: string
 ): Promise<UiReloadResult> {
   try {
+    console.log(`[uiReload] start uiType=${uiType} rfqReference=${rfqReference}`);
+
     const workspace = await getServerActionWorkspace();
     if (!workspace) {
-      return {
-        success: false,
-        error: 'Unauthorized',
-      };
+      const unauthorizedResult: UiReloadResult = { success: false, error: 'Unauthorized' };
+      console.log('[uiReload] result:', unauthorizedResult);
+      return unauthorizedResult;
     }
 
     const { company_id, user_id } = workspace;
 
+    let result: UiReloadResult;
+
     switch (uiType) {
       case 'workspace': {
         if (!rfqReference) {
-          return {
-            success: false,
-            error: 'rfqReference required for workspace UI reload',
-          };
+          result = { success: false, error: 'rfqReference required for workspace UI reload' };
+          break;
         }
-        const data = await fetchWorkspacePayload(company_id, user_id, rfqReference);
-        return {
-          success: true,
-          data,
-          uiType: 'workspace',
-        };
+        // Delegate to fetchWorkspace — it bundles ui_reload layoutPrefs + aiConversations + preview
+        const ws = await fetchWorkspace({ rfqReference });
+        if (!ws.success || !ws.data) {
+          result = { success: false, error: ws.error ?? 'fetchWorkspace failed' };
+        } else {
+          result = { success: true, data: ws.data, uiType: 'workspace' };
+        }
+        break;
       }
 
       case 'dashboard': {
         const data = await fetchDashboardPayload(company_id, user_id);
-        return {
-          success: true,
-          data,
-          uiType: 'dashboard',
-        };
+        result = { success: true, data, uiType: 'dashboard' };
+        break;
       }
 
       case 'rfq_queue': {
         const data = await fetchRfqQueuePayload(company_id, user_id);
-        return {
-          success: true,
-          data,
-          uiType: 'rfq_queue',
-        };
+        result = { success: true, data, uiType: 'rfq_queue' };
+        break;
       }
 
-      default:
-        return {
-          success: false,
-          error: `Unknown UI type: ${uiType}`,
-        };
+      default: {
+        result = { success: false, error: `Unknown UI type: ${uiType}` };
+        break;
+      }
     }
+
+    console.log('[uiReload] result:', result);
+    return result;
   } catch (error) {
     console.error('uiReload error:', error);
     return {
@@ -87,7 +85,7 @@ export async function uiReload(
 }
 
 /**
- * uiSaved: Persist UI state (layout prefs, scroll position, etc)
+ * uiSaved: Persist UI state (layout prefs, scroll position, etc).
  *
  * @param uiType - UI page type
  * @param state - UI state to persist (typically layout preferences)
@@ -139,90 +137,11 @@ export async function uiSaved(
 }
 
 // =============================================
-// PRIVATE FETCH HELPERS
+// PRIVATE FETCH HELPERS — dashboard / rfq_queue only
+// (workspace fetching is delegated to fetchWorkspace in lib/ui-reload/fetch-workspace.ts)
 // =============================================
 
-/**
- * Fetch workspace payload: RFQ state + panels based on stage.
- * Resolves rfqId from rfqReference server-side — callers never pass raw numeric IDs.
- */
-async function fetchWorkspacePayload(
-  companyId: number,
-  userId: number,
-  rfqReference: string,
-): Promise<WorkspacePayload> {
-  // Look up RFQ by reference string with tenant isolation
-  const rfq = await db
-    .select()
-    .from(rfqAnalysis)
-    .where(
-      and(
-        eq(rfqAnalysis.rfqReference, rfqReference),
-        eq(rfqAnalysis.companyId, companyId)
-      )
-    )
-    .limit(1);
-
-  if (!rfq.length) {
-    throw new Error(`RFQ "${rfqReference}" not found`);
-  }
-
-  const rfqId = rfq[0].rfqId;
-
-  const rfqRecord = rfq[0];
-  const stage = (rfqRecord.currentStage || 'user_validation') as RFQStage;
-  const intent = getFetchIntent(stage);
-
-  // Fetch layout prefs
-  const uiState = await db
-    .select({ uiState: uiReloadTable.uiState })
-    .from(uiReloadTable)
-    .where(
-      and(
-        eq(uiReloadTable.companyId, companyId),
-        eq(uiReloadTable.userId, userId),
-        eq(uiReloadTable.uiType, 'workspace')
-      )
-    )
-    .limit(1);
-
-  const layoutPrefs = uiState.length ? (uiState[0].uiState as Record<string, unknown>) : null;
-
-  // Fetch AI conversations (always attempted, empty if none/expired)
-  const aiConversationRecords = await db
-    .select()
-    .from(aiConversations)
-    .where(
-      and(
-        eq(aiConversations.companyId, companyId),
-        eq(aiConversations.userId, userId),
-        eq(aiConversations.rfqId, rfqId)
-      )
-    )
-    .limit(1);
-
-  const ai = aiConversationRecords.length
-    ? [aiConversationRecords[0]]
-    : [];
-
-  // For now, return null for panels requiring further fetching
-  // (preview, workflow, suppliers, pricing would be fetched by dedicated endpoints)
-  return {
-    stage,
-    rfqId,
-    rfqReference: rfqRecord.rfqReference,
-    layoutPrefs,
-    preview: intent.preview ? null : null,
-    workflow: intent.workflow ? null : null,
-    suppliers: intent.suppliers ? null : null,
-    pricing: intent.pricing ? null : null,
-    ai,
-  };
-}
-
-/**
- * Fetch dashboard payload: layout prefs
- */
+/** Dashboard payload: layout prefs from ui_reload */
 async function fetchDashboardPayload(
   companyId: number,
   userId: number
@@ -241,14 +160,10 @@ async function fetchDashboardPayload(
 
   const layoutPrefs = uiState.length ? (uiState[0].uiState as Record<string, unknown>) : null;
 
-  return {
-    layoutPrefs,
-  };
+  return { layoutPrefs };
 }
 
-/**
- * Fetch RFQ queue payload: layout prefs
- */
+/** RFQ queue payload: layout prefs from ui_reload */
 async function fetchRfqQueuePayload(
   companyId: number,
   userId: number
@@ -267,7 +182,5 @@ async function fetchRfqQueuePayload(
 
   const layoutPrefs = uiState.length ? (uiState[0].uiState as Record<string, unknown>) : null;
 
-  return {
-    layoutPrefs,
-  };
+  return { layoutPrefs };
 }

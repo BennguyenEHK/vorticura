@@ -9,7 +9,7 @@
 'use server';
 
 // Generic CRUD + join helpers for Drizzle (all workspace-scoped)
-import { getData, getCount, updateData } from '@/lib/db/queries';
+import { getData, getCount, updateData, getUiState, getLatestSnapshotVersion, insertSnapshot } from '@/lib/db/queries';
 // Resolves authenticated workspace from the server action cookie context
 import { getServerActionWorkspace } from '@/lib/middleware/get-workspace';
 // In-process pub/sub — steady-state deltas are pushed to SSE subscribers via this bus
@@ -184,12 +184,32 @@ export async function emitQueuedRFQs(
   console.log('Check for workspace');
   if (!workspace) return;
 
-  // Optional stage transition — log failure and continue so a stale stage never blocks emit
+  // Optional stage transition — log failure and continue so a stale stage never blocks emit.
+  // Snapshot policy: when current_stage actually changes, capture a workboard_snapshots row
+  // so the user can revert the workspace state to the moment they entered each stage.
   if (currentStage) {
+    let previousStage: string | undefined;
+    try {
+      // Read the existing stage so we can detect a real transition (vs. idempotent re-emit)
+      const existingRows = (await getData('rfqAnalysis', { rfqId }, workspace)) as Array<Record<string, unknown>>;
+      previousStage = existingRows[0]?.currentStage as string | undefined;
+    } catch (err) {
+      console.warn(`[emitQueuedRFQs] previous-stage lookup failed for rfq_id=${rfqId}:`, err);
+    }
+
     try {
       await updateData('rfqAnalysis', { rfqId }, { currentStage }, workspace);
     } catch (err) {
       console.warn(`[emitQueuedRFQs] current_stage update failed for rfq_id=${rfqId}:`, err);
+    }
+
+    // Snapshot only on a genuine transition (old != new). Snapshot is non-blocking.
+    if (previousStage !== currentStage) {
+      try {
+        await captureStageSnapshot(rfqId, currentStage, workspace);
+      } catch (err) {
+        console.warn(`[emitQueuedRFQs] snapshot capture failed for rfq_id=${rfqId}:`, err);
+      }
     }
   }
 
@@ -216,4 +236,41 @@ export async function emitQueuedRFQs(
   console.log('[emitQueuedRFQs] emitting rfq-queue payload for rfqId=%d companyId=%d:',
     payload.rfqId, payload.companyId, payload);
   eventBus.emit('rfq-queue', payload);
+}
+
+// ---------------------------------------------
+// Snapshot helper — Option 1 (snapshot on stage transition)
+// ---------------------------------------------
+/**
+ * Capture a workboard_snapshots row at the moment of a stage transition.
+ *  - panelsSnapshot   = ui_reload.uiState for ('workspace', user) (layout/visibility/maximized state)
+ *  - workflowSnapshot = the rfq_analysis row (stage, unread, last_preview_type, etc.)
+ * Bounded by design: rows ≈ RFQ_count × stage_count. Matches the revert-to-stage UX granularity.
+ */
+async function captureStageSnapshot(
+  rfqId: number,
+  newStage: RFQStage,
+  workspace: WorkspaceContext,
+): Promise<void> {
+  // Pull current workboard layout (panels) and the post-transition rfq_analysis row (workflow).
+  // Done in parallel — both reads are independent and small.
+  const [panelsState, rfqRows] = await Promise.all([
+    getUiState('workspace', workspace).catch(() => null),
+    getData('rfqAnalysis', { rfqId }, workspace).catch(() => [] as Array<Record<string, unknown>>),
+  ]);
+
+  // Compute the next monotonic version for this rfq (avoids races even under concurrent emits)
+  const nextVersion = (await getLatestSnapshotVersion(rfqId, workspace)) + 1;
+
+  await insertSnapshot(
+    {
+      rfqId,
+      version: nextVersion,
+      triggeredBy: newStage,
+      label: `Entered ${STAGE_CONFIGS[newStage]?.label ?? newStage}`,
+      panelsSnapshot: panelsState ?? {},
+      workflowSnapshot: (rfqRows as Array<Record<string, unknown>>)[0] ?? { currentStage: newStage },
+    },
+    workspace,
+  );
 }

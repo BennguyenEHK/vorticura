@@ -34,6 +34,7 @@ import { findAllOverlaps, resolveOverlapShrinkWidth, compactAndFillAll } from ".
 import { uiReload, uiSaved } from "@/lib/actions/ui-reload-actions";
 // RFQ context for accessing current RFQ ID in workspace
 import { useRFQContext } from "@/hooks/rfq-context";
+import { usePathname } from 'next/navigation';
 
 // =============================================
 // Context
@@ -98,7 +99,12 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
 
   // Get current RFQ reference from context (available only in workspace pages)
   const rfqCtx = useRFQContext();
-  const rfqReference = rfqCtx?.rfqReference; // string | undefined — undefined on dashboard/other pages
+  // Fallback: derive RFQ reference from current pathname when RFQProvider is not mounted above
+  const pathname = usePathname();
+  const rfqFromPath = pathname?.startsWith('/workspace/')
+    ? decodeURIComponent(pathname.split('/workspace/')[1] ?? '')
+    : undefined;
+  const rfqReference = rfqCtx?.rfqReference ?? rfqFromPath; // string | undefined — undefined on dashboard/other pages
 
   // Hydrate state from uiReload DB (for workspace) or fallback to defaults
   // Client-side fetch after mount to prevent hydration mismatch
@@ -107,6 +113,7 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
       if (rfqReference) {
         // Workspace context: fetch layout from DB via uiReload (server resolves rfqId)
         try {
+          
           const result = await uiReload('workspace', rfqReference);
           if (result.success && result.data && 'layoutPrefs' in result.data && result.data.layoutPrefs) {
             const layoutPrefs = result.data.layoutPrefs as Record<string, unknown>;
@@ -139,6 +146,24 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
 
     loadLayout();
   }, [rfqReference]);
+
+  // Listen for in-page uiReload notifications (dispatched by RFQQueueItem)
+  useEffect(() => {
+    const handler = (evt: Event) => {
+      try {
+        // @ts-ignore - CustomEvent typing
+        const detail = (evt as CustomEvent).detail;
+        console.log('[WorkboardProvider] received in-page uiReload event:', detail);
+      } catch (err) {
+        console.warn('[WorkboardProvider] failed to read uiReload event detail:', err);
+      }
+    };
+
+    window.addEventListener('quoteflow:uiReload', handler as EventListener);
+    return () => {
+      window.removeEventListener('quoteflow:uiReload', handler as EventListener);
+    };
+  }, []);
 
   // =============================================
   // Actions

@@ -33,7 +33,7 @@ export function useRfqQueueSSE(opts: UseRfqQueueSSEOptions): { connected: boolea
   onReconnectRef.current = opts.onReconnect;
 
   useEffect(() => {
-    const es = new EventSource('/api/rfq-queue-stream');
+    const es = new EventSource('/api/rfq-queue');
 
     // Tracks whether we've seen a prior error — distinguishes "first open" from "reconnect"
     let hadError = false;
@@ -43,7 +43,12 @@ export function useRfqQueueSSE(opts: UseRfqQueueSSEOptions): { connected: boolea
       // Fire re-seed only when onopen follows an error (in-session reconnect)
       if (hadError) {
         hadError = false;
-        onReconnectRef.current();
+        console.log('[rfq-queue SSE] re-open after error — invoking onReconnect');
+        try {
+          onReconnectRef.current();
+        } catch (err) {
+          console.error('[rfq-queue SSE] onReconnect handler threw:', err);
+        }
       }
     };
 
@@ -51,7 +56,13 @@ export function useRfqQueueSSE(opts: UseRfqQueueSSEOptions): { connected: boolea
       try {
         // Heartbeats start with ':' and are filtered by the browser — never reach here
         const payload = JSON.parse(evt.data) as QueuedRFQ;
-        onUpsertRef.current(payload);
+        console.log('[rfq-queue SSE] payload received:', payload);
+        console.log('[rfq-queue SSE] invoking onUpsert callback for rfq:', payload?.rfqId ?? payload?.rfqReference ?? payload);
+        try {
+          onUpsertRef.current(payload);
+        } catch (err) {
+          console.error('[rfq-queue SSE] onUpsert handler threw:', err);
+        }
       } catch (err) {
         console.error('[rfq-queue SSE] Failed to parse event:', err);
       }

@@ -17,7 +17,6 @@ import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
 import type { AnalysisData, MergedAnalysisData } from '@/types/ai-agent';
 import { getServerActionWorkspace } from '@/lib/middleware/get-workspace';
 import type { WorkspaceContext } from '@/lib/middleware/workspace-context';
-
 // ---------------------------------------------
 // Configuration
 // ---------------------------------------------
@@ -50,6 +49,7 @@ const FUNCTION_MAP: Record<string, typeof buildAnalyzeUserMessage | typeof build
 export async function processAnalysis(input: ProcessorInput): Promise<ProcessorResult> {
   const startTime = Date.now();
   const timestamp = new Date().toISOString();
+  console.log('Ananlysis-actions start');
 
   try {
     const { action_type, rfq_id } = input;
@@ -152,40 +152,52 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
     // pushes the RFQ to priority 1 in the sidebar queue. current_stage /
     // unread_count are set ONLY for new RFQs so reanalyze never regresses them.
     const isNewRfq = resolvedRfqId == null;
+    // Use a named payload so modifyDatabase() can mutate it (TC_rfqAnalysis.onInsert sets rfq_id)
+    console.log("RUN DATABASE INSERT")
+    const dbPayload = {
+      data_type: 'rfq_analysis',
+      rfq_id: resolvedRfqId,
+      rfq_reference: rfqRef,
+      rfq_analysis: {
+        ...merged.rfq_analysis,
+        required_currency: merged.required_currency,
+        deadline_period: merged.deadline_period,
+        closing_time: merged.closing_time,
+        // Newly-created rows land at Gate 1 (user_validation); existing rows keep their stage
+        current_stage: isNewRfq ? 'user_validation' : undefined,
+        unread_count: isNewRfq ? 1 : undefined,
+      },
+      rfq_items: merged.rfq_items,
+      customer_info: merged.customer_info,
+    } as any;
+
+    // Isolate DB writes so a mid-chain failure (rfq_items / customers) cannot suppress
+    // the sidebar emit for a row whose rfq_analysis insert already committed.
     try {
-      await modifyDatabase({
-        data_type: 'rfq_analysis',
-        rfq_id: resolvedRfqId,
-        rfq_reference: rfqRef,
-        rfq_analysis: {
-          ...merged.rfq_analysis,
-          required_currency: merged.required_currency,
-          deadline_period: merged.deadline_period,
-          closing_time: merged.closing_time,
-          // Newly-created rows land at Gate 1 (user_validation); existing rows keep their stage
-          current_stage: isNewRfq ? 'user_validation' : undefined,
-          unread_count: isNewRfq ? 1 : undefined,
-        },
-        rfq_items: merged.rfq_items,
-        customer_info: merged.customer_info,
-      }, workspace);
-
-      // Post-insert: for NEW rfqs, the id is assigned by the DB — re-resolve so we can emit
-      let finalRfqId: number | undefined = resolvedRfqId;
-      if (finalRfqId == null && merged.customer_info.email && rfqRef) {
-        finalRfqId = await resolveRfqId(merged.customer_info.email, rfqRef, workspace);
-      }
-
-      // Push sidebar upsert so the RFQ appears immediately (new) or refreshes (reanalyze)
-      if (finalRfqId != null) {
-        // Backfill result.data.rfq_id so downstream consumers (pipeline, preview) see the new id
-        (result.data as Record<string, unknown>).rfq_id = finalRfqId;
-        void emitQueuedRFQs(finalRfqId, workspace).catch((err) =>
-          console.warn('[Analysis] emitQueuedRFQs failed:', err)
-        );
-      }
+      console.log('Database storing activate!')
+      await modifyDatabase(dbPayload, workspace);
     } catch (dbError) {
       console.error('[Analysis] DB save failed (non-blocking):', dbError);
+    }
+
+    // Resolve rfq_id: prefer the in-place mutation (onInsert fast path), fall back to a
+    // deterministic (email, rfq_reference) lookup so a mid-chain throw or missing mutation
+    // still lets the emit fire.
+    console.log("RUN CHECK ID ")
+    resolvedRfqId = resolvedRfqId ?? (dbPayload.rfq_id as number | undefined);
+    if (resolvedRfqId == null && merged.customer_info.email && rfqRef) {
+      resolvedRfqId = await resolveRfqId(merged.customer_info.email, rfqRef, workspace);
+    }
+
+    console.log("UPdate RFQ_QUEUE")
+    // Push sidebar upsert so the RFQ appears immediately (new) or refreshes (reanalyze)
+    if (resolvedRfqId != null) {
+      console.log('emit queued start');
+      // Backfill result.data.rfq_id so downstream consumers (pipeline, preview) see the new id
+      (result.data as Record<string, unknown>).rfq_id = resolvedRfqId;
+      await emitQueuedRFQs(resolvedRfqId, workspace).catch((err) =>
+        console.warn('[Analysis] emitQueuedRFQs failed:', err)
+      );
     }
 
     return result;

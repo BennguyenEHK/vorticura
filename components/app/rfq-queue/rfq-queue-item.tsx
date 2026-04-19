@@ -78,6 +78,15 @@ export function RFQQueueItem({
       title={isCollapsed ? `${rfq.rfqReference}: ${rfq.clientName}` : undefined}
       onMouseEnter={() => {
         // Prefetch workspace payload on hover — server resolves rfqId from reference
+          // Notify in-page listeners (visible in browser console) that uiReload was invoked
+          try {
+            const eventDetail = { uiType: 'workspace', rfqReference: rfq.rfqReference };
+            console.log('[RFQQueueItem] dispatching in-page uiReload event:', eventDetail);
+            window.dispatchEvent(new CustomEvent('quoteflow:uiReload', { detail: eventDetail }));
+          } catch (evtErr) {
+            // Non-fatal: window may be undefined during SSR (guarded by click handler runtime)
+            console.warn('[RFQQueueItem] failed to dispatch uiReload event:', evtErr);
+          }
         prefetchWorkspace(rfq.rfqReference);
       }}
     >

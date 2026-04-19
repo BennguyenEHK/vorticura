@@ -116,6 +116,9 @@ export const rfqAnalysis = pgTable('rfq_analysis', {
   // Manual queue priority override — lower = higher priority.
   // Null = use natural order (rfq_id DESC). Admin or UI can stamp this to pin items.
   queuePriority: integer('queue_priority'),
+  // Last preview panel viewed by the user (drives fetch-workspace tableMap lookup)
+  // Allowed values: 'analysis' | 'suppliers_search' | 'email' | 'quotation' | null (defaults to 'analysis')
+  lastPreviewType: varchar('last_preview_type', { length: 30 }),
 
   // Timestamps
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
@@ -491,13 +494,7 @@ export const userSessions = pgTable(
     companyId: integer('company_id').notNull(),
     userId: integer('user_id').notNull(),  // renamed from client_id
 
-    // Last viewed item tracking
-    lastViewedItemId: integer('last_viewed_item_id'),
-    lastViewedType: varchar('last_viewed_type', { length: 50 }).default('quotation'),
-    lastViewedTypeId: integer('last_viewed_type_id'),
-    lastViewedTimestamp: timestamp('last_viewed_timestamp', { withTimezone: false }).defaultNow(),
-
-    // Location tracking for session redirect
+    // Location tracking for session redirect (kept; consumed by login route)
     prevLocation: varchar('prev_location', { length: 500 }),
 
     // Timestamps

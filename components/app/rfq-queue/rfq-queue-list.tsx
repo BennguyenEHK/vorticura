@@ -61,7 +61,8 @@ export function RFQQueueList({
           if (aPinned && bPinned) return a.queuePriority! - b.queuePriority!;
           if (aPinned) return -1;
           if (bPinned) return 1;
-          return b.rfqId - a.rfqId;
+          // Earliest updates first, latest last (ascending updatedAt)
+          return a.updatedAt.getTime() - b.updatedAt.getTime();
         });
         return merged.map((r, i) => ({ ...r, priority: i + 1 }));
       });
@@ -83,6 +84,7 @@ export function RFQQueueList({
   // Upsert handler — receives a single QueuedRFQ from SSE and merges it into state
   // Re-sorts by rfqId DESC and re-assigns priority so the list mirrors getQueuedRFQs semantics
   const upsertRfq = useCallback((incoming: QueuedRFQ) => {
+    console.log("START RFQ-INJECTIONS")
     setRfqs((prev) => {
       const idx = prev.findIndex((r) => r.rfqId === incoming.rfqId);
       // Replace existing row in place, otherwise prepend (sort below re-orders regardless)

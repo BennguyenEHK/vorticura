@@ -4,7 +4,7 @@ import { uiReload, uiSaved } from '@/lib/actions/ui-reload-actions';
 const mockWorkspace = new WorkspaceContext({
   user_id: 1,
   company_id: 1,
-  username: 'testuser',
+  username: 'versempra',
   role: 'admin',
 });
 

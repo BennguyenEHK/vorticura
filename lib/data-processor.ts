@@ -36,6 +36,9 @@ import { eventBus } from './event-bus';
 // so all connected clients see the sidebar row update without re-fetching.
 import { emitQueuedRFQs } from './services/rfq-queue/queue-manager';
 import type { RFQStage } from '@/types/rfq-queue';
+// Persist last_preview_type before SSE emit so workspace hydration picks the right tableMap
+import { updateData } from './db/queries';
+import type { PreviewType } from '@/types/ui-reload';
 
 // ========== WORKSPACE RESOLUTION ==========
 import { getServerActionWorkspace } from './middleware/get-workspace';
@@ -367,11 +370,49 @@ async function executePipelineChain(input: ProcessorInput): Promise<ProcessorRes
 // All action processors return results without emitting SSE.
 // data-processor handles all SSE emission centrally after receiving the result.
 
+// Maps the processor's data_type to the previewType tag stored on rfq_analysis.last_preview_type.
+// Drives which content table fetch-workspace pulls from on next workspace hydration.
+const DATA_TYPE_TO_PREVIEW: Record<string, PreviewType> = {
+  rfq_analysis:    'analysis',
+  supplier_search: 'suppliers_search',
+  email:           'email',
+  quotation:       'quotation',
+};
+
 /**
  * Emit SSE events based on processor result.
  * Handles: preview-update for all results, comms-update for all-items-available.
+ * Persists last_preview_type onto rfq_analysis BEFORE the SSE emit so a parallel
+ * workspace hydration sees the freshest preview tag.
  */
 function emitProcessorResult(result: ProcessorResult, _dataType: DataType, input: ProcessorInput): void {
+  // ── Persist last_preview_type before emit ──
+  // Only update when we have rfq_id + workspace + a known preview-type mapping.
+  const resultDataPre = result.data as Record<string, unknown> | undefined;
+  const rfqIdForPreview = resultDataPre?.rfq_id;
+  const previewTag = DATA_TYPE_TO_PREVIEW[_dataType];
+  if (
+    previewTag &&
+    typeof rfqIdForPreview === 'number' &&
+    rfqIdForPreview > 0 &&
+    input.workspace
+  ) {
+    const wsFilter = input.workspace.getDatabaseFilter();
+    // Fire-and-forget — a persistence hiccup must not suppress the SSE emit
+    void updateData(
+      'rfqAnalysis',
+      {
+        rfqId: rfqIdForPreview,
+        userId: wsFilter.user_id,
+        companyId: wsFilter.company_id,
+      },
+      { lastPreviewType: previewTag },
+      input.workspace,
+    ).catch((err) => {
+      console.warn('[data-processor] last_preview_type persistence failed:', err);
+    });
+  }
+
   // Always emit preview-update for UI real-time rendering
   eventBus.emit('preview-update', result);
 

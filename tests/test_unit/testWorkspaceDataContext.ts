@@ -13,15 +13,15 @@ import type {
   UiReloadResult,
 } from '@/types/ui-reload';
 
-// Validate WorkspacePayload structure
+// Validate WorkspacePayload structure (suppliers removed — preview driven by last_preview_type)
 const workspacePayload: WorkspacePayload = {
   stage: 'supplier_discovery',
   rfqId: 123,
   rfqReference: 'RFQ-001',
   layoutPrefs: { layout: 'test' },
+  previewType: 'analysis',
   preview: null,
   workflow: null,
-  suppliers: null,
   pricing: null,
   ai: [],
 };

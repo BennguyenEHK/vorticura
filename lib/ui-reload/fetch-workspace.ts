@@ -1,16 +1,18 @@
 // =============================================
 // WORKSPACE DATA FETCHER - Stage-aware parallel loader
 // =============================================
-// Orchestrator for fetching workspace domain data by RFQ reference.
-// Fetches only the panels needed for the current RFQ stage using getFetchIntent from stage-map.
-// Uses Promise.all for parallel getData calls.
+// SOURCE OF TRUTH for the workspace UI hydration payload.
+// - Reads rfq_analysis (incl. last_preview_type) to drive preview content selection.
+// - Resolves preview content via tableMap → email_content / search_content / analysis_content / quotation.
+// - Bundles ui_reload.layoutPrefs and ai_conversations (no separate fetcher in ui-reload-actions).
 
 'use server';
 
-import { getRfqByReference, getData } from '@/lib/db/queries';
+import { getRfqByReference, getData, getUiState, getAiConversations } from '@/lib/db/queries';
 import { getServerActionWorkspace } from '@/lib/middleware/get-workspace';
+import { loadProcessorInput } from '@/lib/data-loader';
 import { getFetchIntent } from './stage-map';
-import type { WorkspacePayload, PanelFetchIntent } from '@/types/ui-reload';
+import type { WorkspacePayload, PanelFetchIntent, PreviewType } from '@/types/ui-reload';
 
 // =============================================
 // Types
@@ -26,6 +28,16 @@ interface FetchWorkspaceResult {
   error?: string;
 }
 
+// Preview type → DB table descriptor.
+// Tells fetch-workspace which table + column carries the preview content for each type.
+// `null` (unset / unknown) defaults to rfq_analysis (per spec).
+const PREVIEW_TABLE_MAP: Record<PreviewType, { table: string; idColumn: string }> = {
+  analysis:         { table: 'rfqAnalysis',    idColumn: 'rfqId' },  // analysis_content lives on rfq_analysis
+  suppliers_search: { table: 'supplierSearch', idColumn: 'rfqId' },  // search_content   lives on supplier_search
+  email:            { table: 'emailTable',     idColumn: 'rfqId' },  // email_content    lives on email_table
+  quotation:        { table: 'quotations',     idColumn: 'rfqId' },  // quotation handled via data-loader (full shape)
+};
+
 // =============================================
 // Main Fetcher
 // =============================================
@@ -33,16 +45,14 @@ interface FetchWorkspaceResult {
 /**
  * Fetch workspace domain data by RFQ reference.
  * Stage-aware: only fetches panels needed at the current RFQ stage.
+ * Preview-aware: pulls from the table indicated by last_preview_type.
  * Parallel execution: uses Promise.all for independent panel fetches.
- *
- * @param input - { rfqReference: string }
- * @returns WorkspacePayload with stage, rfqId, and fetched panels
  */
 export async function fetchWorkspace(
   input: FetchWorkspaceInput
 ): Promise<FetchWorkspaceResult> {
   try {
-    // Derive workspace server-side from auth cookie
+    // Workspace context derived server-side from auth cookie (tenant isolation)
     const workspace = await getServerActionWorkspace();
     if (!workspace) {
       return { success: false, error: 'Authentication required' };
@@ -50,117 +60,63 @@ export async function fetchWorkspace(
 
     const { rfqReference } = input;
 
-    // =============================================
-    // STEP 1: Fetch RFQ metadata (rfq_id, current_stage)
-    // =============================================
+    // ── STEP 1: Fetch RFQ metadata (rfq_id, current_stage, last_preview_type) ──
     const rfq = await getRfqByReference(rfqReference, workspace);
     if (!rfq) {
       return { success: false, error: 'RFQ not found' };
     }
 
-    const rfqId = rfq.rfqId;
-    const currentStage = rfq.currentStage || 'ingestion';
-    const layoutPrefs = rfq.layoutPrefs || null; // If persisted on rfq_analysis table
+    const rfqId = rfq.rfqId as number;
+    const currentStage = (rfq.currentStage || 'ingestion') as string;
+    // Default to 'analysis' when never persisted — matches the rfq_analysis fallback rule.
+    const lastPreviewType = ((rfq.lastPreviewType as string | null) || 'analysis') as PreviewType;
 
-    // =============================================
-    // STEP 2: Determine fetch intent for current stage
-    // =============================================
+    // ── STEP 2: Determine fetch intent for current stage ──
     const fetchIntent: PanelFetchIntent = getFetchIntent(currentStage);
 
-    // =============================================
-    // STEP 3: Parallel panel fetches
-    // =============================================
-    const [preview, workflow, suppliers, pricing, ai] = await Promise.all([
-      // Preview (rfq_analysis + email draft)
-      fetchIntent.preview
-        ? getData('rfqAnalysis', { rfqId }, workspace)
-            .then((results) => results[0] || null)
-            .catch((err) => {
-              console.error('Failed to fetch preview:', err);
-              return null;
-            })
-        : Promise.resolve(null),
+    // ── STEP 3: Parallel fetches for preview, workflow, pricing, ui_reload, aiConversations ──
+    const [preview, workflow, pricing, layoutPrefs, ai] = await Promise.all([
+      // Preview — driven by last_preview_type via PREVIEW_TABLE_MAP (defaults to rfq_analysis)
+      fetchIntent.preview ? fetchPreviewByType(lastPreviewType, rfqId, workspace) : Promise.resolve(null),
 
-      // Workflow (workflow state — likely stored on rfq_analysis or a separate table)
-      // For now, fetch rfq_analysis again if needed; structure can be extended per requirements
+      // Workflow state — currently piggy-backs on rfq_analysis (current_stage, unread_count, etc.)
       fetchIntent.workflow
-        ? getData('rfqAnalysis', { rfqId }, workspace)
-            .then((results) => results[0] || null)
-            .catch((err) => {
-              console.error('Failed to fetch workflow:', err);
-              return null;
-            })
+        ? Promise.resolve({
+            currentStage,
+            unreadCount: rfq.unreadCount ?? 0,
+            queuePriority: rfq.queuePriority ?? null,
+            updatedAt: rfq.updatedAt ?? null,
+          })
         : Promise.resolve(null),
 
-      // Suppliers (supplierSearch + supplierItemStatus)
-      fetchIntent.suppliers
-        ? Promise.all([
-            getData('supplierSearch', { rfqId }, workspace).catch((err) => {
-              console.error('Failed to fetch supplier search:', err);
-              return [];
-            }),
-            getData('supplierItemStatus', { rfqId }, workspace).catch((err) => {
-              console.error('Failed to fetch supplier item status:', err);
-              return [];
-            }),
-          ])
-            .then(([searches, items]) => ({
-              searches,
-              items,
-            }))
-            .catch((err) => {
-              console.error('Failed to fetch suppliers:', err);
-              return null;
-            })
-        : Promise.resolve(null),
-
-      // Pricing (quotationPricing + quotations metadata)
+      // Pricing (quotationPricing + quotations header) — only when stage gates allow it
       fetchIntent.pricing
         ? Promise.all([
-            getData('quotationPricing', { rfqId }, workspace).catch((err) => {
-              console.error('Failed to fetch quotation pricing:', err);
-              return [];
-            }),
-            // Also fetch quotations to get header info
-            getData('quotations', { rfqId }, workspace).catch((err) => {
-              console.error('Failed to fetch quotations:', err);
-              return [];
-            }),
-          ])
-            .then(([pricing, quotations]) => ({
-              pricing,
-              quotations,
-            }))
-            .catch((err) => {
-              console.error('Failed to fetch pricing:', err);
-              return null;
-            })
+            getData('quotationPricing', { rfqId }, workspace).catch(() => []),
+            getData('quotations', { rfqId }, workspace).catch(() => []),
+          ]).then(([pricingRows, quotations]) => ({ pricing: pricingRows, quotations }))
         : Promise.resolve(null),
 
-      // AI (ai_conversations — assumed stored on a future table or in rfq_analysis)
-      // For now, return empty array; extend once ai_conversations table exists
+      // Layout prefs from ui_reload (consolidated here — ui-reload-actions no longer fetches)
+      getUiState('workspace', workspace).catch(() => null),
+
+      // AI conversations (always attempted, empty if expired/none) — consolidated here too
       fetchIntent.ai
-        ? Promise.resolve([])
-            .catch((err) => {
-              console.error('Failed to fetch AI conversations:', err);
-              return [];
-            })
+        ? getAiConversations(rfqId, workspace).catch(() => [])
         : Promise.resolve([]),
     ]);
 
-    // =============================================
-    // STEP 4: Build and return WorkspacePayload
-    // =============================================
+    // ── STEP 4: Build and return WorkspacePayload ──
     const payload: WorkspacePayload = {
-      stage: currentStage as any, // Already validated by stage-map
+      stage: currentStage as WorkspacePayload['stage'],
       rfqId,
       rfqReference,
-      layoutPrefs,
+      layoutPrefs: layoutPrefs as Record<string, unknown> | null,
+      previewType: lastPreviewType,
       preview,
       workflow,
-      suppliers,
       pricing,
-      ai: ai || [],
+      ai: ai as unknown[],
     };
 
     return { success: true, data: payload };
@@ -170,5 +126,47 @@ export async function fetchWorkspace(
       success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch workspace',
     };
+  }
+}
+
+// =============================================
+// Preview Fetcher — tableMap dispatch
+// =============================================
+
+/**
+ * Fetch preview content for the requested previewType.
+ * - 'quotation' → delegate to data-loader.loadQuotationManualUpdateInput for the full shape.
+ * - others → resolve table from PREVIEW_TABLE_MAP and return the row (defaults to rfq_analysis).
+ */
+async function fetchPreviewByType(
+  previewType: PreviewType,
+  rfqId: number,
+  workspace: Parameters<typeof getData>[2],
+): Promise<unknown | null> {
+  // Quotation preview = fresh quotation_ui_manual JSON shape (drives the manual-edit panel)
+  if (previewType === 'quotation') {
+    try {
+      const built = await loadProcessorInput({
+        data_type: 'quotation',
+        action_type: 'manual_update',
+        rfq_id: rfqId,
+        workspace,
+      });
+      return built.quotation_data ?? built ?? null;
+    } catch (err) {
+      console.warn('[fetchWorkspace] quotation preview load failed:', err);
+      return null;
+    }
+  }
+
+  // Resolve descriptor; fall back to rfq_analysis when type is unknown (per spec).
+  const descriptor = PREVIEW_TABLE_MAP[previewType] ?? PREVIEW_TABLE_MAP.analysis;
+
+  try {
+    const rows = await getData(descriptor.table, { [descriptor.idColumn]: rfqId }, workspace);
+    return rows[0] ?? null;
+  } catch (err) {
+    console.warn(`[fetchWorkspace] preview load failed for type=${previewType}:`, err);
+    return null;
   }
 }
