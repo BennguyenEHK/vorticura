@@ -26,11 +26,14 @@ import type {
 import {
   DEFAULT_PANELS,
   CHAT_PANEL_CONFIG,
-  WORKBOARD_LAYOUT_STORAGE_KEY,
   PANEL_SPAWN_CONFIGS, // Approach B: Dynamic spawn configs
 } from "@/types/workboard";
 // Grid layout utilities (relocated from lib/utils/generators)
 import { findAllOverlaps, resolveOverlapShrinkWidth, compactAndFillAll } from "./utils/grid-layout";
+// Server actions for UI reload persistence
+import { uiReload, uiSaved } from "@/lib/actions/ui-reload-actions";
+// RFQ context for accessing current RFQ ID in workspace
+import { useRFQContext } from "@/hooks/rfq-context";
 
 // =============================================
 // Context
@@ -84,6 +87,7 @@ interface WorkboardProviderProps {
 /**
  * WorkboardProvider - Context provider for workboard state
  * Manages: layout positions, panel configs, lock state, active panel
+ * Uses RFQContext to detect workspace vs. dashboard context
  */
 export function WorkboardProvider({ children }: WorkboardProviderProps) {
   // Initialize with default state (same on server and client to prevent hydration mismatch)
@@ -92,44 +96,49 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
   // Ref to skip overlap resolution in grid after panel toggle-on
   const skipOverlapResolutionRef = useRef(false);
 
-  // Hydrate state from localStorage AFTER mount (client-only, prevents hydration mismatch)
-  // This is the standard Next.js pattern for localStorage-dependent state
+  // Get current RFQ ID from context (available only in workspace pages)
+  const rfqCtx = useRFQContext();
+  const rfqId = rfqCtx?.rfqId;
+
+  // Hydrate state from uiReload DB (for workspace) or fallback to defaults
+  // Client-side fetch after mount to prevent hydration mismatch
   useEffect(() => {
-    const savedLayout = localStorage.getItem(WORKBOARD_LAYOUT_STORAGE_KEY);
-    if (savedLayout) {
-      try {
-        const parsed = JSON.parse(savedLayout);
+    const loadLayout = async () => {
+      if (rfqId) {
+        // Workspace context: fetch layout from DB via uiReload
+        try {
+          const result = await uiReload('workspace', rfqId);
+          if (result.success && result.data && 'layoutPrefs' in result.data && result.data.layoutPrefs) {
+            const layoutPrefs = result.data.layoutPrefs as Record<string, unknown>;
 
-        // Guard: If layout or panels is empty, clear corrupted state and keep defaults
-        if (!parsed.layout?.length || !parsed.panels?.length) {
-          localStorage.removeItem(WORKBOARD_LAYOUT_STORAGE_KEY);
-          return;
+            // Parse layout preferences
+            if (layoutPrefs.layout && layoutPrefs.panels) {
+              const hiddenPanelsMap = new Map<string, HiddenPanelInfo>(
+                (layoutPrefs.hiddenPanels as any[]) || []
+              );
+
+              // Update state with hydrated values from DB
+              // eslint-disable-next-line react-hooks/set-state-in-effect
+              setState((prev) => ({
+                ...prev,
+                layout: layoutPrefs.layout as LayoutItem[],
+                panels: layoutPrefs.panels as PanelConfig[],
+                hiddenPanels: hiddenPanelsMap,
+                maximizedPanelId: (layoutPrefs.maximizedPanelId as string | null) || null,
+                savedGridHeight: (layoutPrefs.savedGridHeight as number | null) || null,
+                maximizedPanelOriginalLayout: (layoutPrefs.maximizedPanelOriginalLayout as LayoutItem | null) || null,
+              }));
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to load workspace layout from DB:', err);
+          // Fall through to defaults
         }
-
-        // Restore hiddenPanels Map from array
-        const hiddenPanelsMap = new Map<string, HiddenPanelInfo>(
-          parsed.hiddenPanels || []
-        );
-
-        // Update state with hydrated values from localStorage
-        // This is the standard Next.js pattern for localStorage hydration - must happen after mount
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setState((prev) => ({
-          ...prev,
-          layout: parsed.layout,
-          panels: parsed.panels,
-          hiddenPanels: hiddenPanelsMap,
-          maximizedPanelId: parsed.maximizedPanelId || null, // Restore maximized state
-          savedGridHeight: parsed.savedGridHeight || null, // Restore stored grid height
-          maximizedPanelOriginalLayout: parsed.maximizedPanelOriginalLayout || null, // Restore original layout
-        }));
-      } catch {
-        // Failed to parse saved layout - clear corrupted state
-        console.warn("Failed to parse saved workboard layout");
-        localStorage.removeItem(WORKBOARD_LAYOUT_STORAGE_KEY);
       }
-    }
-  }, []);
+    };
+
+    loadLayout();
+  }, [rfqId]);
 
   // =============================================
   // Actions
@@ -420,25 +429,27 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
     });
   }, []);
 
-  /** Save current layout to localStorage */
+  /** Save current layout to DB (workspace) */
   const saveLayout = useCallback(() => {
-    if (typeof window !== "undefined") {
-      // Convert Map to array for JSON serialization
-      const hiddenPanelsArray = Array.from(state.hiddenPanels.entries());
+    // Convert Map to array for JSON serialization
+    const hiddenPanelsArray = Array.from(state.hiddenPanels.entries());
 
-      localStorage.setItem(
-        WORKBOARD_LAYOUT_STORAGE_KEY,
-        JSON.stringify({
-          layout: state.layout,
-          panels: state.panels,
-          hiddenPanels: hiddenPanelsArray,
-          maximizedPanelId: state.maximizedPanelId, // Persist maximized state
-          savedGridHeight: state.savedGridHeight, // Persist grid height for maximize
-          maximizedPanelOriginalLayout: state.maximizedPanelOriginalLayout, // Persist original layout
-        })
-      );
+    const layoutState = {
+      layout: state.layout,
+      panels: state.panels,
+      hiddenPanels: hiddenPanelsArray,
+      maximizedPanelId: state.maximizedPanelId,
+      savedGridHeight: state.savedGridHeight,
+      maximizedPanelOriginalLayout: state.maximizedPanelOriginalLayout,
+    };
+
+    // Only persist to DB if we're in workspace context
+    if (rfqId) {
+      uiSaved('workspace', layoutState).catch((err) => {
+        console.warn('Failed to save workspace layout:', err);
+      });
     }
-  }, [state.layout, state.panels, state.hiddenPanels, state.maximizedPanelId, state.savedGridHeight, state.maximizedPanelOriginalLayout]);
+  }, [state.layout, state.panels, state.hiddenPanels, state.maximizedPanelId, state.savedGridHeight, state.maximizedPanelOriginalLayout, rfqId]);
 
   /** Toggle panel visibility - hide/show panel while preserving its position */
   const togglePanelVisibility = useCallback((id: string) => {

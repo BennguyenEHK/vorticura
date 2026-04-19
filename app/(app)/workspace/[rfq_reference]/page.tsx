@@ -10,6 +10,7 @@
 import { use } from "react";
 import { Lock, Unlock, RotateCcw, GitBranch, DollarSign, FileText } from "lucide-react";
 import { WorkboardGrid, useWorkboard } from "@/components/app/workboard";
+import { RFQProvider } from "@/hooks/rfq-context";
 import { Button } from "@/components/ui/button";
 
 // =============================================
@@ -137,12 +138,14 @@ export default function WorkspacePage({ params }: WorkspacePageProps) {
   const rfqReference = decodeURIComponent(rfq_reference);
 
   return (
-    <div className="space-y-4">
-      {/* Page header with controls */}
-      <WorkspaceHeader rfqReference={rfqReference} />
+    <RFQProvider rfqReference={rfqReference}>
+      <div className="space-y-4">
+        {/* Page header with controls */}
+        <WorkspaceHeader rfqReference={rfqReference} />
 
-      {/* Dynamic panel grid */}
-      <WorkboardGrid className="min-h-[calc(100vh-200px)]" />
-    </div>
+        {/* Dynamic panel grid */}
+        <WorkboardGrid className="min-h-[calc(100vh-200px)]" />
+      </div>
+    </RFQProvider>
   );
 }
