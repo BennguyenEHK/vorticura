@@ -50,7 +50,21 @@ export function RFQQueueList({
       });
 
       // Update state with results
-      setRfqs(result.items);
+      setRfqs((prev) => {
+        const sseOnly = prev.filter(
+          (p) => !result.items.some((i) => i.rfqId === p.rfqId)
+        );
+        const merged = [...result.items, ...sseOnly];
+        merged.sort((a, b) => {
+          const aPinned = a.queuePriority != null;
+          const bPinned = b.queuePriority != null;
+          if (aPinned && bPinned) return a.queuePriority! - b.queuePriority!;
+          if (aPinned) return -1;
+          if (bPinned) return 1;
+          return b.rfqId - a.rfqId;
+        });
+        return merged.map((r, i) => ({ ...r, priority: i + 1 }));
+      });
       setHasMore(result.hasMore);
       setTotal(result.total);
     } catch (error) {
@@ -76,8 +90,14 @@ export function RFQQueueList({
         idx >= 0
           ? prev.map((r) => (r.rfqId === incoming.rfqId ? incoming : r))
           : [incoming, ...prev];
-      // Keep largest rfq_id at priority 1
-      merged.sort((a, b) => b.rfqId - a.rfqId);
+      merged.sort((a, b) => {
+        const aPinned = a.queuePriority != null;
+        const bPinned = b.queuePriority != null;
+        if (aPinned && bPinned) return a.queuePriority! - b.queuePriority!;
+        if (aPinned) return -1;
+        if (bPinned) return 1;
+        return b.rfqId - a.rfqId;
+      });
       const ranked = merged.map((r, i) => ({ ...r, priority: i + 1 }));
       // Only bump total when this is a genuinely new row — avoids double-counting on edits
       if (idx < 0) setTotal((t) => t + 1);

@@ -44,6 +44,7 @@ interface SnapshotResult {
 //   READ path  — WorkboardHistory renders snapshots as a read-only timeline; see
 //                preview-panel-content.tsx::handleRevert for the preview-only revert.
 //   NEVER cross-table restore from these JSONBs — see handleRevert comment for why.
+//   RETENTION — snapshots are audit records; no TTL or cleanup cron. Only manual delete.
 
 /**
  * Create a new workboard snapshot when user accepts a workflow step

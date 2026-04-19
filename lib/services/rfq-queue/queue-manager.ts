@@ -74,6 +74,7 @@ function shapeRow(row: JoinedRow, workspace: WorkspaceContext): QueuedRFQ {
     companyId: Number(rfq.companyId ?? workspace.company_id),
     status: statusFromStage(stage),
     priority: 0,            // assigned after sort (or overridden to 1 for push payloads)
+    queuePriority: rfq.queuePriority != null ? Number(rfq.queuePriority) : null,
     createdAt,
     updatedAt,
   } satisfies QueuedRFQ;
@@ -108,12 +109,19 @@ export async function getQueuedRFQs(filters?: QueueFilters): Promise<QueueRespon
     { joinColumn: 'rfqId' },   // rfq_analysis.rfq_id = customers.rfq_id
   )) as JoinedRow[];
 
-  // Shape join rows into QueuedRFQ[] + sort by rfq_id DESC (priority = row index + 1)
-  // Largest rfq_id → priority 1 (newest record always at top of queue)
+  // Shape join rows into QueuedRFQ[] + sort:
+  //   1. Rows with queuePriority set come first, sorted ascending (lower = higher priority).
+  //   2. Rows without queuePriority follow, sorted by rfq_id DESC (newest first).
   const shaped: QueuedRFQ[] = rows
     .map((row) => shapeRow(row, workspace))
-    // Sort by rfq_id DESC → the most recently created RFQ lands at priority 1
-    .sort((a, b) => b.rfqId - a.rfqId)
+    .sort((a, b) => {
+      const aPinned = a.queuePriority != null;
+      const bPinned = b.queuePriority != null;
+      if (aPinned && bPinned) return a.queuePriority! - b.queuePriority!;
+      if (aPinned) return -1;
+      if (bPinned) return 1;
+      return b.rfqId - a.rfqId;
+    })
     .map((item, idx) => ({ ...item, priority: idx + 1 }));
 
   // Apply optional filters in-memory (small list — sidebar shows ≤20 rows)
@@ -168,10 +176,12 @@ export async function getUnreadCount(): Promise<number> {
  */
 export async function emitQueuedRFQs(
   rfqId: number,
-  workspace: WorkspaceContext,
+  ws: WorkspaceContext,
   currentStage?: RFQStage
 ): Promise<void> {
   // Defensive guard — a missing workspace here indicates a caller bug, not a silent skip
+  const workspace = ws;
+  console.log('Check for workspace');
   if (!workspace) return;
 
   // Optional stage transition — log failure and continue so a stale stage never blocks emit
@@ -183,6 +193,7 @@ export async function emitQueuedRFQs(
     }
   }
 
+  console.log(' retriveing data ');
   // Fetch the single joined row for this rfq_id (workspace filter applied inside getData)
   const rows = (await getData(
     ['rfqAnalysis', 'customers'],
@@ -200,5 +211,9 @@ export async function emitQueuedRFQs(
   const payload: QueuedRFQ = { ...shapeRow(rows[0], workspace), priority: 1 };
 
   // Broadcast to all SSE subscribers listening on 'rfq-queue'
+  // Log the notification payload to the server terminal for visibility
+  // (helps during tests, cron runs, and non-request contexts).
+  console.log('[emitQueuedRFQs] emitting rfq-queue payload for rfqId=%d companyId=%d:',
+    payload.rfqId, payload.companyId, payload);
   eventBus.emit('rfq-queue', payload);
 }

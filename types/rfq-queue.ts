@@ -56,6 +56,7 @@ export interface QueuedRFQ {
   companyId: number;             // workspace isolation (company_id)
   status: QueueStatus;           // derived from stage (isGate/isAsync)
   priority: number;              // 1 = top; derived from updated_at DESC row index
+  queuePriority: number | null;  // rfq_analysis.queue_priority — manual pin override (lower = higher)
   createdAt: Date;
   updatedAt: Date;
 }

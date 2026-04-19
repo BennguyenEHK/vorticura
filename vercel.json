@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/refresh-tokens",
       "schedule": "*/45 * * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-ai-conversations",
+      "schedule": "0 */6 * * *"
     }
   ]
 }
