@@ -113,9 +113,6 @@ export const rfqAnalysis = pgTable('rfq_analysis', {
   // Workflow queue state — drives the sidebar RFQ queue rendering
   currentStage: varchar('current_stage', { length: 40 }).default('user_validation'),  // 11-stage workflow cursor
   unreadCount: integer('unread_count').default(0),                                     // unseen updates badge
-  // Manual queue priority override — lower = higher priority.
-  // Null = use natural order (rfq_id DESC). Admin or UI can stamp this to pin items.
-  queuePriority: integer('queue_priority'),
   // Last preview panel viewed by the user (drives fetch-workspace tableMap lookup)
   // Allowed values: 'analysis' | 'suppliers_search' | 'email' | 'quotation' | null (defaults to 'analysis')
   lastPreviewType: varchar('last_preview_type', { length: 30 }),

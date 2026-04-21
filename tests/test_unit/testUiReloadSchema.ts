@@ -29,14 +29,8 @@ async function run() {
     throw new Error(`ai_conversations columns mismatch: got ${JSON.stringify(aiNames)}`);
   }
 
-  const rfqCols = await db.execute(sql`
-    SELECT column_name FROM information_schema.columns
-    WHERE table_name = 'rfq_analysis' AND column_name = 'queue_priority'
-  `);
-  if (rfqCols.rows.length !== 1) {
-    throw new Error('rfq_analysis.queue_priority column missing');
-  }
-
+  // queue_priority column removed — no longer part of rfq_analysis. Ordering
+  // is now strictly by updated_at DESC (latest activity on top).
   console.log('OK: schema presence');
 }
 

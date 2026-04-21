@@ -2,7 +2,7 @@
 // RFQ Queue Manager — live, workspace-isolated
 // =============================================
 // Reads rfq_analysis ⨝ customers for the sidebar queue.
-// Priority is derived from rfq_id DESC (largest rfq_id = priority 1).
+// Priority is derived from updated_at DESC (most recently updated = priority 1).
 // All DB access goes through lib/db/queries.ts (no raw Drizzle) and
 // all workspace isolation goes through getServerActionWorkspace().
 
@@ -74,7 +74,6 @@ function shapeRow(row: JoinedRow, workspace: WorkspaceContext): QueuedRFQ {
     companyId: Number(rfq.companyId ?? workspace.company_id),
     status: statusFromStage(stage),
     priority: 0,            // assigned after sort (or overridden to 1 for push payloads)
-    queuePriority: rfq.queuePriority != null ? Number(rfq.queuePriority) : null,
     createdAt,
     updatedAt,
   } satisfies QueuedRFQ;
@@ -109,19 +108,12 @@ export async function getQueuedRFQs(filters?: QueueFilters): Promise<QueueRespon
     { joinColumn: 'rfqId' },   // rfq_analysis.rfq_id = customers.rfq_id
   )) as JoinedRow[];
 
-  // Shape join rows into QueuedRFQ[] + sort:
-  //   1. Rows with queuePriority set come first, sorted ascending (lower = higher priority).
-  //   2. Rows without queuePriority follow, sorted by rfq_id DESC (newest first).
+  // Shape join rows into QueuedRFQ[] + sort by updated_at DESC (latest update on top).
+  // Rationale: the sidebar reflects "what changed most recently" so users always
+  // see the RFQ that just progressed / received activity at the top.
   const shaped: QueuedRFQ[] = rows
     .map((row) => shapeRow(row, workspace))
-    .sort((a, b) => {
-      const aPinned = a.queuePriority != null;
-      const bPinned = b.queuePriority != null;
-      if (aPinned && bPinned) return a.queuePriority! - b.queuePriority!;
-      if (aPinned) return -1;
-      if (bPinned) return 1;
-      return b.rfqId - a.rfqId;
-    })
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
     .map((item, idx) => ({ ...item, priority: idx + 1 }));
 
   // Apply optional filters in-memory (small list — sidebar shows ≤20 rows)

@@ -84,7 +84,6 @@ export async function fetchWorkspace(
         ? Promise.resolve({
             currentStage,
             unreadCount: rfq.unreadCount ?? 0,
-            queuePriority: rfq.queuePriority ?? null,
             updatedAt: rfq.updatedAt ?? null,
           })
         : Promise.resolve(null),

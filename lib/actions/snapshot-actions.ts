@@ -11,11 +11,13 @@ import {
   insertSnapshot,
   getSnapshotsByRfq,
   getSnapshotById as getSnapshotByIdQuery,
+  updateData,
 } from '@/lib/db/queries';
 import { WorkspaceContext } from '@/lib/middleware/workspace-context';
 import { getServerActionWorkspace } from '@/lib/middleware/get-workspace';
 import type { PanelsSnapshot } from '@/types/preview';
 import type { WorkflowStep, WorkflowStepId } from '@/types/workflow';
+import type { PreviewType } from '@/types/ui-reload';
 
 // ---------------------------------------------
 // Types
@@ -116,6 +118,48 @@ export async function getWorkboardSnapshots(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to get snapshots',
+    };
+  }
+}
+
+/**
+ * Persist `last_preview_type` on the `rfq_analysis` row during a history revert.
+ * Mirrors the backend-side persistence in data-processor.ts (before SSE emit):
+ * after the user reverts to a snapshot, the preview tag must match the reverted
+ * document so a subsequent page reload (fetchWorkspace) hydrates the same panel
+ * the user just restored. Workspace is resolved server-side from the auth cookie.
+ */
+export async function persistRevertedPreviewType(
+  rfqId: number,
+  previewType: PreviewType,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Auth boundary — no client-supplied workspace allowed
+    const workspace = await getServerActionWorkspace();
+    if (!workspace) {
+      return { success: false, error: 'Authentication required' };
+    }
+
+    const wsFilter = workspace.getDatabaseFilter();
+    // Stamp the preview tag. Same shape as data-processor.ts so the DB row layout
+    // stays consistent across both the processor-emit path and the revert path.
+    await updateData(
+      'rfqAnalysis',
+      {
+        rfqId,
+        userId: wsFilter.user_id,
+        companyId: wsFilter.company_id,
+      },
+      { lastPreviewType: previewType },
+      workspace,
+    );
+
+    return { success: true };
+  } catch (error) {
+    console.error('persistRevertedPreviewType failed:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to persist preview type',
     };
   }
 }

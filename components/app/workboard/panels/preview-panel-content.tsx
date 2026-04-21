@@ -27,9 +27,19 @@ import {
   BlankDocument,
 } from './preview';
 
-import { getWorkboardSnapshots, getSnapshotById } from '@/lib/actions/snapshot-actions';
+import { getWorkboardSnapshots, getSnapshotById, persistRevertedPreviewType } from '@/lib/actions/snapshot-actions';
 import type { DocumentData, WorkboardSnapshotRecord } from '@/types/preview';
 import type { DataType } from '@/lib/utils/validator';
+import type { PreviewType } from '@/types/ui-reload';
+
+// DocumentData.type → last_preview_type tag (single source of truth on the client side).
+// Keeps the revert path consistent with data-processor.ts DATA_TYPE_TO_PREVIEW.
+const DOC_TYPE_TO_PREVIEW: Record<DocumentData['type'], PreviewType> = {
+  rfq_analysis:    'analysis',
+  supplier_search: 'suppliers_search',
+  email:           'email',
+  quotation:       'quotation',
+};
 
 // ---------------------------------------------
 // Data type tab configuration
@@ -192,10 +202,23 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
 
       if (result.success && result.data) {
         const snapshot = result.data;
+        const revertedDoc = snapshot.panelsSnapshot?.preview as DocumentData | undefined;
+
+        // Persist last_preview_type BEFORE loading — mirrors data-processor.ts, so a
+        // subsequent page reload lands on the same document the user just reverted to.
+        // Fire-and-forget; a persistence hiccup must not suppress the visual revert.
+        if (revertedDoc && typeof snapshot.rfqId === 'number' && snapshot.rfqId > 0) {
+          const previewTag = DOC_TYPE_TO_PREVIEW[revertedDoc.type];
+          if (previewTag) {
+            void persistRevertedPreviewType(snapshot.rfqId, previewTag).catch((err) => {
+              console.warn('[preview-panel] persistRevertedPreviewType failed:', err);
+            });
+          }
+        }
 
         // Load panels snapshot into preview reducer
-        if (snapshot.panelsSnapshot?.preview) {
-          actions.loadDocument(snapshot.panelsSnapshot.preview as DocumentData);
+        if (revertedDoc) {
+          actions.loadDocument(revertedDoc);
         }
 
         // Close history panel after revert

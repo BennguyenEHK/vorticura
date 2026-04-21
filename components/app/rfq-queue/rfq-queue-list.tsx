@@ -49,21 +49,13 @@ export function RFQQueueList({
         limit: isExpanded ? 20 : initialLimit,
       });
 
-      // Update state with results
+      // Update state with results — sort by updatedAt DESC (latest activity on top)
       setRfqs((prev) => {
         const sseOnly = prev.filter(
           (p) => !result.items.some((i) => i.rfqId === p.rfqId)
         );
         const merged = [...result.items, ...sseOnly];
-        merged.sort((a, b) => {
-          const aPinned = a.queuePriority != null;
-          const bPinned = b.queuePriority != null;
-          if (aPinned && bPinned) return a.queuePriority! - b.queuePriority!;
-          if (aPinned) return -1;
-          if (bPinned) return 1;
-          // Earliest updates first, latest last (ascending updatedAt)
-          return a.updatedAt.getTime() - b.updatedAt.getTime();
-        });
+        merged.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
         return merged.map((r, i) => ({ ...r, priority: i + 1 }));
       });
       setHasMore(result.hasMore);
@@ -81,8 +73,8 @@ export function RFQQueueList({
     fetchQueue();
   }, [fetchQueue]);
 
-  // Upsert handler — receives a single QueuedRFQ from SSE and merges it into state
-  // Re-sorts by rfqId DESC and re-assigns priority so the list mirrors getQueuedRFQs semantics
+  // Upsert handler — receives a single QueuedRFQ from SSE and merges it into state.
+  // Re-sorts by updatedAt DESC (latest activity on top) so the list mirrors getQueuedRFQs semantics.
   const upsertRfq = useCallback((incoming: QueuedRFQ) => {
     console.log("START RFQ-INJECTIONS")
     setRfqs((prev) => {
@@ -92,14 +84,7 @@ export function RFQQueueList({
         idx >= 0
           ? prev.map((r) => (r.rfqId === incoming.rfqId ? incoming : r))
           : [incoming, ...prev];
-      merged.sort((a, b) => {
-        const aPinned = a.queuePriority != null;
-        const bPinned = b.queuePriority != null;
-        if (aPinned && bPinned) return a.queuePriority! - b.queuePriority!;
-        if (aPinned) return -1;
-        if (bPinned) return 1;
-        return b.rfqId - a.rfqId;
-      });
+      merged.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
       const ranked = merged.map((r, i) => ({ ...r, priority: i + 1 }));
       // Only bump total when this is a genuinely new row — avoids double-counting on edits
       if (idx < 0) setTotal((t) => t + 1);
