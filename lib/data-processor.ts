@@ -397,15 +397,15 @@ function emitProcessorResult(result: ProcessorResult, _dataType: DataType, input
     rfqIdForPreview > 0 &&
     input.workspace
   ) {
-    const wsFilter = input.workspace.getDatabaseFilter();
-    // Fire-and-forget — a persistence hiccup must not suppress the SSE emit
+    // Filter is intentionally {rfqId} only. buildWhereClause inside updateData layers
+    // company_id (and user_id when ENABLE_CLIENT_ISOLATION=true) on top. Previously we
+    // passed { userId: wsFilter.user_id } here, but wsFilter.user_id is undefined in
+    // Phase 1 (shared) mode — multipleCol then produced `user_id = NULL`, which matches
+    // zero rows and silently no-ops the UPDATE. Trimming the filter mirrors every
+    // working getData('rfqAnalysis', { rfqId }, workspace) call elsewhere.
     void updateData(
       'rfqAnalysis',
-      {
-        rfqId: rfqIdForPreview,
-        userId: wsFilter.user_id,
-        companyId: wsFilter.company_id,
-      },
+      { rfqId: rfqIdForPreview },
       { lastPreviewType: previewTag },
       input.workspace,
     ).catch((err) => {

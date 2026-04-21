@@ -67,6 +67,10 @@ function multipleCol<T extends PgTable>(
 
   // Iterate through each column in the columns object
   for (const [key, value] of Object.entries(columns)) {
+    // Skip undefined values — otherwise eq(col, undefined) becomes `col = NULL`,
+    // which is UNKNOWN in SQL and silently matches zero rows (the trap that caused
+    // last_preview_type updates to no-op in Phase 1 / shared-workspace mode).
+    if (value === undefined) continue;
     // Check if the column exists in the table
     if (key in table) {
       // Add eq condition for each column-value pair

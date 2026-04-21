@@ -140,16 +140,13 @@ export async function persistRevertedPreviewType(
       return { success: false, error: 'Authentication required' };
     }
 
-    const wsFilter = workspace.getDatabaseFilter();
-    // Stamp the preview tag. Same shape as data-processor.ts so the DB row layout
-    // stays consistent across both the processor-emit path and the revert path.
+    // Filter is intentionally {rfqId} only. buildWhereClause inside updateData injects
+    // company_id and (when ENABLE_CLIENT_ISOLATION=true) user_id on top. Passing
+    // wsFilter.user_id here directly was a silent-no-op trap in Phase 1 mode because
+    // user_id was undefined → SQL became `user_id = NULL` which never matches.
     await updateData(
       'rfqAnalysis',
-      {
-        rfqId,
-        userId: wsFilter.user_id,
-        companyId: wsFilter.company_id,
-      },
+      { rfqId },
       { lastPreviewType: previewType },
       workspace,
     );

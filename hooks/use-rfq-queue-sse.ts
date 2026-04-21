@@ -33,7 +33,10 @@ export function useRfqQueueSSE(opts: UseRfqQueueSSEOptions): { connected: boolea
   onReconnectRef.current = opts.onReconnect;
 
   useEffect(() => {
-    const es = new EventSource('/api/rfq-queue');
+    // Must match the route handler at app/api/rfq-queue-stream/route.ts — the previous
+    // '/api/rfq-queue' path 404'd and trapped EventSource in a reconnect loop, so no upsert
+    // payload ever reached onmessage and the sidebar never refreshed in real time.
+    const es = new EventSource('/api/rfq-queue-stream');
 
     // Tracks whether we've seen a prior error — distinguishes "first open" from "reconnect"
     let hadError = false;
