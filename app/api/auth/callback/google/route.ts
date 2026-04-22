@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { eq, and } from 'drizzle-orm';
 import { cookies } from 'next/headers';
+import { SignJWT } from 'jose';
 
 import { db } from '@/lib/db/client';
 import { userInfo, userCompany, emailConnections } from '@/lib/db/schema';
@@ -33,7 +34,7 @@ import type { JWTPayload } from '@/lib/middleware/auth-helpers';
 // =============================================
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-const GMAIL_PUBSUB_TOPIC = process.env.GMAIL_PUBSUB_TOPIC || '';
+const GMAIL_PUBSUB_TOPIC = process.env.GOOGLE_PUBSUB_TOPIC || '';
 
 /** Sanitize returnUrl to prevent open redirect attacks — only allow relative paths */
 function sanitizeReturnUrl(url?: string): string | undefined {
@@ -117,12 +118,15 @@ export async function GET(request: NextRequest) {
 // =============================================
 // SIGNUP MODE
 // =============================================
-// Create a new company + user account with Google identity, save Gmail tokens,
-// and set up Pub/Sub watch for incoming emails.
+// First stage of OAuth signup: verify the Google identity isn't already registered,
+// then stash the OAuth tokens + profile in a short-lived signed cookie and redirect
+// the user to /onboarding to collect company info. The DB account is only created
+// once the onboarding form is submitted (see lib/actions/oauth-signup-actions.ts).
 
 async function handleSignup(
   tokens: Awaited<ReturnType<typeof exchangeGoogleCode>>,
   profile: ReturnType<typeof decodeGoogleIdToken>,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   returnUrl?: string,
 ) {
   // Check if a user with this Google ID already exists
@@ -143,92 +147,34 @@ async function handleSignup(
     );
   }
 
-  // Create company and user in a transaction
-  const result = await db.transaction(async (tx) => {
-    // Create the company (use Google profile name as company name initially)
-    const [company] = await tx
-      .insert(userCompany)
-      .values({
-        companyName: profile.name ? `${profile.name}'s Company` : 'My Company',
-        companyEmail: profile.email,
-      })
-      .returning({ companyId: userCompany.companyId });
+  // Store OAuth tokens + profile in a signed temp cookie (15-min TTL).
+  // The onboarding page will read this to create the full account after
+  // company info is collected.
+  const JWT_SECRET_KEY = new TextEncoder().encode(
+    process.env.JWT_SECRET || 'quoteflow-ai-secret-key-change-in-production',
+  );
 
-    // Create the user with Google OAuth identity (no password)
-    const [user] = await tx
-      .insert(userInfo)
-      .values({
-        companyId: company.companyId,
-        username: profile.name || profile.email,
-        email: profile.email,
-        passwordHash: null, // OAuth-only user — no password
-        oauthProvider: 'google',
-        oauthProviderId: profile.sub,
-        userRole: 'admin', // First user in company is admin
-      })
-      .returning({
-        userId: userInfo.userId,
-        companyId: userInfo.companyId,
-        username: userInfo.username,
-        userRole: userInfo.userRole,
-      });
+  const tempToken = await new SignJWT({
+    sub: profile.sub,
+    email: profile.email,
+    name: profile.name,
+    picture: profile.picture ?? null,
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    expires_in: tokens.expires_in,
+    scope: tokens.scope,
+  })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setExpirationTime('15m')
+    .setIssuedAt()
+    .sign(JWT_SECRET_KEY);
 
-    return { company, user };
-  });
-
-  // Save encrypted OAuth tokens to email_connections
-  const tokenExpiresAt = new Date(Date.now() + tokens.expires_in * 1000);
-
-  const [connection] = await db
-    .insert(emailConnections)
-    .values({
-      companyId: result.company.companyId,
-      userId: result.user.userId,
-      provider: 'gmail',
-      providerAccountId: profile.sub,
-      emailAddress: profile.email,
-      accessToken: encryptToken(tokens.access_token),
-      refreshToken: encryptToken(tokens.refresh_token),
-      tokenExpiresAt,
-      scopes: tokens.scope,
-      status: 'active',
-    })
-    .returning({ connectionId: emailConnections.connectionId });
-
-  // Set up Gmail Pub/Sub watch for real-time push notifications
-  if (GMAIL_PUBSUB_TOPIC) {
-    try {
-      const watchResult = await setupGmailWatch(tokens.access_token, GMAIL_PUBSUB_TOPIC);
-      await db
-        .update(emailConnections)
-        .set({
-          historyId: watchResult.historyId,
-          subscriptionExpires: new Date(Number(watchResult.expiration)),
-        })
-        .where(eq(emailConnections.connectionId, connection.connectionId));
-    } catch (watchError) {
-      // Non-fatal: user can still use the app, watch can be retried
-      console.error('[google-callback] Gmail watch setup failed:', watchError);
-    }
-  }
-
-  // Generate JWT and set auth cookie
-  const jwtPayload: JWTPayload = {
-    user_id: result.user.userId,
-    company_id: result.user.companyId!,
-    username: result.user.username,
-    role: result.user.userRole || 'user',
-  };
-
-  const token = await generateJWT(jwtPayload);
-  const redirectUrl = returnUrl || '/dashboard';
-
-  const response = NextResponse.redirect(`${APP_URL}${redirectUrl}`);
-  response.cookies.set('auth_token', token, {
+  const response = NextResponse.redirect(`${APP_URL}/onboarding`);
+  response.cookies.set('oauth_signup_temp', tempToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60, // 7 days
+    maxAge: 15 * 60, // 15 minutes
     path: '/',
   });
 

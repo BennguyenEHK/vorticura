@@ -133,3 +133,14 @@ export {
   addressSchema,
   optionalEmailSchema,
 }
+
+// Company info schema for OAuth onboarding (no user credentials needed — from OAuth)
+export const companyInfoSchema = z.object({
+  companyName: companyNameSchema,
+  companyEmail: optionalEmailSchema,
+  companyAddress: addressSchema,
+  companyNumber: phoneSchema,
+  companyFax: faxSchema,
+})
+
+export type CompanyInfoFormData = z.infer<typeof companyInfoSchema>
