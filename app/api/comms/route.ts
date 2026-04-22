@@ -3,6 +3,9 @@
 // =============================================
 // GET /api/comms - List channels and messages
 // POST /api/comms - Update channel or message status
+//
+// Auth context (company_id, user_id) is injected by Next.js middleware
+// as x-company-id / x-user-id request headers.
 
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -14,54 +17,49 @@ import {
 } from "@/lib/services/comms";
 import type { ChannelStatus, RecentMessagesRequest } from "@/types/comms";
 
+/** Parse company_id from middleware-injected header — returns null if missing/invalid */
+function getCompanyId(request: NextRequest): number | null {
+  const raw = request.headers.get("x-company-id");
+  if (!raw) return null;
+  const id = parseInt(raw, 10);
+  return isNaN(id) ? null : id;
+}
+
 /**
  * GET /api/comms
- * Fetches channels, status, and recent messages
- * Query params: workspaceId, includeMessages, messageLimit, unreadOnly
+ * Fetches real channels (from email_connections) and recent messages (from rfq_analysis).
  */
 export async function GET(request: NextRequest) {
+  const companyId = getCompanyId(request);
+  if (!companyId) {
+    return NextResponse.json(
+      { success: false, error: "Authentication required" },
+      { status: 401 }
+    );
+  }
+
   try {
-    // Parse query parameters
     const searchParams = request.nextUrl.searchParams;
-    const workspaceId = searchParams.get("workspaceId") || undefined;
-    const includeMessages = searchParams.get("includeMessages") !== "false"; // Default: true
-    const messageLimit = searchParams.get("messageLimit")
-      ? parseInt(searchParams.get("messageLimit")!, 10)
-      : 5;
-    const unreadOnly = searchParams.get("unreadOnly") === "true";
+    const includeMessages = searchParams.get("includeMessages") !== "false";
+    const messageLimit = parseInt(searchParams.get("messageLimit") ?? "5", 10);
+    const unreadOnly   = searchParams.get("unreadOnly") === "true";
 
-    // Fetch channels
-    const channels = await getChannels(workspaceId);
+    const [channels, status] = await Promise.all([
+      getChannels(companyId),
+      getCommsHubStatus(companyId),
+    ]);
 
-    // Fetch aggregate status
-    const status = await getCommsHubStatus(workspaceId);
-
-    // Optionally fetch recent messages
     let messages: Awaited<ReturnType<typeof getRecentMessages>> = [];
     if (includeMessages) {
-      const messageRequest: RecentMessagesRequest = {
-        workspaceId,
-        limit: messageLimit,
-        unreadOnly,
-      };
-      messages = await getRecentMessages(messageRequest);
+      const req: RecentMessagesRequest = { limit: messageLimit, unreadOnly };
+      messages = await getRecentMessages(companyId, req);
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        channels,
-        status,
-        messages,
-      },
-    });
+    return NextResponse.json({ success: true, data: { channels, status, messages } });
   } catch (error) {
     console.error("[Comms API] GET error:", error);
     return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to fetch communications data",
-      },
+      { success: false, error: "Failed to fetch communications data" },
       { status: 500 }
     );
   }
@@ -69,102 +67,60 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/comms
- * Updates channel status or marks message as read
- * Body: { action: "updateChannel" | "markRead", channelId?, messageId?, status? }
+ * Updates channel status or marks a message as read.
  */
 export async function POST(request: NextRequest) {
+  const companyId = getCompanyId(request);
+  if (!companyId) {
+    return NextResponse.json(
+      { success: false, error: "Authentication required" },
+      { status: 401 }
+    );
+  }
+
   try {
     const body = await request.json();
 
-    // Validate action
     if (!body.action) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "action is required (updateChannel or markRead)",
-        },
+        { success: false, error: "action is required (updateChannel or markRead)" },
         { status: 400 }
       );
     }
 
-    // Handle channel status update
     if (body.action === "updateChannel") {
       if (!body.channelId || !body.status) {
         return NextResponse.json(
-          {
-            success: false,
-            error: "channelId and status are required for updateChannel",
-          },
+          { success: false, error: "channelId and status are required" },
           { status: 400 }
         );
       }
-
-      const updatedChannel = await updateChannelStatus(
-        body.channelId,
-        body.status as ChannelStatus
-      );
-
-      if (!updatedChannel) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Channel not found",
-          },
-          { status: 404 }
-        );
+      const updated = await updateChannelStatus(body.channelId, body.status as ChannelStatus);
+      if (!updated) {
+        return NextResponse.json({ success: false, error: "Channel not found" }, { status: 404 });
       }
-
-      return NextResponse.json({
-        success: true,
-        data: updatedChannel,
-      });
+      return NextResponse.json({ success: true, data: updated });
     }
 
-    // Handle mark message as read
     if (body.action === "markRead") {
       if (!body.messageId) {
         return NextResponse.json(
-          {
-            success: false,
-            error: "messageId is required for markRead",
-          },
+          { success: false, error: "messageId is required" },
           { status: 400 }
         );
       }
-
-      const updatedMessage = await markMessageAsRead(body.messageId);
-
-      if (!updatedMessage) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Message not found",
-          },
-          { status: 404 }
-        );
+      const updated = await markMessageAsRead(body.messageId);
+      if (!updated) {
+        return NextResponse.json({ success: false, error: "Message not found" }, { status: 404 });
       }
-
-      return NextResponse.json({
-        success: true,
-        data: updatedMessage,
-      });
+      return NextResponse.json({ success: true, data: updated });
     }
 
-    // Unknown action
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Unknown action",
-      },
-      { status: 400 }
-    );
+    return NextResponse.json({ success: false, error: "Unknown action" }, { status: 400 });
   } catch (error) {
     console.error("[Comms API] POST error:", error);
     return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to update communications",
-      },
+      { success: false, error: "Failed to update communications" },
       { status: 500 }
     );
   }

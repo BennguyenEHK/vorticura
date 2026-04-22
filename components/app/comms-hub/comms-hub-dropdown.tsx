@@ -7,7 +7,7 @@
 // Appears when clicking the Comms Hub trigger in topbar
 
 import { useEffect, useState, useRef } from "react";
-import { X, Plus, Mail, Clock } from "lucide-react";
+import { X, Plus, Mail, Clock, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChannelItem } from "./channel-item";
 import type { Channel, Message } from "@/types/comms";
@@ -49,6 +49,7 @@ export function CommsHubDropdown({
   const [isLoading, setIsLoading] = useState(true);
   const [showProviderPicker, setShowProviderPicker] = useState(false);
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   // Ref for click-outside handling
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -110,6 +111,30 @@ export function CommsHubDropdown({
     }
   }, [isOpen]);
 
+  // Poll Gmail inbox directly (bypasses Pub/Sub — works in local dev)
+  async function handleSyncInbox() {
+    setSyncing(true);
+    try {
+      const res  = await fetch('/api/cron/sync-gmail', { method: 'POST' });
+      const data = await res.json();
+      if (data.totalProcessed > 0) {
+        // Re-fetch messages to show newly synced emails
+        const params = new URLSearchParams({ includeMessages: 'true', messageLimit: '5' });
+        if (workspaceId) params.append('workspaceId', workspaceId);
+        const refresh = await fetch(`/api/comms?${params}`);
+        const result  = await refresh.json();
+        if (result.success) {
+          setChannels(result.data.channels);
+          setMessages(result.data.messages);
+        }
+      }
+    } catch (err) {
+      console.error('Inbox sync failed:', err);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   // Starts OAuth flow for connecting an email provider (mode: 'connect')
   async function handleConnectProvider(provider: 'gmail' | 'outlook') {
     setConnectingProvider(provider);
@@ -139,15 +164,29 @@ export function CommsHubDropdown({
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border">
         <h2 className="font-semibold text-foreground">Communications</h2>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onClose}
-          className="h-8 w-8"
-          aria-label="Close"
-        >
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          {/* Manual inbox sync — polls Gmail directly (bypasses Pub/Sub for local dev) */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleSyncInbox}
+            disabled={syncing}
+            className="h-8 w-8"
+            aria-label="Sync inbox"
+            title="Sync inbox"
+          >
+            <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="h-8 w-8"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Scrollable content */}

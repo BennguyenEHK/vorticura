@@ -1,9 +1,12 @@
 // =============================================
 // Communications Manager Service
 // =============================================
-// Business logic for managing communication channels
-// Handles channel CRUD, connection status, and message retrieval
+// Real DB-backed channel and message retrieval.
+// Channels come from email_connections; messages from rfq_analysis.
 
+import { db } from "@/lib/db/client";
+import { emailConnections, rfqAnalysis, customers } from "@/lib/db/schema";
+import { eq, desc, and } from "drizzle-orm";
 import type {
   Channel,
   ChannelType,
@@ -14,249 +17,160 @@ import type {
 } from "@/types/comms";
 
 // =============================================
-// Mock Data for Development
+// Mapping helpers
 // =============================================
 
-/**
- * Mock channel data for UI development
- * Will be replaced with database queries
- */
-const MOCK_CHANNELS: Channel[] = [
-  {
-    id: "ch-001",
-    type: "email",
-    name: "Gmail",
-    status: "connected",
-    identifier: "sales@company.com",
-    unreadCount: 3,
-    lastSyncAt: new Date("2026-01-29T10:30:00"),
-    workspaceId: "ws-001",
-    createdAt: new Date("2026-01-15T09:00:00"),
-    updatedAt: new Date("2026-01-29T10:30:00"),
-  },
-  {
-    id: "ch-002",
-    type: "whatsapp",
-    name: "WhatsApp Business",
-    status: "connected",
-    identifier: "+1 555-0123",
-    unreadCount: 0,
-    lastSyncAt: new Date("2026-01-29T10:28:00"),
-    workspaceId: "ws-001",
-    createdAt: new Date("2026-01-20T14:00:00"),
-    updatedAt: new Date("2026-01-29T10:28:00"),
-  },
-  {
-    id: "ch-003",
-    type: "sms",
-    name: "Phone/SMS",
-    status: "disconnected",
-    identifier: "",
-    unreadCount: 0,
-    lastSyncAt: null,
-    workspaceId: "ws-001",
-    createdAt: new Date("2026-01-25T11:00:00"),
-    updatedAt: new Date("2026-01-25T11:00:00"),
-  },
-];
-
-/**
- * Mock message data for recent incoming display
- */
-const MOCK_MESSAGES: Message[] = [
-  {
-    id: "msg-001",
-    channelId: "ch-001",
-    channelType: "email",
-    direction: "inbound",
-    status: "received",
-    from: "acme@corp.com",
-    to: "sales@company.com",
-    fromName: "John Smith",
-    subject: "Request for Quotation - Industrial Parts",
-    preview: "Dear Sir/Madam, We are looking to procure the following items...",
-    timestamp: new Date("2026-01-29T10:25:00"),
-    isRFQ: true,
-    workspaceId: "ws-001",
-  },
-  {
-    id: "msg-002",
-    channelId: "ch-001",
-    channelType: "email",
-    direction: "inbound",
-    status: "received",
-    from: "supplier@parts.com",
-    to: "sales@company.com",
-    fromName: "Parts Supplier Co",
-    subject: "RE: Quote Request #RFQ-003",
-    preview: "Thank you for your inquiry. Please find attached our quotation...",
-    timestamp: new Date("2026-01-29T09:45:00"),
-    isRFQ: false,
-    rfqId: "RFQ-003",
-    workspaceId: "ws-001",
-  },
-  {
-    id: "msg-003",
-    channelId: "ch-002",
-    channelType: "whatsapp",
-    direction: "inbound",
-    status: "read",
-    from: "+1 555-9876",
-    to: "+1 555-0123",
-    fromName: "TechStart Purchasing",
-    preview: "Hi, just checking on the status of our order RFQ-004?",
-    timestamp: new Date("2026-01-29T08:30:00"),
-    isRFQ: false,
-    rfqId: "RFQ-004",
-    workspaceId: "ws-001",
-  },
-];
-
-// =============================================
-// Channel Management Functions
-// =============================================
-
-/**
- * Get all channels for a workspace
- * @param workspaceId - Workspace identifier
- * @returns Promise<Channel[]> - List of channels
- */
-export async function getChannels(workspaceId?: string): Promise<Channel[]> {
-  let channels = [...MOCK_CHANNELS];
-
-  if (workspaceId) {
-    channels = channels.filter((ch) => ch.workspaceId === workspaceId);
+function dbStatusToChannelStatus(dbStatus: string | null): ChannelStatus {
+  switch (dbStatus) {
+    case "active":  return "connected";
+    case "expired": return "error";
+    case "paused":  return "disconnected";
+    default:        return "disconnected";
   }
-
-  return channels;
 }
 
-/**
- * Get a single channel by ID
- * @param channelId - Channel identifier
- * @returns Promise<Channel | null>
- */
-export async function getChannelById(channelId: string): Promise<Channel | null> {
-  const channel = MOCK_CHANNELS.find((ch) => ch.id === channelId);
-  return channel || null;
+function providerToName(provider: string | null): string {
+  if (provider === "gmail")     return "Gmail";
+  if (provider === "microsoft") return "Outlook";
+  return "Email";
 }
 
-/**
- * Get aggregate comms hub status
- * @param workspaceId - Optional workspace filter
- * @returns Promise<CommsHubStatus> - Aggregate status
- */
-export async function getCommsHubStatus(
-  workspaceId?: string
-): Promise<CommsHubStatus> {
-  const channels = await getChannels(workspaceId);
-
+function connectionToChannel(conn: typeof emailConnections.$inferSelect): Channel {
   return {
-    totalChannels: channels.length,
-    connectedChannels: channels.filter((ch) => ch.status === "connected").length,
-    totalUnread: channels.reduce((sum, ch) => sum + ch.unreadCount, 0),
-    hasError: channels.some((ch) => ch.status === "error"),
+    id:           String(conn.connectionId),
+    type:         "email" as ChannelType,
+    name:         providerToName(conn.provider),
+    status:       dbStatusToChannelStatus(conn.status),
+    identifier:   conn.emailAddress ?? "",
+    unreadCount:  0, // unread tracking not yet in schema
+    lastSyncAt:   conn.lastSyncAt ?? null,
+    workspaceId:  String(conn.companyId),
+    createdAt:    conn.createdAt ?? new Date(),
+    updatedAt:    conn.updatedAt ?? new Date(),
   };
 }
 
-/**
- * Update channel connection status
- * @param channelId - Channel identifier
- * @param status - New connection status
- * @returns Promise<Channel | null>
- */
+// =============================================
+// Channel functions
+// =============================================
+
+export async function getChannels(companyId: number): Promise<Channel[]> {
+  const conns = await db
+    .select()
+    .from(emailConnections)
+    .where(eq(emailConnections.companyId, companyId));
+  return conns.map(connectionToChannel);
+}
+
+export async function getChannelById(channelId: string): Promise<Channel | null> {
+  const id = parseInt(channelId, 10);
+  if (isNaN(id)) return null;
+  const [conn] = await db
+    .select()
+    .from(emailConnections)
+    .where(eq(emailConnections.connectionId, id))
+    .limit(1);
+  return conn ? connectionToChannel(conn) : null;
+}
+
+export async function getCommsHubStatus(companyId: number): Promise<CommsHubStatus> {
+  const channels = await getChannels(companyId);
+  return {
+    totalChannels:     channels.length,
+    connectedChannels: channels.filter((c) => c.status === "connected").length,
+    totalUnread:       0,
+    hasError:          channels.some((c) => c.status === "error"),
+  };
+}
+
 export async function updateChannelStatus(
   channelId: string,
   status: ChannelStatus
 ): Promise<Channel | null> {
-  const channelIndex = MOCK_CHANNELS.findIndex((ch) => ch.id === channelId);
-  if (channelIndex === -1) return null;
+  const id = parseInt(channelId, 10);
+  if (isNaN(id)) return null;
 
-  MOCK_CHANNELS[channelIndex] = {
-    ...MOCK_CHANNELS[channelIndex],
-    status,
-    updatedAt: new Date(),
-    lastSyncAt: status === "connected" ? new Date() : MOCK_CHANNELS[channelIndex].lastSyncAt,
-  };
+  // Map UI status back to DB status
+  const dbStatus = status === "connected" ? "active"
+    : status === "error" ? "expired"
+    : "paused";
 
-  return MOCK_CHANNELS[channelIndex];
+  const [updated] = await db
+    .update(emailConnections)
+    .set({ status: dbStatus })
+    .where(eq(emailConnections.connectionId, id))
+    .returning();
+
+  return updated ? connectionToChannel(updated) : null;
 }
 
 // =============================================
-// Message Functions
+// Message functions
 // =============================================
 
-/**
- * Get recent messages for comms hub dropdown
- * @param request - Filter options
- * @returns Promise<Message[]> - List of recent messages
- */
 export async function getRecentMessages(
+  companyId: number,
   request?: RecentMessagesRequest
 ): Promise<Message[]> {
-  let messages = [...MOCK_MESSAGES];
+  const limit  = request?.limit  ?? 5;
+  const offset = request?.offset ?? 0;
 
-  // Filter by workspace
-  if (request?.workspaceId) {
-    messages = messages.filter((m) => m.workspaceId === request.workspaceId);
-  }
+  // Find first active connection so we have a 'to' address
+  const [activeConn] = await db
+    .select({ connectionId: emailConnections.connectionId, emailAddress: emailConnections.emailAddress })
+    .from(emailConnections)
+    .where(and(
+      eq(emailConnections.companyId, companyId),
+      eq(emailConnections.status, "active")
+    ))
+    .limit(1);
 
-  // Filter by channel
-  if (request?.channelId) {
-    messages = messages.filter((m) => m.channelId === request.channelId);
-  }
+  // Recent RFQs joined with customer info for sender details
+  const rows = await db
+    .select({
+      rfqId:           rfqAnalysis.rfqId,
+      rfqReference:    rfqAnalysis.rfqReference,
+      subject:         rfqAnalysis.subject,
+      analysisContent: rfqAnalysis.analysisContent,
+      createdAt:       rfqAnalysis.createdAt,
+      customerName:    customers.companyName,
+      customerEmail:   customers.email,
+    })
+    .from(rfqAnalysis)
+    .leftJoin(customers, eq(customers.rfqId, rfqAnalysis.rfqId))
+    .where(eq(rfqAnalysis.companyId, companyId))
+    .orderBy(desc(rfqAnalysis.createdAt))
+    .limit(limit)
+    .offset(offset);
 
-  // Filter by channel type
-  if (request?.channelType) {
-    messages = messages.filter((m) => m.channelType === request.channelType);
-  }
+  const channelId = activeConn ? String(activeConn.connectionId) : "";
+  const toAddr    = activeConn?.emailAddress ?? "";
 
-  // Filter unread only
-  if (request?.unreadOnly) {
-    messages = messages.filter((m) => m.status === "received");
-  }
-
-  // Sort by timestamp (newest first)
-  messages.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-
-  // Apply pagination
-  const offset = request?.offset || 0;
-  const limit = request?.limit || 10;
-  messages = messages.slice(offset, offset + limit);
-
-  return messages;
+  return rows.map((row) => ({
+    id:          String(row.rfqId),
+    channelId,
+    channelType: "email" as ChannelType,
+    direction:   "inbound" as const,
+    status:      "received" as const,
+    from:        row.customerEmail ?? "",
+    to:          toAddr,
+    fromName:    row.customerName ?? "",
+    subject:     row.subject ?? "",
+    preview:     row.analysisContent
+      ? row.analysisContent.slice(0, 120) + (row.analysisContent.length > 120 ? "…" : "")
+      : row.rfqReference ?? "(no preview)",
+    timestamp:   row.createdAt ?? new Date(),
+    isRFQ:       true,
+    rfqId:       row.rfqReference ?? undefined,
+    workspaceId: String(companyId),
+  }));
 }
 
-/**
- * Mark message as read
- * @param messageId - Message identifier
- * @returns Promise<Message | null>
- */
-export async function markMessageAsRead(messageId: string): Promise<Message | null> {
-  const messageIndex = MOCK_MESSAGES.findIndex((m) => m.id === messageId);
-  if (messageIndex === -1) return null;
-
-  MOCK_MESSAGES[messageIndex] = {
-    ...MOCK_MESSAGES[messageIndex],
-    status: "read",
-  };
-
-  // Update channel unread count
-  const channelId = MOCK_MESSAGES[messageIndex].channelId;
-  const channelIndex = MOCK_CHANNELS.findIndex((ch) => ch.id === channelId);
-  if (channelIndex !== -1 && MOCK_CHANNELS[channelIndex].unreadCount > 0) {
-    MOCK_CHANNELS[channelIndex].unreadCount--;
-  }
-
-  return MOCK_MESSAGES[messageIndex];
+// markMessageAsRead — RFQ messages have no read/unread state in current schema
+export async function markMessageAsRead(_messageId: string): Promise<Message | null> {
+  return null;
 }
 
-/**
- * Get total unread message count
- * @param workspaceId - Optional workspace filter
- * @returns Promise<number>
- */
-export async function getTotalUnreadCount(workspaceId?: string): Promise<number> {
-  const channels = await getChannels(workspaceId);
-  return channels.reduce((sum, ch) => sum + ch.unreadCount, 0);
+export async function getTotalUnreadCount(_companyId: number): Promise<number> {
+  return 0;
 }

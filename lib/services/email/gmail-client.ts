@@ -211,6 +211,42 @@ export async function fetchGmailAttachment(
 }
 
 // =============================================
+// listGmailInbox()
+// =============================================
+
+/**
+ * List unread INBOX message IDs (polling fallback when Pub/Sub is unavailable).
+ * Use this in local development where the Pub/Sub webhook can't be reached.
+ *
+ * @param accessToken - Decrypted OAuth access token
+ * @param maxResults  - Maximum messages to return (default 20)
+ * @returns Array of Gmail message IDs
+ */
+export async function listGmailInbox(
+  accessToken: string,
+  maxResults = 20,
+): Promise<string[]> {
+  const params = new URLSearchParams({
+    labelIds: 'INBOX',
+    q: 'is:unread',
+    maxResults: String(maxResults),
+  });
+
+  const response = await fetch(`${GMAIL_API}/messages?${params.toString()}`, {
+    headers: authHeader(accessToken),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Gmail list inbox failed (${response.status}): ${error}`);
+  }
+
+  const data = await response.json();
+  // data.messages is undefined when inbox is empty
+  return (data.messages ?? []).map((m: { id: string }) => m.id);
+}
+
+// =============================================
 // sendGmailMessage()
 // =============================================
 
