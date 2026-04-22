@@ -38,10 +38,13 @@ const CompanyInfoForm = () => {
     setIsLoading(true)
     setError(null)
     try {
-      // On success, the server action calls redirect('/dashboard') — this page navigates away.
-      // If we reach the line below, there was an error returned.
       const result = await completeOAuthSignup(data)
-      setError(result?.error || "Failed to complete signup. Please try again.")
+      if (!result.success) {
+        setError(result.error || "Failed to complete signup. Please try again.")
+        return
+      }
+      // Hard navigation so the browser sends a fresh request with the new auth_token cookie
+      window.location.href = '/dashboard'
     } catch {
       setError("An unexpected error occurred. Please try again.")
     } finally {

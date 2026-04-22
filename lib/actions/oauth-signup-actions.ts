@@ -8,7 +8,6 @@
 // sets the auth cookie, and clears the temp cookie.
 
 import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
 import { jwtVerify } from 'jose'
 import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db/client'
@@ -27,20 +26,18 @@ const JWT_SECRET_KEY = new TextEncoder().encode(
 /**
  * Complete OAuth signup after user provides company info.
  * Reads the oauth_signup_temp cookie set by the Google callback.
- * On success: calls redirect('/dashboard') so Next.js handles navigation server-side.
- * On failure: returns { error } so the client can display it.
+ * Returns { success: true } or { error: string } — client handles navigation
+ * (uses window.location.href to avoid next/navigation import in this bundle).
  */
 export async function completeOAuthSignup(
   companyData: CompanyInfoFormData
-): Promise<{ error: string }> {
-  // All DB + cookie work is inside try/catch.
-  // redirect() is called OUTSIDE so NEXT_REDIRECT propagates correctly.
+): Promise<{ success: boolean; error?: string }> {
   try {
     const cookieStore = await cookies()
     const tempToken = cookieStore.get('oauth_signup_temp')?.value
 
     if (!tempToken) {
-      return { error: 'Session expired. Please sign up again.' }
+      return { success: false, error: 'Session expired. Please sign up again.' }
     }
 
     // Verify and decode the temp JWT
@@ -49,7 +46,7 @@ export async function completeOAuthSignup(
       const result = await jwtVerify(tempToken, JWT_SECRET_KEY)
       payload = result.payload as Record<string, unknown>
     } catch {
-      return { error: 'Session expired. Please sign up again.' }
+      return { success: false, error: 'Session expired. Please sign up again.' }
     }
 
     // Create company + user in a single transaction
@@ -141,12 +138,9 @@ export async function completeOAuthSignup(
     // Clear the temp cookie
     cookieStore.delete('oauth_signup_temp')
 
+    return { success: true }
   } catch (error) {
     console.error('[completeOAuthSignup] failed:', error)
-    return { error: 'Failed to complete signup. Please try again.' }
+    return { success: false, error: 'Failed to complete signup. Please try again.' }
   }
-
-  // redirect() must be outside try/catch — it throws NEXT_REDIRECT internally
-  // which Next.js intercepts to perform server-driven navigation
-  redirect('/dashboard')
 }
