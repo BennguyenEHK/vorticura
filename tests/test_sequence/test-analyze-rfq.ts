@@ -22,9 +22,9 @@ const EMIT_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 // =============================================
 
 const workspace = new WorkspaceContext({
-  user_id: 1,
-  company_id: 1,
-  username: 'versempra',
+  user_id: 4,
+  company_id: 4,
+  username: 'minh Nguyen',
   role: 'admin',
 });
 

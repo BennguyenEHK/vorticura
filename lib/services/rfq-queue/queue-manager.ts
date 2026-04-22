@@ -227,6 +227,7 @@ export async function emitQueuedRFQs(
   // (helps during tests, cron runs, and non-request contexts).
   console.log('[emitQueuedRFQs] emitting rfq-queue payload for rfqId=%d companyId=%d:',
     payload.rfqId, payload.companyId, payload);
+  console.log('[emitQueuedRFQs] eventBus listenerCount(rfq-queue)=', eventBus.listenerCount('rfq-queue'));
   eventBus.emit('rfq-queue', payload);
 }
 

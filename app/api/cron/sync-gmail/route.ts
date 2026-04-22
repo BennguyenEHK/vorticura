@@ -3,20 +3,22 @@
 // =============================================
 // POST /api/cron/sync-gmail
 //
-// Polling fallback for when Google Pub/Sub can't reach the webhook
-// (local development, missing push subscription, first-time setup).
+// Dual-mode authentication:
+//   • Vercel Cron  → Authorization: Bearer {CRON_SECRET}  → syncs ALL active companies
+//   • Browser call → auth_token cookie (Sync Inbox button) → syncs caller's company only
 //
-// Flow: fetch all active Gmail connections for the company → list unread
-// INBOX messages → process each through the email pipeline → mark read.
-//
-// Auth: standard auth_token cookie / middleware (x-company-id header required).
-// Returns JSON summary of processed message counts per connection.
+// WHY dual-mode? /api/cron is declared PUBLIC in middleware.ts so middleware exits
+// early and never injects x-company-id. Instead of relying on that header, this
+// route reads auth directly from its two legitimate callers.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { eq, and } from 'drizzle-orm';
+import { cookies } from 'next/headers'; // reads the auth_token cookie server-side
 
 import { db } from '@/lib/db/client';
 import { emailConnections } from '@/lib/db/schema';
+import { getWorkspaceFromToken } from '@/lib/middleware/auth-helpers'; // verifies JWT + builds workspace
+import { WorkspaceContext } from '@/lib/middleware/workspace-context';
 import {
   decryptToken,
   encryptToken,
@@ -28,27 +30,58 @@ import {
   markGmailRead,
 } from '@/lib/services/email/gmail-client';
 import { processEmailMessage } from '@/lib/services/email/email-pipeline';
-import { WorkspaceContext } from '@/lib/middleware/workspace-context';
 
 export async function POST(request: NextRequest) {
-  // company_id injected by middleware for authenticated requests
-  const companyIdHeader = request.headers.get('x-company-id');
-  const companyId = companyIdHeader ? parseInt(companyIdHeader, 10) : NaN;
+  // ── Step 1: Authenticate the caller ─────────────────────────────────────
+  // Vercel Cron sends "Authorization: Bearer <CRON_SECRET>"; browser sends a cookie.
+  const cronSecret = process.env.CRON_SECRET;
 
-  if (isNaN(companyId)) {
-    return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  // isCronCall is true only when CRON_SECRET is configured AND the header matches
+  const isCronCall =
+    !!cronSecret &&
+    request.headers.get('authorization') === `Bearer ${cronSecret}`;
+
+  // companyFilter: number → scope query to one company (browser mode)
+  //               null   → query all companies (cron mode)
+  let companyFilter: number | null = null;
+
+  if (!isCronCall) {
+    // Browser path: read and verify the auth_token cookie directly
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+
+    if (!token) {
+      // No cookie and not a valid cron call → unauthenticated
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const workspace = await getWorkspaceFromToken(token);
+    if (!workspace) {
+      // Cookie present but JWT invalid / expired
+      return NextResponse.json({ error: 'Invalid or expired session' }, { status: 401 });
+    }
+
+    companyFilter = workspace.company_id; // restrict the DB query to this company
   }
 
-  // Fetch all active Gmail connections for this company
+  // ── Step 2: Fetch active Gmail connections ───────────────────────────────
+  // Cron mode  → no companyId filter (process every company's connections)
+  // Browser mode → filter by the authenticated user's company only
   const connections = await db
     .select()
     .from(emailConnections)
     .where(
-      and(
-        eq(emailConnections.companyId, companyId),
-        eq(emailConnections.provider, 'gmail'),
-        eq(emailConnections.status, 'active'),
-      ),
+      companyFilter !== null
+        ? and(
+            eq(emailConnections.provider, 'gmail'),
+            eq(emailConnections.status, 'active'),
+            eq(emailConnections.companyId, companyFilter), // browser: one company
+          )
+        : and(
+            eq(emailConnections.provider, 'gmail'),
+            eq(emailConnections.status, 'active'),
+            // cron: all companies — no companyId condition
+          ),
     );
 
   if (connections.length === 0) {
@@ -57,12 +90,14 @@ export async function POST(request: NextRequest) {
 
   const results: Array<{ email: string; processed: number; errors: number }> = [];
 
+  // ── Step 3: Process each connection ─────────────────────────────────────
   for (const conn of connections) {
     let accessToken: string;
 
-    // Decrypt + refresh token if needed
+    // Decrypt the stored token; refresh it if it expires within the next 60 s
     try {
       accessToken = decryptToken(conn.accessToken!);
+
       const isExpired =
         !conn.tokenExpiresAt || conn.tokenExpiresAt.getTime() < Date.now() + 60_000;
 
@@ -71,28 +106,31 @@ export async function POST(request: NextRequest) {
         const refreshed    = await refreshGoogleToken(refreshToken);
         accessToken        = refreshed.access_token;
 
+        // Persist the refreshed access token; only update refresh_token if Google rotated it
         const updateData: Record<string, unknown> = {
-          accessToken:      encryptToken(accessToken),
-          tokenExpiresAt:   new Date(Date.now() + refreshed.expires_in * 1000),
+          accessToken:    encryptToken(accessToken),
+          tokenExpiresAt: new Date(Date.now() + refreshed.expires_in * 1000),
         };
         if (refreshed.refresh_token) {
           updateData.refreshToken = encryptToken(refreshed.refresh_token);
         }
+
         await db
           .update(emailConnections)
           .set(updateData)
           .where(eq(emailConnections.connectionId, conn.connectionId));
       }
     } catch (err) {
+      // Decryption or refresh failed → mark expired so the user knows to reconnect
       console.error(`[sync-gmail] Token error for ${conn.emailAddress}:`, err);
       await db
         .update(emailConnections)
         .set({ status: 'expired', lastError: String(err) })
         .where(eq(emailConnections.connectionId, conn.connectionId));
-      continue;
+      continue; // move on to the next connection
     }
 
-    // List unread INBOX messages (up to 20 at a time)
+    // List unread INBOX messages (polling fallback for when Pub/Sub is unavailable)
     let messageIds: string[];
     try {
       messageIds = await listGmailInbox(accessToken, 20);
@@ -107,6 +145,7 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
+    // Build workspace context per connection for pipeline tenant isolation
     const workspace = new WorkspaceContext({
       user_id:    conn.userId,
       company_id: conn.companyId,
@@ -117,9 +156,13 @@ export async function POST(request: NextRequest) {
 
     for (const msgId of messageIds) {
       try {
+        // Fetch the raw MIME message as a Buffer (required by mailparser in email-pipeline)
         const rawBuffer = await fetchGmailMessage(accessToken, msgId, 'raw') as Buffer;
+
         await processEmailMessage(rawBuffer, workspace, {
           onSuccess: async () => {
+            // Remove the UNREAD label so this message won't appear on the next poll
+            // (requires the gmail.modify scope — added alongside this fix)
             await markGmailRead(accessToken, msgId);
           },
         });
@@ -130,7 +173,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Update last sync timestamp
+    // Record last successful sync time; clear any previous error state
     await db
       .update(emailConnections)
       .set({ lastSyncAt: new Date(), lastError: null, errorCount: 0 })

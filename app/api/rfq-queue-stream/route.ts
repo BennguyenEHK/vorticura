@@ -24,12 +24,13 @@ export async function GET() {
     start(controller) {
       // Forward event bus messages as SSE data frames
       const onUpdate = (data: QueuedRFQ) => {
+        console.log('[rfq-queue SSE route] forwarding frame for rfqId=', data.rfqId, 'companyId=', data.companyId);
         try {
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
           );
         } catch {
-          // Controller closed — client disconnected
+          // Controller closed — client disconnected 
           cleanup();
         }
       };

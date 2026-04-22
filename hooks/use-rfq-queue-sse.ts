@@ -58,7 +58,15 @@ export function useRfqQueueSSE(opts: UseRfqQueueSSEOptions): { connected: boolea
     es.onmessage = (evt) => {
       try {
         // Heartbeats start with ':' and are filtered by the browser — never reach here
-        const payload = JSON.parse(evt.data) as QueuedRFQ;
+        const raw = JSON.parse(evt.data) as QueuedRFQ;
+        // Rehydrate Date fields: SSE uses JSON.stringify which converts Date → ISO string.
+        // Unlike Server Actions (RSC serialization preserves Date), raw SSE does not —
+        // so .getTime() on consumer sort comparators would crash without this.
+        const payload: QueuedRFQ = {
+          ...raw,
+          createdAt: new Date(raw.createdAt as unknown as string),
+          updatedAt: new Date(raw.updatedAt as unknown as string),
+        };
         console.log('[rfq-queue SSE] payload received:', payload);
         console.log('[rfq-queue SSE] invoking onUpsert callback for rfq:', payload?.rfqId ?? payload?.rfqReference ?? payload);
         try {

@@ -60,17 +60,19 @@ export function generateNonce(): string {
 
 /** Google OAuth scopes by mode */
 const GOOGLE_SCOPES = {
-  // Full scopes for signup (need profile info + email reading + sending)
+  // Full scopes for signup (need profile info + email reading, modifying labels, and sending)
   signup: [
     'openid', 'email', 'profile',
     'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/gmail.modify', // required by markGmailRead() to remove UNREAD label
     'https://www.googleapis.com/auth/gmail.send',
   ],
-  // Login only needs identity verification
+  // Login only needs identity verification — no mailbox access needed
   login: ['openid', 'email', 'profile'],
-  // Connect needs email reading + sending (user already has account)
+  // Connect needs email reading, modifying labels, and sending (user already has account)
   connect: [
     'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/gmail.modify', // required by markGmailRead() to remove UNREAD label
     'https://www.googleapis.com/auth/gmail.send',
   ],
 };
@@ -139,7 +141,7 @@ export async function exchangeGoogleCode(code: string): Promise<GoogleTokenRespo
  * Refresh an expired Google access token.
  * @param refreshToken - The refresh_token stored in email_connections
  */
-export async function refreshGoogleToken(refreshToken: string): Promise<{ access_token: string; expires_in: number }> {
+export async function refreshGoogleToken(refreshToken: string): Promise<{ access_token: string; expires_in: number; refresh_token?: string }> {
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
