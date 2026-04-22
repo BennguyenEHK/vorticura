@@ -17,6 +17,7 @@ const PUBLIC_ROUTES = [
   '/',                // Homepage (public landing page)
   '/login',           // Login page
   '/signup',          // Signup page
+  '/onboarding',      // OAuth signup step 2: company info (no auth cookie yet, guarded by temp JWT cookie)
   '/api/auth',        // All auth endpoints (login, signup, logout, verify, OAuth callbacks)
   '/api/health',      // Health check endpoints
   '/api/webhooks',    // Email webhook endpoints (Gmail Pub/Sub, Microsoft Graph — self-authenticated)

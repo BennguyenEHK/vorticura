@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 
@@ -21,7 +20,6 @@ import { companyInfoSchema, type CompanyInfoFormData } from "@/lib/utils/validat
 import { completeOAuthSignup } from "@/lib/actions/oauth-signup-actions"
 
 const CompanyInfoForm = () => {
-  const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -40,13 +38,10 @@ const CompanyInfoForm = () => {
     setIsLoading(true)
     setError(null)
     try {
+      // On success, the server action calls redirect('/dashboard') — this page navigates away.
+      // If we reach the line below, there was an error returned.
       const result = await completeOAuthSignup(data)
-      if (!result.success) {
-        setError(result.error || "Failed to complete signup. Please try again.")
-        return
-      }
-      router.push("/dashboard")
-      router.refresh()
+      setError(result?.error || "Failed to complete signup. Please try again.")
     } catch {
       setError("An unexpected error occurred. Please try again.")
     } finally {
