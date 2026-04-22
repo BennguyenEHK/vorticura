@@ -173,7 +173,10 @@ async function handleSignup(
   response.cookies.set('oauth_signup_temp', tempToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    // 'lax' required: the redirect to /onboarding is part of a cross-site OAuth
+    // flow (originated from accounts.google.com). 'strict' silently drops the
+    // cookie on that GET request. 'lax' is safe here — httpOnly + signed JWT.
+    sameSite: 'lax',
     maxAge: 15 * 60, // 15 minutes
     path: '/',
   });

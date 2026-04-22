@@ -31,7 +31,8 @@ import { getOAuthRedirectUrl } from "@/lib/actions/email-connection-actions"
 // AuthForm Props Interface
 // =============================================
 interface AuthFormProps {
-  type: "login" | "signup" // Determines form mode
+  type: "login" | "signup"       // Determines form mode
+  initialError?: string          // Pre-populated error from OAuth redirect (?error= param)
 }
 
 // Union type for form data based on auth type
@@ -42,10 +43,11 @@ type AuthFormData = LoginFormData | SignupFormData
 // =============================================
 // Reusable authentication form that switches between login and signup modes
 // Uses React Hook Form with Zod validation for type-safe form handling
-const AuthForm = ({ type }: AuthFormProps) => {
+const AuthForm = ({ type, initialError }: AuthFormProps) => {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // initialError surfaces OAuth redirect errors (?error= from callback)
+  const [error, setError] = useState<string | null>(initialError ?? null)
   // State for password visibility toggle (eye icon button)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
