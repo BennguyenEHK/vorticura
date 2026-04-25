@@ -48,29 +48,23 @@ export default function FeaturesSection() {
         </div>
 
         {/* ===== Metrics strip — three columns, dividers on lg+ ===== */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:gap-0">
-          {metrics.map((metric, index) => (
+        {/* `divide-x` on lg+ paints a 1px --rule hairline between each metric; on mobile we
+            stack vertically and the divide turns off (each metric sits in its own row). */}
+        <div className="flex flex-col lg:flex-row lg:items-stretch lg:gap-0 lg:divide-x lg:divide-rule">
+          {metrics.map((metric) => (
             <div
               key={metric.caption}
-              className="flex-1 py-8 lg:py-0 flex flex-col items-center lg:items-start text-center lg:text-left"
+              className="flex-1 py-8 lg:py-2 lg:px-10 first:lg:pl-0 last:lg:pr-0 flex flex-col items-center lg:items-start text-center lg:text-left"
             >
-              {/* Vertical hairline divider between metrics on lg+ (not before first) */}
-              {index > 0 && (
-                <div
-                  className="hidden lg:block absolute left-0 top-0 bottom-0 w-px bg-rule"
-                  style={{ marginLeft: `${(index / metrics.length) * 100}%` }}
-                  aria-hidden="true"
-                />
-              )}
-
-              {/* Number — data XL, tabular mono, signal amber accent ===== */}
+              {/* Number — Data XL, tabular mono, --ink color (the eye-magnet) */}
               <div
-                className={`${metric.mobileSize} ${metric.desktopSize} font-data tabular-nums text-signal font-bold leading-none mb-4`}
+                className={`${metric.mobileSize} ${metric.desktopSize} font-data tabular-nums text-ink leading-none mb-4`}
+                style={{ letterSpacing: "-0.01em" }}
               >
                 {metric.number}
               </div>
 
-              {/* Caption — micro-label mono ALL-CAPS in graphite ===== */}
+              {/* Caption — micro-label mono ALL-CAPS in graphite */}
               <p className="micro-label text-graphite max-w-xs">
                 {metric.caption}
               </p>
