@@ -9,6 +9,7 @@
 //        const result = await getLocalModel().chatCompletion<T>(systemPrompt, userMsg);
 
 const AI_SERVER_URL = process.env.AI_SERVER_URL;
+const AI_API_KEY = process.env.AI_API_KEY;
 
 // =============================================
 // LocalAIModel Class
@@ -44,7 +45,10 @@ export class LocalAIModel {
 
     const response = await fetch(`${AI_SERVER_URL}/generate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(AI_API_KEY ? { 'X-API-Key': AI_API_KEY } : {}),
+      },
       body: JSON.stringify({ system: systemPrompt, user: userMessage }),
     });
 
