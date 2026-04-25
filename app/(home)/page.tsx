@@ -1,15 +1,14 @@
 // =============================================
-// QuoteFlow AI Homepage
+// Vorticura Homepage
 // =============================================
 // Main landing page that assembles all homepage sections
-// Uses Single Page Scroll design pattern for smooth navigation
+// Mission Control for Procurement — single-page scroll design
 
 import {
   Navbar,
   HeroSection,
   FeaturesSection,
   HowItWorksSection,
-  PricingSection,
   TestimonialsSection,
   CTASection,
   Footer,
@@ -19,31 +18,28 @@ import {
 // Home Page Component
 // =============================================
 // Public landing page - accessible without authentication
-// Displays company information, features, pricing, and CTAs
+// Vorticura procurement platform overview
 export default function Home() {
   return (
     <>
       {/* Sticky navigation bar with scroll-to-section links */}
       <Navbar />
 
-      {/* Main content wrapper */}
-      <main>
+      {/* Main editorial column — paper background, ink foreground (Mission Control tokens) */}
+      <main className="bg-paper text-ink">
         {/* Hero: Main headline, description, and primary CTAs */}
         <HeroSection />
 
-        {/* Features: Grid showcasing QuoteFlow AI capabilities */}
+        {/* MetricsStrip: Benchmark metrics in ledger format */}
         <FeaturesSection />
 
-        {/* How It Works: 3-step process visualization */}
+        {/* WorkflowNarrative: 4-station scroll-driven pipeline diagram */}
         <HowItWorksSection />
 
-        {/* Pricing: Tier comparison cards */}
-        {/* <PricingSection /> */}
-
-        {/* Testimonials: Customer reviews and social proof */}
+        {/* EditorialQuote: Large blockquote + customer wordmarks */}
         <TestimonialsSection />
 
-        {/* CTA: Final call-to-action with gradient background */}
+        {/* ClosingCTA: Final call-to-action with gradient background */}
         <CTASection />
       </main>
 
