@@ -3,19 +3,17 @@ import Link from "next/link"
 import { Logo } from "@/components/ui/logo"
 
 // =============================================
-// Auth Layout Metadata — Vorticura Mission Control
+// Vorticura Auth Layout — "Mission Control · Station 00"
 // =============================================
+// Two-column instrument-grade split:
+//   Left  (40%) — warm paper form column with wordmark + auth shell + footer
+//   Right (60%) — deep ink console with editorial mission narrative + 3 mono benchmarks
+// No gradient meshes, no orbs, no glassmorphism. Only Vorticura tokens.
 export const metadata: Metadata = {
-  title: "Mission Control | Vorticura",
-  description: "AI-powered procurement automation. Warp-speed results. Zero setup friction.",
+  title: "Sign in — Vorticura",
+  description: "Access your Vorticura mission control.",
 }
 
-// =============================================
-// Auth Layout Component — Instrument-Grade Split Screen
-// =============================================
-// Left: warm paper form column (40%) with wordmark + auth shell + footer.
-// Right: deep ink brand panel (60%, desktop only) with mission narrative, metrics.
-// No gradients, no orbs, no legacy tokens. Vorticura all the way down.
 export default function AuthLayout({
   children,
 }: Readonly<{
@@ -23,97 +21,108 @@ export default function AuthLayout({
 }>) {
   return (
     <main className="flex min-h-screen w-full">
-      {/* ===== Left Panel: Form Area (40% on desktop, 100% on mobile) ===== */}
+      {/* ===== LEFT — Form column (paper, 40% on desktop, 100% on mobile) ===== */}
       <section className="flex w-full flex-col justify-between px-6 py-12 lg:w-2/5 lg:px-12 bg-paper">
-        {/* Wordmark cluster: Logo + serif "Vorticura" + mono "OPS" superscript */}
-        <div className="mb-12">
+        {/* Wordmark cluster: instrument mark + serif "Vorticura" + mono "OPS" superscript */}
+        <div>
           <Link
             href="/"
-            className="inline-flex items-center gap-3 hover:opacity-80 transition-opacity"
+            className="inline-flex items-center gap-3 text-ink hover:text-azimuth transition-colors"
             aria-label="Vorticura — home"
           >
-            {/* Instrument mark */}
-            <Logo className="w-7 h-7 text-ink" />
-            {/* Serif wordmark + mono micro superscript */}
+            <Logo className="w-7 h-7" />
             <div className="flex items-baseline gap-2">
-              <span className="font-display text-[1.375rem] tracking-[-0.01em] leading-none text-ink">
+              <span className="font-display text-[1.375rem] tracking-[-0.01em] leading-none">
                 Vorticura
               </span>
+              {/* Mono superscript label, hidden on small screens to save room */}
               <span className="micro-label text-graphite hidden sm:inline">OPS</span>
             </div>
           </Link>
-          {/* Station identifier micro-label */}
-          <p className="micro-label text-graphite mt-4">STATION 00 · ACCESS</p>
+
+          {/* Station identifier — frames auth as the first step in the trajectory metaphor */}
+          <p className="micro-label text-graphite mt-5">STATION 00 · ACCESS</p>
         </div>
 
-        {/* Form Content (children from page.tsx) */}
-        <div className="flex flex-1 items-center justify-center">
+        {/* Form area — AuthForm renders here via {children} */}
+        <div className="flex flex-1 items-center justify-center py-10">
           {children}
         </div>
 
-        {/* Footer: mono micro-label, Vorticura copyright */}
-        <footer className="text-center">
-          <p className="micro-label text-graphite">
+        {/* Footer — single mono micro line, NO QuoteFlow naming, NO marketing copy */}
+        <footer>
+          <p className="micro-label text-graphite text-center">
             © 2026 VORTICURA · ALL RIGHTS RESERVED
           </p>
         </footer>
       </section>
 
-      {/* ===== Right Panel: Brand/Mission Area (60% on desktop, hidden on mobile) ===== */}
-      {/* Solid ink background — the deep instrument console. No gradients, no orbs. */}
+      {/* ===== RIGHT — Deep ink mission console (60% desktop, hidden on mobile) ===== */}
+      {/* Solid bg-ink — the marketing inverse of the paper form column. No gradient, no orbs. */}
       <section
-        className="relative hidden lg:flex lg:w-3/5 lg:flex-col lg:items-center lg:justify-center bg-ink"
+        className="relative hidden lg:flex lg:w-3/5 lg:flex-col lg:justify-center bg-ink"
         aria-hidden="true"
       >
-        {/* Brand Content: centered in a max-width container */}
-        <div className="relative z-10 max-w-lg px-12 flex flex-col">
-          {/* Mono overline: mission control live status */}
-          <p className="micro-label text-paper/60 mb-6">
-            MISSION CONTROL · LIVE
-          </p>
+        {/* Faint instrument grid — single 1px hairline ledger pattern, NO orbs / blur */}
+        <div
+          className="absolute inset-0 opacity-[0.06] pointer-events-none"
+          style={{
+            backgroundImage: `
+              linear-gradient(90deg, var(--paper) 1px, transparent 1px),
+              linear-gradient(0deg, var(--paper) 1px, transparent 1px)
+            `,
+            backgroundSize: "96px 96px",
+          }}
+        />
 
-          {/* Serif headline: the core hook — 48-56px, leading tight */}
+        {/* Editorial content — left-aligned, NOT centered */}
+        <div className="relative z-10 max-w-xl px-12 xl:px-20">
+          {/* Mono overline — live indicator on the console */}
+          <div className="flex items-center gap-3 mb-10">
+            <span className="block w-2 h-2 bg-signal" aria-hidden="true" />
+            <span className="micro-label text-paper/60">MISSION CONTROL · LIVE</span>
+          </div>
+
+          {/* Serif display headline — specific, numeric, on-brand */}
           <h1
-            className="font-display text-paper mb-6"
+            className="font-display text-paper"
             style={{
-              fontSize: "clamp(3rem, 6vw, 3.5rem)",
-              lineHeight: "1.05",
+              fontSize: "clamp(2.5rem, 5vw, 3.5rem)",
+              lineHeight: 1.05,
               letterSpacing: "-0.015em",
+              fontWeight: 400,
             }}
           >
-            You're four minutes from a sent quote.
+            You&apos;re four minutes from a sent quote.
           </h1>
 
-          {/* Serif italic body: operational context, max-width to anchor rhythm */}
-          <p className="font-display italic text-paper/70 text-lg leading-relaxed max-w-md mb-12">
-            Sign in to pick up where you left off — every active RFQ, every supplier ranking, every draft, exactly where the last shift left them.
+          {/* Editorial italic body — picks up the trajectory metaphor */}
+          <p className="font-display italic text-paper/70 mt-8 max-w-md text-[1.0625rem] leading-[1.55]">
+            Sign in to pick up where you left off — every active RFQ, every supplier
+            ranking, every draft, exactly where the last shift left&nbsp;them.
           </p>
 
-          {/* Divider rule: 1px border-paper/15 */}
-          <div className="border-t border-paper/15 pt-8 mb-8" />
-
-          {/* Three operational metrics: mono micro-labels with signal squares */}
-          <div className="space-y-3 mb-12">
-            {/* Metric 1: INGEST */}
+          {/* 1px hairline rule + 3 mono benchmark rows — the instrument readout */}
+          <div className="mt-12 pt-8 border-t border-paper/15 space-y-3">
+            {/* Each row: 6px signal-amber square + mono ALL-CAPS station label.
+                NO icons, NO checkmarks — the squares ARE the visual. */}
             <div className="flex items-center gap-3">
-              <div className="w-1.5 h-1.5 bg-signal shrink-0" />
-              <span className="micro-label text-paper/80">INGEST · 12S MEDIAN</span>
+              <span className="block w-1.5 h-1.5 bg-signal" aria-hidden="true" />
+              <span className="micro-label text-paper/80">INGEST · 12s MEDIAN</span>
             </div>
-            {/* Metric 2: PARSE */}
             <div className="flex items-center gap-3">
-              <div className="w-1.5 h-1.5 bg-signal shrink-0" />
-              <span className="micro-label text-paper/80">PARSE · 22S MEDIAN</span>
+              <span className="block w-1.5 h-1.5 bg-signal" aria-hidden="true" />
+              <span className="micro-label text-paper/80">PARSE · 22s MEDIAN</span>
             </div>
-            {/* Metric 3: SEND */}
             <div className="flex items-center gap-3">
-              <div className="w-1.5 h-1.5 bg-signal shrink-0" />
-              <span className="micro-label text-paper/80">SEND · 4M 47S MEDIAN</span>
+              <span className="block w-1.5 h-1.5 bg-signal" aria-hidden="true" />
+              <span className="micro-label text-paper/80">SEND · 4m 47s MEDIAN</span>
             </div>
           </div>
 
-          {/* Benchmark footnote: lighter mono micro-label */}
-          <p className="micro-label text-paper/40">
-            BENCHMARK · Q2 2026 · N = 47 TEAMS
+          {/* Benchmark footnote — quietest line on the panel */}
+          <p className="micro-label text-paper/40 mt-10">
+            BENCHMARK · Q2 2026 · n = 47 TEAMS
           </p>
         </div>
       </section>
