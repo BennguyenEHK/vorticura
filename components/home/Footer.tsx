@@ -3,130 +3,44 @@
 import Link from "next/link"
 
 // =============================================
-// QuoteFlow AI Logo Component
+// Vorticura Instrument Footer
 // =============================================
-// Reusable logo SVG for footer branding
-// Note: Using CSS variables for theme-aware colors
-const Logo = ({ className = "w-8 h-8" }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 32 32"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    aria-hidden="true"
-  >
-    {/* Background uses primary/foreground color for dark theme support */}
-    <rect width="32" height="32" rx="8" className="fill-primary" />
-    {/* Logo paths use brand color for consistent branding */}
-    <path d="M8 12L16 8L24 12L16 16L8 12Z" className="fill-brand" />
-    <path
-      d="M8 16L16 20L24 16"
-      className="stroke-brand"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <path
-      d="M8 20L16 24L24 20"
-      className="stroke-brand"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-)
+// Three columns (PRODUCT / COMPANY / TRUST) with mono micro-label headers.
+// Serif "Vorticura" wordmark bottom-left.
+// Mono version string bottom-right: "VORTICURA OPS · v0.1 · BUILT IN HCMC".
+// No social icons, no complex layouts, no brand description — instrument-grade simplicity.
 
-// =============================================
-// Footer Links Configuration
-// =============================================
-// Organized footer link groups for navigation
-const footerLinks = {
+const footerSections = {
   product: {
-    title: "Product",
+    title: "PRODUCT",
     links: [
       { label: "Features", href: "#features" },
-      //{ label: "Pricing", href: "#pricing" },
-      { label: "How It Works", href: "#how-it-works" },
-      { label: "Integrations", href: "#" },
-      { label: "API", href: "#" },
+      { label: "How It Works", href: "#workflow" },
+      { label: "Metrics", href: "#metrics" },
+      { label: "Customers", href: "#customers" },
     ],
   },
   company: {
-    title: "Company",
+    title: "COMPANY",
     links: [
-      { label: "About Us", href: "#" },
+      { label: "About", href: "#" },
       { label: "Blog", href: "#" },
       { label: "Careers", href: "#" },
-      { label: "Press", href: "#" },
       { label: "Contact", href: "#" },
     ],
   },
-  resources: {
-    title: "Resources",
-    links: [
-      { label: "Documentation", href: "#" },
-      { label: "Help Center", href: "#" },
-      { label: "Community", href: "#" },
-      { label: "Tutorials", href: "#" },
-      { label: "Status", href: "#" },
-    ],
-  },
-  legal: {
-    title: "Legal",
+  trust: {
+    title: "TRUST",
     links: [
       { label: "Privacy Policy", href: "#" },
       { label: "Terms of Service", href: "#" },
-      { label: "Cookie Policy", href: "#" },
-      { label: "GDPR", href: "#" },
+      { label: "Security", href: "#" },
+      { label: "Status", href: "#" },
     ],
   },
 }
 
-// =============================================
-// Social Media Icons
-// =============================================
-const socialLinks = [
-  {
-    name: "Twitter",
-    href: "#",
-    icon: (
-      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" />
-      </svg>
-    ),
-  },
-  {
-    name: "LinkedIn",
-    href: "#",
-    icon: (
-      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" />
-      </svg>
-    ),
-  },
-  {
-    name: "GitHub",
-    href: "#",
-    icon: (
-      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-        <path
-          fillRule="evenodd"
-          clipRule="evenodd"
-          d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
-        />
-      </svg>
-    ),
-  },
-]
-
-// =============================================
-// Footer Component
-// =============================================
-// Main footer with navigation links, social icons, and copyright
 export default function Footer() {
-  // Get current year for copyright
-  const currentYear = new Date().getFullYear()
-
   // Handle smooth scroll for anchor links
   const handleAnchorClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     if (href.startsWith("#") && href.length > 1) {
@@ -138,50 +52,23 @@ export default function Footer() {
   }
 
   return (
-    <footer className="bg-muted border-t border-border">
-      {/* ===== Main Footer Content ===== */}
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 lg:gap-12">
-          {/* Brand Column */}
-          <div className="col-span-2 md:col-span-3 lg:col-span-2">
-            {/* Logo and brand */}
-            <Link href="/" className="inline-flex items-center gap-2.5">
-              <Logo />
-              <span className="text-lg font-bold tracking-tight text-foreground">
-                QuoteFlow AI
-              </span>
-            </Link>
-            {/* Brand description */}
-            <p className="mt-4 text-body text-sm leading-relaxed max-w-sm">
-              AI-powered quotation management that helps you create, track, and close deals faster than ever before.
-            </p>
-            {/* Social links */}
-            <div className="mt-6 flex items-center gap-4">
-              {socialLinks.map((social) => (
-                <a
-                  key={social.name}
-                  href={social.href}
-                  className="text-placeholder hover:text-body transition-colors"
-                  aria-label={`Follow us on ${social.name}`}
-                >
-                  {social.icon}
-                </a>
-              ))}
-            </div>
-          </div>
-
-          {/* Product Links */}
+    <footer className="bg-paper border-t border-rule">
+      {/* ===== Main footer content ===== */}
+      <div className="mx-auto max-w-7xl px-6 lg:px-10 py-16 lg:py-20">
+        {/* Three-column grid: PRODUCT / COMPANY / TRUST */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 lg:gap-16 mb-16">
+          {/* Product column */}
           <div>
-            <h3 className="text-sm font-semibold text-foreground tracking-wide">
-              {footerLinks.product.title}
+            <h3 className="micro-label text-graphite mb-6">
+              {footerSections.product.title}
             </h3>
-            <ul className="mt-4 space-y-3">
-              {footerLinks.product.links.map((link) => (
+            <ul className="space-y-3">
+              {footerSections.product.links.map((link) => (
                 <li key={link.label}>
                   <a
                     href={link.href}
                     onClick={(e) => handleAnchorClick(e, link.href)}
-                    className="text-sm text-body hover:text-foreground transition-colors"
+                    className="text-sm font-body text-graphite hover:text-ink transition-colors"
                   >
                     {link.label}
                   </a>
@@ -190,17 +77,17 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Company Links */}
+          {/* Company column */}
           <div>
-            <h3 className="text-sm font-semibold text-foreground tracking-wide">
-              {footerLinks.company.title}
+            <h3 className="micro-label text-graphite mb-6">
+              {footerSections.company.title}
             </h3>
-            <ul className="mt-4 space-y-3">
-              {footerLinks.company.links.map((link) => (
+            <ul className="space-y-3">
+              {footerSections.company.links.map((link) => (
                 <li key={link.label}>
                   <a
                     href={link.href}
-                    className="text-sm text-body hover:text-foreground transition-colors"
+                    className="text-sm font-body text-graphite hover:text-ink transition-colors"
                   >
                     {link.label}
                   </a>
@@ -209,36 +96,17 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Resources Links */}
+          {/* Trust column */}
           <div>
-            <h3 className="text-sm font-semibold text-foreground tracking-wide">
-              {footerLinks.resources.title}
+            <h3 className="micro-label text-graphite mb-6">
+              {footerSections.trust.title}
             </h3>
-            <ul className="mt-4 space-y-3">
-              {footerLinks.resources.links.map((link) => (
+            <ul className="space-y-3">
+              {footerSections.trust.links.map((link) => (
                 <li key={link.label}>
                   <a
                     href={link.href}
-                    className="text-sm text-body hover:text-foreground transition-colors"
-                  >
-                    {link.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Legal Links */}
-          <div>
-            <h3 className="text-sm font-semibold text-foreground tracking-wide">
-              {footerLinks.legal.title}
-            </h3>
-            <ul className="mt-4 space-y-3">
-              {footerLinks.legal.links.map((link) => (
-                <li key={link.label}>
-                  <a
-                    href={link.href}
-                    className="text-sm text-body hover:text-foreground transition-colors"
+                    className="text-sm font-body text-graphite hover:text-ink transition-colors"
                   >
                     {link.label}
                   </a>
@@ -247,29 +115,18 @@ export default function Footer() {
             </ul>
           </div>
         </div>
-      </div>
 
-      {/* ===== Bottom Bar ===== */}
-      <div className="border-t border-border">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            {/* Copyright */}
-            <p className="text-sm text-muted-foreground">
-              &copy; {currentYear} QuoteFlow AI. All rights reserved.
-            </p>
-            {/* Additional links */}
-            <div className="flex items-center gap-6">
-              <a href="#" className="text-sm text-muted-foreground hover:text-label transition-colors">
-                Privacy
-              </a>
-              <a href="#" className="text-sm text-muted-foreground hover:text-label transition-colors">
-                Terms
-              </a>
-              <a href="#" className="text-sm text-muted-foreground hover:text-label transition-colors">
-                Cookies
-              </a>
-            </div>
-          </div>
+        {/* ===== Bottom bar: wordmark + version string ===== */}
+        <div className="border-t border-rule pt-12 lg:pt-16 flex flex-col md:flex-row items-start md:items-end justify-between gap-8">
+          {/* Serif "Vorticura" wordmark bottom-left */}
+          <Link href="/" className="font-display text-[1.25rem] tracking-[-0.01em] leading-none text-ink hover:text-azimuth transition-colors">
+            Vorticura
+          </Link>
+
+          {/* Mono version string bottom-right */}
+          <p className="micro-label text-graphite">
+            VORTICURA OPS · v0.1 · BUILT IN HCMC
+          </p>
         </div>
       </div>
     </footer>

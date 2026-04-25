@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+// Geist fonts kept for the dashboard surface (legacy --font-sans / --font-mono tokens)
+import { Geist, Geist_Mono, Fraunces, Inter_Tight, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
+// ===== Legacy fonts (dashboard) =====
+// The internal app still maps Tailwind's font-sans/font-mono to these two.
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -12,26 +15,52 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// ===== Vorticura editorial fonts (home/marketing) =====
+// Display: Fraunces — editorial serif with sharp angled terminals (drives hero & H1 headlines)
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
+  display: "swap",
+});
+
+// Body: Inter Tight — neutral grotesque for paragraphs and UI chrome
+const interTight = Inter_Tight({
+  variable: "--font-inter-tight",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  display: "swap",
+});
+
+// Data: JetBrains Mono — tabular monospace for numbers, micro-labels, station IDs
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  display: "swap",
+});
+
 // =============================================
-// Root Layout Metadata
+// Root Layout Metadata (Vorticura)
 // =============================================
-// SEO and social sharing metadata for QuoteFlow AI
+// SEO copy uses the new positioning: instrument-grade procurement, real numbers, no AI cliché.
 export const metadata: Metadata = {
-  title: "QuoteFlow AI | AI-Powered Quotation Management",
+  title: "Vorticura — Mission Control for Procurement",
   description:
-    "Streamline your sales workflow with AI-powered quotation generation. From RFQ analysis to professional documents, QuoteFlow AI helps you close deals faster.",
+    "Procurement teams using Vorticura cut quote response from a median of 38 hours to 4 minutes 47 seconds.",
   keywords: [
-    "quotation management",
-    "AI quotation",
-    "sales automation",
-    "RFQ analysis",
-    "proposal software",
+    "procurement automation",
+    "RFQ management",
+    "supplier sourcing",
+    "quotation platform",
+    "Vorticura",
   ],
-  authors: [{ name: "QuoteFlow AI" }],
+  authors: [{ name: "Vorticura" }],
   openGraph: {
-    title: "QuoteFlow AI | AI-Powered Quotation Management",
+    title: "Vorticura — Mission Control for Procurement",
     description:
-      "Create professional quotations in seconds with AI-powered automation.",
+      "The peak of every bid, four minutes after the RFQ lands.",
     type: "website",
   },
 };
@@ -48,7 +77,9 @@ export default function RootLayout({
     // suppressHydrationWarning required by next-themes to prevent hydration mismatch
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        // All five font CSS variables exposed; per-surface utilities (font-display/font-body/font-data)
+        // pick the right family without disturbing legacy font-sans usage in the dashboard.
+        className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} ${interTight.variable} ${jetbrainsMono.variable} antialiased`}
         suppressHydrationWarning
       >
         {/* Wrap entire app with global providers (Theme, etc.) */}

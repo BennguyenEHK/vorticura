@@ -4,118 +4,253 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
 // =============================================
-// HeroSection Component
+// Vorticura HeroSection
 // =============================================
-// Main landing hero section with headline, description, and CTA buttons
-// Features decorative gradient background and animated elements
+// "Mission Control for Procurement" — left-weighted asymmetric hero.
+// - Left column (5/12): mono overline + serif headline + body + dual CTAs + cert micro-line.
+// - Right column (7/12): a single trajectory arc with five station markers — one signature SVG.
+// No orbs, no grid mesh, no gradient text, no badge, no glassmorphism.
+
+// Five stations on the trajectory arc — these are the literal procurement pipeline.
+// (Time stamps are illustrative; the data tells the speed story without prose.)
+const STATIONS = [
+  { label: "RFQ", time: "00:12" },
+  { label: "PARSE", time: "00:34" },
+  { label: "SOURCE", time: "01:08" },
+  { label: "DRAFT", time: "02:21" },
+  { label: "SEND", time: "04:47" },
+]
+
 export default function HeroSection() {
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-background">
-      {/* ===== Decorative Background Elements ===== */}
-      {/* Gradient mesh background for depth and visual interest */}
-      <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
-        {/* Top-left gradient orb: sky blue with blur effect */}
-        <div className="absolute -top-1/4 -left-1/4 w-1/2 h-1/2 bg-hero-orb-1 rounded-full blur-3xl" />
-        {/* Bottom-right gradient orb: indigo with blur effect */}
-        <div className="absolute -bottom-1/4 -right-1/4 w-1/2 h-1/2 bg-hero-orb-2 rounded-full blur-3xl" />
-        {/* Center accent orb: subtle sky tint */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-1/2 bg-brand-muted/50 rounded-full blur-3xl" />
+    // Section: solid --paper background, no decorative orbs, full viewport height.
+    <section className="relative min-h-screen flex items-center bg-paper overflow-hidden">
+      {/* Faint vertical guide rule on the right gutter — feels like a printed grid sheet */}
+      <div
+        className="absolute top-0 bottom-0 right-[7%] w-px bg-rule pointer-events-none hidden lg:block"
+        aria-hidden="true"
+      />
 
-        {/* Geometric grid pattern overlay for texture */}
-        <div
-          className="absolute inset-0 opacity-[0.015]"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%230f172a' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-          }}
-        />
-      </div>
+      <div className="relative z-10 mx-auto max-w-7xl w-full px-6 lg:px-10 pt-32 pb-20 lg:pt-40 lg:pb-28">
+        {/* 12-col grid: 5/7 split between text column and trajectory artifact */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-center">
+          {/* ===== LEFT — text column (5/12) ===== */}
+          <div className="lg:col-span-5">
+            {/* Mono overline — instrument identifier, NASA mission-patch styling */}
+            <div className="flex items-center gap-3 mb-10">
+              <span className="micro-label text-graphite">VORTICURA · OPS</span>
+              <span className="h-px w-10 bg-rule-strong" aria-hidden="true" />
+              <span className="micro-label text-graphite">v0.1</span>
+            </div>
 
-      {/* ===== Main Hero Content ===== */}
-      <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-32 lg:py-40">
-        <div className="text-center">
-          {/* Badge/Tag above headline */}
-          <div className="inline-flex items-center gap-2 rounded-full bg-brand-muted border border-brand/20 px-4 py-1.5 text-sm font-medium text-brand-dark mb-8">
-            {/* Sparkle icon */}
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.715-5.349L10 6.477l-3.763 1.105 1.715 5.349a1 1 0 01-.285 1.05A3.989 3.989 0 015 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.788l1.599.799L9 4.323V3a1 1 0 011-1z" />
-            </svg>
-            <span>AI-Powered Quotation Management</span>
-          </div>
-
-          {/* Main Headline */}
-          {/* Gradient text uses brand color tokens for theme consistency */}
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold tracking-tight text-foreground leading-[1.1]">
-            Create Professional
-            <span className="block mt-2 bg-gradient-to-r from-brand via-brand-light to-brand-dark bg-clip-text text-transparent">
-              Quotations in Seconds
-            </span>
-          </h1>
-
-          {/* Subheadline/Description */}
-          <p className="mt-6 mx-auto max-w-2xl text-lg sm:text-xl text-body leading-relaxed">
-            Streamline your sales workflow with AI-powered quotation generation.
-            From RFQ analysis to professional documents, QuoteFlow AI handles it all
-            so you can close deals faster.
-          </p>
-
-          {/* CTA Buttons */}
-          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            {/* Primary CTA: Get Started */}
-            <Link href="/signup">
-              <Button
-                size="lg"
-                className="bg-primary hover:bg-primary-hover text-primary-foreground px-8 py-6 text-base font-medium shadow-lg shadow-foreground/10 hover:shadow-xl hover: shadow-foreground/20 transition-all"
-              >
-                Start Free Trial
-                {/* Arrow icon */}
-                <svg className="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                </svg>
-              </Button>
-            </Link>
-            {/* Secondary CTA: Watch Demo */}
-            <Button
-              variant="outline"
-              size="lg"
-              className="px-8 py-6 text-base font-medium border-border hover:bg-muted"
-              onClick={() => {
-                // Scroll to how-it-works section for demo
-                const element = document.getElementById("how-it-works")
-                element?.scrollIntoView({ behavior: "smooth" })
+            {/* Serif display headline — the entire hook lives in this sentence */}
+            <h1
+              className="font-display text-ink leading-[0.95]"
+              style={{
+                fontSize: "clamp(2.75rem, 7vw, 6.5rem)", // ~44px -> ~104px fluid
+                letterSpacing: "-0.02em",
+                fontWeight: 400,
               }}
             >
-              {/* Play icon */}
-              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
-              </svg>
-              See How It Works
-            </Button>
+              The peak of every bid,
+              {/* Subordinate clause on its own line — italic adds editorial cadence */}
+              <span className="block italic text-graphite mt-2">
+                four minutes after the&nbsp;RFQ lands.
+              </span>
+            </h1>
+
+            {/* Body paragraph — Inter Tight, 18px, generous leading */}
+            <p className="font-body mt-8 max-w-xl text-graphite text-[1.125rem] leading-[1.55]">
+              Procurement teams using Vorticura cut quote response from a median of
+              {" "}
+              {/* Numbers in mono draw the eye and feel "data-grade" */}
+              <span className="font-data tabular-nums text-ink">38h</span>
+              {" to "}
+              <span className="font-data tabular-nums text-ink">4m&nbsp;47s</span>
+              . Same RFQ. Same suppliers. Different instrument.
+            </p>
+
+            {/* CTAs — primary is azimuth, secondary is text-link with arrow.
+                No third button, no trust pile-on, no "Watch Demo" cliché. */}
+            <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-4">
+              <Link href="/signup">
+                <Button
+                  className="bg-azimuth hover:bg-azimuth-glow text-paper font-body font-medium border border-ink px-7 h-12 rounded-[6px] shadow-none"
+                >
+                  Request access
+                </Button>
+              </Link>
+
+              <Link
+                href="#workflow"
+                className="font-body font-medium text-ink hover:text-azimuth transition-colors inline-flex items-center gap-2 underline underline-offset-[6px] decoration-rule-strong hover:decoration-azimuth"
+              >
+                See how it moves
+                <span aria-hidden="true">→</span>
+              </Link>
+            </div>
+
+            {/* Mono certifications strip — replaces fake-logo trust band */}
+            <div className="mt-16 pt-6 border-t border-rule">
+              <p className="micro-label text-graphite">
+                SOC 2 TYPE II · ISO 27001 · TRUSTED BY 47 PROCUREMENT TEAMS
+              </p>
+            </div>
           </div>
 
-          {/* Trust Indicators */}
-          <div className="mt-16 pt-8 border-t border-border/50">
-            <p className="text-sm text-muted-foreground mb-6">Trusted by innovative sales teams worldwide</p>
-            {/* Company logos placeholder - subtle grayscale treatment */}
-            <div className="flex flex-wrap items-center justify-center gap-x-12 gap-y-6 opacity-60 grayscale">
-              {/* Placeholder company names as text - in production, replace with actual logos */}
-              {["TechCorp", "GlobalSales", "InnovateCo", "ScaleUp", "NextGen"].map((company) => (
-                <span
-                  key={company}
-                  className="text-lg font-semibold text-placeholder tracking-tight"
-                >
-                  {company}
-                </span>
-              ))}
-            </div>
+          {/* ===== RIGHT — trajectory artifact (7/12) ===== */}
+          {/* The single signature visual: an arc that draws on load with 5 station markers. */}
+          <div className="lg:col-span-7 relative" aria-hidden="true">
+            <TrajectoryArc />
           </div>
         </div>
       </div>
-
-      {/* Bottom fade gradient for section transition */}
-      <div
-        className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-background to-transparent"
-        aria-hidden="true"
-      />
     </section>
+  )
+}
+
+// =============================================
+// TrajectoryArc — the hero artifact
+// =============================================
+// SVG drawing of a single sweeping arc from lower-left -> upper-right, with five station
+// markers placed along its path. The arc itself uses a stroke-dashoffset draw-on; the
+// markers fade in staggered. One signature animation, played once on load.
+function TrajectoryArc() {
+  // Arc geometry: viewBox 700 x 420, arc rises gently from (60, 360) to (650, 60).
+  // Path uses a quadratic curve so the trajectory feels like a launch, not a parabola.
+  const pathD = "M 60 360 Q 280 60 650 60"
+  // Approximate length for the dash animation (calibrated to the curve above).
+  const arcLength = 760
+
+  // Pre-computed station coordinates along the arc at 5%, 25%, 50%, 75%, 95% of length.
+  // (Eyeballed from the curve — close enough for an editorial illustration.)
+  const points = [
+    { x: 88, y: 305 },   // RFQ
+    { x: 200, y: 175 },  // PARSE
+    { x: 350, y: 105 },  // SOURCE
+    { x: 500, y: 75 },   // DRAFT
+    { x: 640, y: 62 },   // SEND
+  ]
+
+  return (
+    <div className="relative w-full">
+      <svg
+        viewBox="0 0 700 420"
+        className="w-full h-auto overflow-visible"
+        role="img"
+        aria-label="Trajectory diagram from RFQ to sent quote"
+      >
+        {/* Faint instrument grid under the arc — barely visible, prints once on a paper background */}
+        <g stroke="var(--rule)" strokeWidth="1">
+          {/* Three baseline rules at 25/50/75% height */}
+          <line x1="0" y1="105" x2="700" y2="105" />
+          <line x1="0" y1="210" x2="700" y2="210" />
+          <line x1="0" y1="315" x2="700" y2="315" />
+        </g>
+
+        {/* Trajectory arc — the protagonist */}
+        <path
+          d={pathD}
+          fill="none"
+          stroke="var(--ink)"
+          strokeWidth="1.5"
+          strokeLinecap="square"
+          // Dash array equals path length; offset starts equal so nothing renders, animates to 0.
+          strokeDasharray={arcLength}
+          strokeDashoffset={arcLength}
+          className="animate-trajectory"
+          style={{ ["--arc-length" as string]: arcLength }}
+        />
+
+        {/* Station markers — small squares + mono labels, fade in staggered */}
+        {points.map((p, i) => {
+          const station = STATIONS[i]
+          // Last station = apogee = signal amber (the winning bid)
+          const isApogee = i === points.length - 1
+          return (
+            <g
+              key={station.label}
+              className="animate-marker"
+              style={{ animationDelay: `${1.0 + i * 0.18}s` }}
+            >
+              {/* Station marker square — 8x8, sits centered on the path point */}
+              <rect
+                x={p.x - 4}
+                y={p.y - 4}
+                width="8"
+                height="8"
+                fill={isApogee ? "var(--signal)" : "var(--ink)"}
+              />
+              {/* Vertical tick from the marker down to its caption */}
+              <line
+                x1={p.x}
+                y1={p.y + 8}
+                x2={p.x}
+                y2={p.y + 28}
+                stroke="var(--rule-strong)"
+                strokeWidth="1"
+              />
+              {/* Time stamp (top line, mono, tabular) */}
+              <text
+                x={p.x}
+                y={p.y + 44}
+                textAnchor="middle"
+                fill="var(--ink)"
+                style={{
+                  fontFamily: "var(--font-data)",
+                  fontSize: "12px",
+                  letterSpacing: "0.04em",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {station.time}
+              </text>
+              {/* Station label (bottom line, mono caps, lighter) */}
+              <text
+                x={p.x}
+                y={p.y + 60}
+                textAnchor="middle"
+                fill="var(--graphite)"
+                style={{
+                  fontFamily: "var(--font-data)",
+                  fontSize: "10px",
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {station.label}
+              </text>
+            </g>
+          )
+        })}
+
+        {/* Apogee callout: a small mono badge near the SEND marker */}
+        <g className="animate-marker" style={{ animationDelay: "2.0s" }}>
+          <line
+            x1={points[4].x}
+            y1={points[4].y - 12}
+            x2={points[4].x}
+            y2={points[4].y - 30}
+            stroke="var(--signal)"
+            strokeWidth="1"
+          />
+          <text
+            x={points[4].x}
+            y={points[4].y - 38}
+            textAnchor="middle"
+            fill="var(--ink)"
+            style={{
+              fontFamily: "var(--font-data)",
+              fontSize: "10px",
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              fontWeight: 500,
+            }}
+          >
+            APOGEE
+          </text>
+        </g>
+      </svg>
+    </div>
   )
 }

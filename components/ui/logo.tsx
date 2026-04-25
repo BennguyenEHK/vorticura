@@ -1,25 +1,22 @@
 // =============================================
-// QuoteFlow AI Logo Component
+// Vorticura Logo — instrument mark
 // =============================================
-// Shared logo SVG used across the application:
-// - Homepage navbar
-// - Dashboard topbar
-// - Auth pages
-// Configurable size via className prop
+// Mission Control / "trajectory + signal lamp" identity.
+// - Outer ring: thin instrument bezel at low alpha (rule color)
+// - Trajectory arc: rises left -> apogee at upper right (currentColor)
+// - Origin marker: square at the start of the arc
+// - Apogee marker: square in the --signal amber, calling out the peak of the bid
+// All strokes monochrome — no gradients, no fills (except the two instrument squares).
 
 interface LogoProps {
-  className?: string;  // Tailwind classes for sizing (default: w-8 h-8)
+  className?: string; // sizing utility (default: w-8 h-8)
 }
 
 /**
- * Logo - QuoteFlow AI brand logo SVG
+ * Logo - Vorticura instrument mark
  *
- * Design:
- * - Dark slate background with rounded corners
- * - Sky-blue layered shape (diamond + two chevrons)
- * - Creates depth effect with filled and stroked elements
- *
- * @param className - Size classes (default: "w-8 h-8" = 32x32px)
+ * Inherits color from `currentColor` so it adapts to dark/light mode wherever it's used.
+ * The two square markers anchor the trajectory: origin (ink) -> apogee (signal).
  */
 export function Logo({ className = "w-8 h-8" }: LogoProps) {
   return (
@@ -28,31 +25,34 @@ export function Logo({ className = "w-8 h-8" }: LogoProps) {
       viewBox="0 0 32 32"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"  // Decorative, not announced by screen readers
+      aria-hidden="true" // Decorative — wordmark is the accessible label
     >
-      {/* Background: dark slate rounded rectangle */}
-      <rect width="32" height="32" rx="8" fill="#0f172a" />
-
-      {/* Top layer: filled sky-blue diamond shape */}
-      <path d="M8 12L16 8L24 12L16 16L8 12Z" fill="#38bdf8" />
-
-      {/* Middle layer: stroked sky-blue chevron */}
-      <path
-        d="M8 16L16 20L24 16"
-        stroke="#38bdf8"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+      {/* Instrument bezel: thin ring at low alpha — reads as a watch dial / scope */}
+      <circle
+        cx="16"
+        cy="16"
+        r="14.5"
+        stroke="currentColor"
+        strokeOpacity="0.18"
+        strokeWidth="1"
+        fill="none"
       />
 
-      {/* Bottom layer: stroked sky-blue chevron */}
+      {/* Trajectory arc: origin (lower-left) -> apogee (upper-right) */}
+      {/* Drawn as a single open curve, square-capped to feel engineered, not organic */}
       <path
-        d="M8 20L16 24L24 20"
-        stroke="#38bdf8"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        d="M5 23 Q 12 8 27 9"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="square"
+        fill="none"
       />
+
+      {/* Origin marker (ink): the bid kickoff */}
+      <rect x="3" y="21" width="4" height="4" fill="currentColor" />
+
+      {/* Apogee marker (signal amber): the winning peak — only place color appears in the mark */}
+      <rect x="25" y="7" width="4" height="4" fill="var(--signal)" />
     </svg>
   );
 }
