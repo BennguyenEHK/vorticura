@@ -1,21 +1,21 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { Logo } from "@/components/ui/logo"  // Shared logo component
+import { Logo } from "@/components/ui/logo"
 
 // =============================================
-// Auth Layout Metadata
+// Auth Layout Metadata — Vorticura Mission Control
 // =============================================
 export const metadata: Metadata = {
-  title: "Authentication | QuoteFlow AI",
-  description: "Sign in or create an account to access QuoteFlow AI",
+  title: "Mission Control | Vorticura",
+  description: "AI-powered procurement automation. Warp-speed results. Zero setup friction.",
 }
 
 // =============================================
-// Auth Layout Component
+// Auth Layout Component — Instrument-Grade Split Screen
 // =============================================
-// Split-screen authentication layout:
-// - Desktop: 40% left form panel, 60% right brand panel
-// - Mobile: Single column with form only
+// Left: warm paper form column (40%) with wordmark + auth shell + footer.
+// Right: deep ink brand panel (60%, desktop only) with mission narrative, metrics.
+// No gradients, no orbs, no legacy tokens. Vorticura all the way down.
 export default function AuthLayout({
   children,
 }: Readonly<{
@@ -23,19 +23,27 @@ export default function AuthLayout({
 }>) {
   return (
     <main className="flex min-h-screen w-full">
-      {/* ===== Left Panel: Form Area (40% on desktop) ===== */}
-      <section className="flex w-full flex-col justify-center px-6 py-12 lg:w-2/5 lg:px-12">
-        {/* Logo and Brand Name */}
-        <div className="mb-8">
+      {/* ===== Left Panel: Form Area (40% on desktop, 100% on mobile) ===== */}
+      <section className="flex w-full flex-col justify-between px-6 py-12 lg:w-2/5 lg:px-12 bg-paper">
+        {/* Wordmark cluster: Logo + serif "Vorticura" + mono "OPS" superscript */}
+        <div className="mb-12">
           <Link
             href="/"
-            className="inline-flex items-center gap-2.5 transition-opacity hover:opacity-80"
-            aria-label="Go to QuoteFlow AI homepage"
+            className="inline-flex items-center gap-3 hover:opacity-80 transition-opacity"
+            aria-label="Vorticura — home"
           >
-            {/* Shared Logo Component */}
-            <Logo className="w-8 h-8" />
-            <span className="text-xl font-bold text-foreground">QuoteFlow AI</span>
+            {/* Instrument mark */}
+            <Logo className="w-7 h-7 text-ink" />
+            {/* Serif wordmark + mono micro superscript */}
+            <div className="flex items-baseline gap-2">
+              <span className="font-display text-[1.375rem] tracking-[-0.01em] leading-none text-ink">
+                Vorticura
+              </span>
+              <span className="micro-label text-graphite hidden sm:inline">OPS</span>
+            </div>
           </Link>
+          {/* Station identifier micro-label */}
+          <p className="micro-label text-graphite mt-4">STATION 00 · ACCESS</p>
         </div>
 
         {/* Form Content (children from page.tsx) */}
@@ -43,104 +51,70 @@ export default function AuthLayout({
           {children}
         </div>
 
-        {/* Footer (using design token) */}
-        <footer className="mt-8 text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} QuoteFlow AI. All rights reserved.</p>
+        {/* Footer: mono micro-label, Vorticura copyright */}
+        <footer className="text-center">
+          <p className="micro-label text-graphite">
+            © 2026 VORTICURA · ALL RIGHTS RESERVED
+          </p>
         </footer>
       </section>
 
-      {/* ===== Right Panel: Brand Area (60% on desktop, hidden on mobile) ===== */}
-      {/* Uses semantic gradient tokens: primary (dark) to primary-hover (slightly lighter) */}
+      {/* ===== Right Panel: Brand/Mission Area (60% on desktop, hidden on mobile) ===== */}
+      {/* Solid ink background — the deep instrument console. No gradients, no orbs. */}
       <section
-        className="relative hidden lg:flex lg:w-3/5 lg:flex-col lg:items-center lg:justify-center lg:bg-gradient-to-br lg:from-primary lg:via-primary-hover lg:to-primary"
-        aria-hidden="true" // Decorative panel, not essential for accessibility
+        className="relative hidden lg:flex lg:w-3/5 lg:flex-col lg:items-center lg:justify-center bg-ink"
+        aria-hidden="true"
       >
-        {/* Decorative Background Pattern */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -left-1/4 -top-1/4 h-1/2 w-1/2 rounded-full bg-brand/10 blur-3xl" />
-          <div className="absolute -bottom-1/4 -right-1/4 h-1/2 w-1/2 rounded-full bg-chart-2/10 blur-3xl" />
-        </div>
-
-        {/* Brand Content */}
-        <div className="relative z-10 max-w-lg px-8 text-center">
-          {/* Large Logo for Brand Panel - uses shared component */}
-          {/* Uses background/10 for semi-transparent overlay on always-dark brand panel */}
-          <div className="mb-8 inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-background/10 backdrop-blur-sm">
-            <Logo className="w-12 h-12" />
-          </div>
-
-          {/* Headline - uses on-dark token for text on dark backgrounds */}
-          <h1 className="mb-4 text-4xl font-bold tracking-tight text-on-dark">
-            Streamline Your Quotations
-          </h1>
-
-          {/* Tagline (using design token for text on dark bg) */}
-          <p className="mb-8 text-lg text-on-dark">
-            AI-powered quotation management that helps you create, track, and close deals faster than ever.
+        {/* Brand Content: centered in a max-width container */}
+        <div className="relative z-10 max-w-lg px-12 flex flex-col">
+          {/* Mono overline: mission control live status */}
+          <p className="micro-label text-paper/60 mb-6">
+            MISSION CONTROL · LIVE
           </p>
 
-          {/* Feature Highlights */}
-          <div className="space-y-4 text-left">
-            {/* Feature 1 */}
-            <div className="flex items-start gap-3">
-              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand/20">
-                <svg
-                  className="h-3 w-3 text-brand-light"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </div>
-              <p className="text-sm text-on-dark">
-                Generate professional quotations in seconds with AI assistance
-              </p>
-            </div>
+          {/* Serif headline: the core hook — 48-56px, leading tight */}
+          <h1
+            className="font-display text-paper mb-6"
+            style={{
+              fontSize: "clamp(3rem, 6vw, 3.5rem)",
+              lineHeight: "1.05",
+              letterSpacing: "-0.015em",
+            }}
+          >
+            You're four minutes from a sent quote.
+          </h1>
 
-            {/* Feature 2 */}
-            <div className="flex items-start gap-3">
-              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand/20">
-                <svg
-                  className="h-3 w-3 text-brand-light"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </div>
-              <p className="text-sm text-on-dark">
-                Track workflow progress and collaborate with your team
-              </p>
-            </div>
+          {/* Serif italic body: operational context, max-width to anchor rhythm */}
+          <p className="font-display italic text-paper/70 text-lg leading-relaxed max-w-md mb-12">
+            Sign in to pick up where you left off — every active RFQ, every supplier ranking, every draft, exactly where the last shift left them.
+          </p>
 
-            {/* Feature 3 */}
-            <div className="flex items-start gap-3">
-              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand/20">
-                <svg
-                  className="h-3 w-3 text-brand-light"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </div>
-              <p className="text-sm text-on-dark">
-                Secure workspace isolation for multi-tenant environments
-              </p>
+          {/* Divider rule: 1px border-paper/15 */}
+          <div className="border-t border-paper/15 pt-8 mb-8" />
+
+          {/* Three operational metrics: mono micro-labels with signal squares */}
+          <div className="space-y-3 mb-12">
+            {/* Metric 1: INGEST */}
+            <div className="flex items-center gap-3">
+              <div className="w-1.5 h-1.5 bg-signal shrink-0" />
+              <span className="micro-label text-paper/80">INGEST · 12S MEDIAN</span>
+            </div>
+            {/* Metric 2: PARSE */}
+            <div className="flex items-center gap-3">
+              <div className="w-1.5 h-1.5 bg-signal shrink-0" />
+              <span className="micro-label text-paper/80">PARSE · 22S MEDIAN</span>
+            </div>
+            {/* Metric 3: SEND */}
+            <div className="flex items-center gap-3">
+              <div className="w-1.5 h-1.5 bg-signal shrink-0" />
+              <span className="micro-label text-paper/80">SEND · 4M 47S MEDIAN</span>
             </div>
           </div>
+
+          {/* Benchmark footnote: lighter mono micro-label */}
+          <p className="micro-label text-paper/40">
+            BENCHMARK · Q2 2026 · N = 47 TEAMS
+          </p>
         </div>
       </section>
     </main>

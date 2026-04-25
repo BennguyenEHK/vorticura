@@ -18,7 +18,8 @@ import { cookies } from 'next/headers';
 import { SignJWT } from 'jose';
 
 import { db } from '@/lib/db/client';
-import { userInfo, userCompany, emailConnections } from '@/lib/db/schema';
+// userSessions added for prev-location lookup (parity with POST /api/auth/login)
+import { userInfo, userCompany, emailConnections, userSessions } from '@/lib/db/schema';
 import {
   exchangeGoogleCode,
   decodeGoogleIdToken,
@@ -223,6 +224,19 @@ async function handleLogin(
     .set({ lastLogin: new Date() })
     .where(eq(userInfo.userId, user.userId));
 
+  // Look up the user's last in-app location so OAuth login lands them where they left off,
+  // matching the behaviour of the password-based POST /api/auth/login route.
+  const [session] = await db
+    .select({ prevLocation: userSessions.prevLocation })
+    .from(userSessions)
+    .where(
+      and(
+        eq(userSessions.companyId, user.companyId!),
+        eq(userSessions.userId, user.userId),
+      ),
+    )
+    .limit(1);
+
   // Generate JWT and set auth cookie
   const jwtPayload: JWTPayload = {
     user_id: user.userId,
@@ -232,13 +246,22 @@ async function handleLogin(
   };
 
   const token = await generateJWT(jwtPayload);
-  const redirectUrl = returnUrl || '/dashboard';
+
+  // Resolution order: explicit ?returnUrl=  →  saved prevLocation  →  /dashboard.
+  // The previous default of returnUrl||'/dashboard' lost the user's last context.
+  const redirectUrl = returnUrl || session?.prevLocation || '/dashboard';
 
   const response = NextResponse.redirect(`${APP_URL}${redirectUrl}`);
   response.cookies.set('auth_token', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    // 'lax' (NOT 'strict'): the OAuth flow is a cross-site redirect chain
+    // (accounts.google.com → our callback → /dashboard). With 'strict', Chrome
+    // drops the cookie on the redirect-following request, the middleware then
+    // sees no auth_token and bounces the user back to '/'. 'lax' allows the
+    // cookie on top-level GET navigations and is the industry standard for
+    // OAuth-issued session cookies (Auth0, Clerk, Supabase all use 'lax').
+    sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60,
     path: '/',
   });
