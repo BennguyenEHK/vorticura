@@ -1,14 +1,14 @@
 "use client";
 
 // =============================================
-// Panel Header
+// Panel Header — Mission Control instrument bar
 // =============================================
-// Header component for workboard panels
-// Contains: drag handle, title, minimize/close controls
-//
-// Close button behavior:
-// - Chat panel: Undocks to FAB (removePanel + setDocked)
-// - Other panels: Hides panel (togglePanelVisibility) - can restore via toggle icons
+// Sits at the top of every workboard panel. Carries:
+// - Drag grip (left)
+// - Mono ALL-CAPS panel title (instrument label gesture)
+// - Maximize/restore + close controls (ghost buttons, hairline tray)
+// Uses paper fill with a hairline rule beneath — separates header from body
+// without a heavy bar.
 
 import {
   GripVertical,
@@ -29,7 +29,7 @@ import { Button } from "@/components/ui/button";
 // Icon Map
 // =============================================
 
-const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+const iconMap: Record<string, React.ComponentType<{ className?: string; strokeWidth?: number }>> = {
   Bot,
   GitBranch,
   DollarSign,
@@ -43,52 +43,49 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
 
 interface PanelHeaderProps {
   id: string;                    // Panel identifier
-  title: string;                 // Panel title
+  title: string;                 // Panel title (will be rendered ALL CAPS)
   icon?: string;                 // Lucide icon name
-  isClosable?: boolean;          // Legacy prop - no longer used (all panels have close button)
+  isClosable?: boolean;          // Legacy prop (every panel has a close button now)
+  isMinimized?: boolean;         // Reserved for future minimize control
 }
 
 /**
- * PanelHeader - Header for workboard panels
- * Features:
- * - Drag handle (grip icon)
- * - Panel title with icon
- * - Minimize button
- * - Close button (all panels - hides or undocks based on panel type)
+ * PanelHeader — Mission Control instrument bar.
+ * Title renders as a mono ALL-CAPS micro-label (panel-as-instrument).
+ * Close behavior:
+ *   - Chat panel: undocks back to FAB
+ *   - Other panels: hides (toggle visible from the workspace header)
  */
 export function PanelHeader({
   id,
   title,
   icon,
-  // isClosable is now ignored - all panels have close button
 }: PanelHeaderProps) {
-  // Get workboard actions and state for maximize/restore functionality
+  // Workboard actions for maximize/restore and hide
   const { toggleMaximize, removePanel, togglePanelVisibility, maximizedPanelId } = useWorkboard();
 
-  // Get AI Chat actions for undocking
+  // AI Chat actions for undock-to-FAB behavior
   const { setDocked } = useAIChat();
 
-  // Get icon component from icon name
+  // Resolve the icon component from its name
   const IconComponent = icon ? iconMap[icon] : null;
 
-  // Determine if this is the chat panel (different close behavior)
+  // Chat panel has different close semantics (undock instead of hide)
   const isChatPanel = id === "chat";
 
-  // Check if this panel is currently maximized
+  // Track whether this panel is currently maximized
   const isMaximized = maximizedPanelId === id;
 
   /**
-   * Handle close/hide panel
-   * - Chat panel: Undock to FAB mode (removePanel + setDocked)
-   * - Other panels: Hide panel with position preserved (togglePanelVisibility)
+   * Close handler:
+   * - Chat: undock to FAB (return to floating mode)
+   * - Other panels: hide with position preserved
    */
   const handleClose = () => {
     if (isChatPanel) {
-      // Chat panel: undock it (return to floating FAB)
       setDocked(false);
       removePanel(id);
     } else {
-      // Other panels: hide with position preserved (can restore via toggle icons)
       togglePanelVisibility(id);
     }
   };
@@ -99,64 +96,61 @@ export function PanelHeader({
         panel-drag-handle
         flex items-center justify-between
         px-3 py-2
-        border-b border-border
-        bg-muted/50
+        border-b border-rule
+        bg-paper
         cursor-grab
         active:cursor-grabbing
         select-none
       `}
     >
-      {/* Left side: drag handle + icon + title */}
-      <div className="flex items-center gap-2">
-        {/* Drag handle icon - indicates draggable area */}
-        <GripVertical className="w-4 h-4 text-muted-foreground" />
+      {/* Left side: drag grip + icon + mono caps title */}
+      <div className="flex items-center gap-2.5">
+        {/* Drag grip — graphite tone, indicates this row is the drag handle */}
+        <GripVertical className="w-4 h-4 text-graphite" strokeWidth={1.5} />
 
-        {/* Panel icon - visual identifier */}
+        {/* Panel icon — single-weight Lucide stroke */}
         {IconComponent && (
-          <IconComponent className="w-4 h-4 text-muted-foreground" />
+          <IconComponent className="w-4 h-4 text-graphite" strokeWidth={1.5} />
         )}
 
-        {/* Panel title */}
-        <span className="text-sm font-medium text-foreground">{title}</span>
+        {/* Panel title — mono ALL-CAPS, wide tracking (instrument label) */}
+        <span className="micro-label text-ink">{title}</span>
       </div>
 
-      {/* Right side: action buttons */}
+      {/* Right side: maximize/restore + close — both ghost buttons */}
       <div className="flex items-center gap-1">
-        {/* Maximize/Restore button - expands panel to fill space or restores to original */}
+        {/* Maximize/restore */}
         <Button
           variant="ghost"
           size="icon"
-          className="h-6 w-6"
+          className="h-7 w-7"
           onClick={(e) => {
-            e.stopPropagation(); // Prevent drag start
+            e.stopPropagation(); // Prevent triggering a drag start
             toggleMaximize(id);
           }}
           aria-label={isMaximized ? "Restore panel" : "Maximize panel"}
           title={isMaximized ? "Restore" : "Maximize"}
         >
-          {/* Show Minimize2 when maximized (click to restore), Maximize2 when normal (click to maximize) */}
           {isMaximized ? (
-            <Minimize2 className="w-3 h-3" />
+            <Minimize2 className="w-3.5 h-3.5" strokeWidth={1.5} />
           ) : (
-            <Maximize2 className="w-3 h-3" />
+            <Maximize2 className="w-3.5 h-3.5" strokeWidth={1.5} />
           )}
         </Button>
 
-        {/* Close button - all panels have this now */}
-        {/* Chat: "Close panel" (undocks to FAB) */}
-        {/* Others: "Hide panel" (can restore via toggle icons in header) */}
+        {/* Close — hover state shifts to ember (oxidized red) for "warning lamp" feel */}
         <Button
           variant="ghost"
           size="icon"
-          className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive"
+          className="h-7 w-7 hover:bg-ember/10 hover:text-ember"
           onClick={(e) => {
-            e.stopPropagation(); // Prevent drag start
+            e.stopPropagation();
             handleClose();
           }}
           aria-label={isChatPanel ? "Close panel" : "Hide panel"}
           title={isChatPanel ? "Close" : "Hide"}
         >
-          <X className="w-3 h-3" />
+          <X className="w-3.5 h-3.5" strokeWidth={1.5} />
         </Button>
       </div>
     </div>

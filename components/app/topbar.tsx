@@ -1,10 +1,13 @@
 "use client";
 
 // =============================================
-// App Top Bar Component
+// App Top Bar — Mission Control header
 // =============================================
-// Fixed header navigation with logo, search, Comms Hub, and user info
-// Includes theme toggle using next-themes
+// Solid paper surface with a single hairline rule beneath. NO glassmorphism,
+// no backdrop blur — those are the AI-tell-tale fingerprints. The wordmark
+// pairs a serif "Vorticura" with a tiny mono superscript (NASA mission-patch
+// gesture). Search, Comms Hub, notifications and theme toggle live to the
+// right; everything aligned to the same baseline rule.
 
 import { useState, useEffect } from "react";
 import { Search, Bell, ChevronDown, Moon, Sun, Menu } from "lucide-react";
@@ -20,48 +23,39 @@ import { CommsHubTrigger, CommsHubDropdown } from "@/components/app/comms-hub";
 // =============================================
 
 /**
- * DashboardTopBar - Fixed header navigation with search, Comms Hub, and user info
- * Features:
- * - Logo and brand name
- * - Hamburger menu to toggle sidebar
- * - Workspace selector dropdown
- * - Search input
- * - Comms Hub dropdown (email, WhatsApp, SMS)
- * - Notifications with badge
- * - Theme toggle (light/dark)
- * - User avatar
+ * DashboardTopBar — Mission Control header bar.
+ * Solid --paper background, 1px --rule bottom border, no blur.
+ * Wordmark is serif + mono superscript, theme toggle + Comms Hub on the right.
  */
 export function DashboardTopBar() {
-  // Track if component has mounted (for hydration-safe theme rendering)
+  // Hydration-safe theme rendering
   const [mounted, setMounted] = useState(false);
-  // Track Comms Hub dropdown state
+  // Comms Hub dropdown state
   const [commsOpen, setCommsOpen] = useState(false);
-  // Theme toggle hook from next-themes
+  // Theme toggle hook
   const { setTheme, resolvedTheme } = useTheme();
-  // Sidebar context for toggle
+  // Sidebar context for hamburger toggle
   const { toggleSidebar } = useSidebar();
 
-  // Set mounted to true after hydration completes
+  // Wait for hydration to complete before resolving theme icon
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Toggle between light and dark themes
+  // Toggle between light and dark
   const toggleTheme = () => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark");
   };
 
   // Toggle Comms Hub dropdown
-  const toggleCommsHub = () => {
-    setCommsOpen(!commsOpen);
-  };
+  const toggleCommsHub = () => setCommsOpen(!commsOpen);
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-16 border-b border-border bg-card z-50">
+    <header className="fixed top-0 left-0 right-0 h-16 border-b border-rule bg-paper z-50">
       <div className="h-full flex items-center justify-between px-6 gap-4">
-        {/* Left Section - Hamburger, Logo, workspace */}
+        {/* Left cluster — hamburger, wordmark, workspace selector */}
         <div className="flex items-center gap-4">
-          {/* Hamburger menu button - toggles sidebar */}
+          {/* Hamburger menu — toggles the sidebar rail */}
           <Button
             variant="ghost"
             size="icon"
@@ -72,47 +66,55 @@ export function DashboardTopBar() {
             <Menu className="h-5 w-5" />
           </Button>
 
-          {/* Logo and brand name */}
-          <div className="flex items-center gap-2.5">
-            <Logo className="w-8 h-8" />
-            <span className="text-lg font-bold tracking-tight text-foreground">
-              QuoteFlow AI
+          {/* Wordmark: instrument logo + serif name + mono superscript */}
+          <div className="flex items-baseline gap-2.5">
+            {/* Logo aligned to the cap-height of the serif word */}
+            <Logo className="w-6 h-6 self-center text-ink" />
+
+            {/* Serif wordmark — display font, tight tracking */}
+            <span className="font-display text-ink text-[22px] leading-none tracking-[-0.01em]">
+              Vorticura
+            </span>
+
+            {/* Mono superscript — NASA mission-patch detail */}
+            <span className="hidden md:inline micro-label text-graphite">
+              · OPS
             </span>
           </div>
 
-          {/* Workspace selector */}
+          {/* Workspace selector — divider + mono caps button */}
           <div className="hidden md:flex items-center gap-3 ml-4">
-            {/* Divider */}
-            <div className="h-6 w-px bg-border" aria-hidden="true" />
+            {/* Vertical hairline divider between identity and workspace */}
+            <div className="h-6 w-px bg-rule" aria-hidden="true" />
 
-            {/* Workspace dropdown trigger */}
+            {/* Workspace dropdown trigger — mono caps, hairline bottom on hover */}
             <button
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-label hover:bg-secondary transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-sm font-body text-sm text-ink hover:bg-vellum transition-colors"
               aria-haspopup="listbox"
               aria-label="Select workspace"
             >
-              <span className="text-sm">Acme Corp Workspace</span>
-              <ChevronDown className="h-4 w-4" />
+              <span>Acme Corp Workspace</span>
+              <ChevronDown className="h-4 w-4 text-graphite" />
             </button>
           </div>
         </div>
 
-        {/* Right Section - Search, Comms Hub, actions, and user */}
+        {/* Right cluster — search, comms, notifications, theme, avatar */}
         <div className="flex items-center gap-3">
-          {/* Search input with icon - hidden on mobile */}
+          {/* Search — paper-on-paper field with hairline ink/40 border */}
           <div className="relative hidden md:block w-64">
             <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-placeholder"
+              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-graphite"
               aria-hidden="true"
             />
             <Input
-              placeholder="Search..."
+              placeholder="Search RFQs, suppliers, quotes…"
               className="pl-9 h-9"
               aria-label="Search"
             />
           </div>
 
-          {/* Comms Hub - Communication channels dropdown */}
+          {/* Comms Hub */}
           <div className="relative">
             <CommsHubTrigger
               isOpen={commsOpen}
@@ -124,7 +126,7 @@ export function DashboardTopBar() {
             />
           </div>
 
-          {/* Notifications button with indicator */}
+          {/* Notifications — bell with a small ember dot for unread */}
           <Button
             variant="ghost"
             size="icon"
@@ -132,14 +134,13 @@ export function DashboardTopBar() {
             aria-label="View notifications"
           >
             <Bell className="h-4 w-4" />
-            {/* Notification indicator dot */}
             <span
-              className="absolute top-1 right-1 w-2 h-2 rounded-full bg-destructive"
+              className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-ember"
               aria-hidden="true"
             />
           </Button>
 
-          {/* Theme toggle button */}
+          {/* Theme toggle — sun in dark mode, moon in light */}
           <Button
             variant="ghost"
             size="icon"
@@ -153,7 +154,6 @@ export function DashboardTopBar() {
                 : "Toggle theme"
             }
           >
-            {/* Show sun icon in dark mode, moon icon in light mode */}
             {mounted ? (
               resolvedTheme === "dark" ? (
                 <Sun className="h-4 w-4" />
@@ -165,9 +165,9 @@ export function DashboardTopBar() {
             )}
           </Button>
 
-          {/* User avatar */}
+          {/* User avatar — Azimuth fill (depth color, not indigo cliché) */}
           <div
-            className="h-8 w-8 rounded-full flex items-center justify-center bg-avatar text-avatar-foreground text-sm font-medium"
+            className="h-8 w-8 rounded-sm flex items-center justify-center bg-azimuth text-paper font-data text-xs font-medium tracking-wider"
             role="img"
             aria-label="User avatar"
           >

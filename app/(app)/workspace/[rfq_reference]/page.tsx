@@ -1,9 +1,9 @@
 // =============================================
-// Workspace Page — RFQ-keyed editor
+// Workspace Page — Mission Control workboard
 // =============================================
-// Dynamic route for editing a specific RFQ by its rfq_reference (from incoming email).
+// Dynamic route for editing a specific RFQ by its rfq_reference (from email).
 // URL: /workspace/[rfq_reference]  (e.g. /workspace/RFQ%20PK%2022501)
-// Uses dynamic WorkboardGrid for resizable/repositionable panels.
+// Hosts the resizable WorkboardGrid plus the workspace header with panel toggles.
 
 "use client";
 
@@ -27,11 +27,11 @@ interface WorkspacePageProps {
 // Panel Toggle Configuration
 // =============================================
 
-/** Config for panel toggle buttons — maps panel id to icon */
+/** Panel toggle config — drives the icon buttons in the workspace header */
 const PANEL_TOGGLES = [
-  { id: "workflow", icon: GitBranch, label: "Workflow" },
-  { id: "pricing", icon: DollarSign, label: "Pricing" },
-  { id: "preview", icon: FileText, label: "Preview" },
+  { id: "workflow", icon: GitBranch,  label: "Workflow" },
+  { id: "pricing",  icon: DollarSign, label: "Pricing"  },
+  { id: "preview",  icon: FileText,   label: "Preview"  },
 ] as const;
 
 // =============================================
@@ -39,61 +39,66 @@ const PANEL_TOGGLES = [
 // =============================================
 
 /**
- * WorkspaceHeader - Header with title and layout controls
- * Includes panel toggle buttons for hiding/showing individual panels
+ * WorkspaceHeader — Mission Control workspace header.
+ * Pairs an editorial title block with a row of instrument controls
+ * (panel toggles, reset, lock/unlock) on the right.
  */
 function WorkspaceHeader({ rfqReference }: { rfqReference: string }) {
-  // Workboard state (layout lock + panel visibility)
   const { isLocked, setLocked, resetLayout, togglePanelVisibility, isPanelVisible } = useWorkboard();
 
   return (
-    <div className="flex items-center justify-between mb-6">
-      {/* Page title — renders the human-friendly rfq_reference */}
+    <div className="flex items-end justify-between gap-6 flex-wrap mb-6">
+      {/* ===== Editorial title block ===== */}
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">
-          Workspace: {rfqReference}
+        {/* Mono overline — workspace identifier */}
+        <div className="flex items-center gap-3 mb-3">
+          <span className="micro-label text-graphite">VORTICURA · OPS</span>
+          <span className="h-px w-8 bg-rule-strong" aria-hidden="true" />
+          <span className="micro-label text-graphite">WORKSPACE</span>
+        </div>
+
+        {/* Serif display headline — RFQ reference reads as a mono inset */}
+        <h1 className="font-display text-ink text-[2rem] leading-[1.05] tracking-[-0.015em]">
+          <span className="font-data text-ink tabular-nums tracking-[0.02em]">
+            {rfqReference}
+          </span>
         </h1>
-        <p className="text-body">
-          Drag panel edges to resize, drag headers to reposition
+
+        {/* Body description */}
+        <p className="font-body mt-2 text-graphite text-sm leading-[1.55]">
+          Drag panel edges to resize, drag headers to reposition.
         </p>
       </div>
 
-      {/* Layout controls */}
+      {/* ===== Instrument controls ===== */}
       <div className="flex items-center gap-2">
-        {/* Panel toggle buttons — circular buttons to hide/show panels */}
+        {/* Panel toggle row — compact instrument squares (rounded-sm = 6px) */}
         {PANEL_TOGGLES.map(({ id, icon: Icon, label }) => {
           const isVisible = isPanelVisible(id);
           return (
             <Button
               key={id}
-              variant="ghost"
+              variant={isVisible ? "default" : "outline"}
               size="icon"
               onClick={() => togglePanelVisibility(id)}
-              className={`
-                h-9 w-9 rounded-full border transition-all duration-200
-                ${isVisible
-                  ? "bg-primary text-primary-foreground border-primary hover:bg-primary-hover"
-                  : "bg-muted text-muted-foreground border-border hover:bg-secondary"
-                }
-              `}
               aria-label={`${isVisible ? "Hide" : "Show"} ${label} panel`}
               title={`${isVisible ? "Hide" : "Show"} ${label}`}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className="h-4 w-4" strokeWidth={1.5} />
             </Button>
           );
         })}
 
-        {/* Separator */}
-        <div className="h-6 w-px bg-border mx-1" />
+        {/* Vertical hairline separator */}
+        <div className="h-6 w-px bg-rule mx-1" />
 
         {/* Reset layout */}
         <Button variant="outline" size="sm" onClick={resetLayout} className="gap-2">
-          <RotateCcw className="w-4 h-4" />
-          Reset Layout
+          <RotateCcw className="w-4 h-4" strokeWidth={1.5} />
+          Reset
         </Button>
 
-        {/* Lock/Unlock */}
+        {/* Lock / Unlock — primary when locked, outline when free */}
         <Button
           variant={isLocked ? "default" : "outline"}
           size="sm"
@@ -102,12 +107,12 @@ function WorkspaceHeader({ rfqReference }: { rfqReference: string }) {
         >
           {isLocked ? (
             <>
-              <Lock className="w-4 h-4" />
+              <Lock className="w-4 h-4" strokeWidth={1.5} />
               Locked
             </>
           ) : (
             <>
-              <Unlock className="w-4 h-4" />
+              <Unlock className="w-4 h-4" strokeWidth={1.5} />
               Unlocked
             </>
           )}
@@ -122,28 +127,22 @@ function WorkspaceHeader({ rfqReference }: { rfqReference: string }) {
 // =============================================
 
 /**
- * WorkspacePage - Main RFQ editing workspace keyed on rfq_reference
- * Features:
- * - Drag edges to resize panels
- * - Drag headers to reposition panels
- * - Drop AI Chat FAB to add chat panel
- * - Lock/unlock layout editing
- * - Reset to default layout
- *
- * @param params - Route params containing rfq_reference (URL-encoded)
+ * WorkspacePage — Mission Control workboard for a single RFQ.
+ * Wraps everything in the warm paper background so panels (vellum) sit on it
+ * with the same paper-vs-vellum contrast used elsewhere.
  */
 export default function WorkspacePage({ params }: WorkspacePageProps) {
-  // Unwrap params Promise using React.use(); decode spaces/slashes in rfq_reference
+  // Unwrap async params; decode encoded slashes/spaces in rfq_reference
   const { rfq_reference } = use(params);
   const rfqReference = decodeURIComponent(rfq_reference);
 
   return (
     <RFQProvider rfqReference={rfqReference}>
-      <div className="space-y-4">
-        {/* Page header with controls */}
+      <div className="bg-paper text-ink min-h-full">
+        {/* Workspace header */}
         <WorkspaceHeader rfqReference={rfqReference} />
 
-        {/* Dynamic panel grid */}
+        {/* Resizable panel grid */}
         <WorkboardGrid className="min-h-[calc(100vh-200px)]" />
       </div>
     </RFQProvider>

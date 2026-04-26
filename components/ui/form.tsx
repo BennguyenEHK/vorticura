@@ -108,7 +108,8 @@ const FormLabel = React.forwardRef<
   return (
     <Label
       ref={ref}
-      className={cn(error && "text-error", className)}  /* Using design token for error state */
+      // Ember (oxidized red) on validation error; otherwise inherit Label defaults
+      className={cn(error && "text-ember", className)}
       htmlFor={formItemId}
       {...props}
     />
@@ -153,7 +154,8 @@ const FormDescription = React.forwardRef<
     <p
       ref={ref}
       id={formDescriptionId}
-      className={cn("text-sm text-muted-foreground", className)}  /* Using design token */
+      // Helper text below an input — body grotesque, graphite tone
+      className={cn("font-body text-sm text-graphite", className)}
       {...props}
     />
   )
@@ -177,7 +179,8 @@ const FormMessage = React.forwardRef<
     <p
       ref={ref}
       id={formMessageId}
-      className={cn("text-sm font-medium text-error", className)}  /* Using design token for error */
+      // Validation error message — ember (oxidized red), body grotesque
+      className={cn("font-body text-sm font-medium text-ember", className)}
       role="alert" // Accessibility: announce error to screen readers
       {...props}
     >

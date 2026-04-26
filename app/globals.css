@@ -559,35 +559,42 @@
   bottom: 4px;
   width: 8px;
   height: 8px;
-  border-right: 2px solid var(--muted-foreground);
-  border-bottom: 2px solid var(--muted-foreground);
+  /* Mission Control: graphite hairline at rest, Azimuth on hover */
+  border-right: 1.5px solid var(--graphite);
+  border-bottom: 1.5px solid var(--graphite);
   opacity: 0.5;
-  transition: opacity 0.2s;
+  transition: opacity 0.2s, border-color 0.2s;
 }
 
 .react-grid-item:hover > .react-resizable-handle-se::after {
   opacity: 1;
-  border-color: var(--brand);
+  border-color: var(--azimuth);
 }
 
-/* Dragging state for react-grid-layout */
+/* Dragging state — single subtle ink shadow (no big SaaS drop) */
 .react-grid-item.react-draggable-dragging {
   z-index: 100;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  /* Mission Control: very tight ink shadow to lift the dragged panel just a touch */
+  box-shadow: 0 4px 12px oklch(0 0 0 / 0.12);
 }
 
-/* Placeholder styling when dragging */
+/* Placeholder while dragging — vellum fill + dashed Azimuth border, sharp corners */
 .react-grid-placeholder {
-  background-color: var(--brand-muted);
-  border: 2px dashed var(--brand);
-  border-radius: var(--radius);
-  opacity: 0.5;
+  background-color: var(--vellum);
+  border: 1.5px dashed var(--azimuth);
+  border-radius: calc(var(--radius) - 4px);  /* matches the panel rounded-sm = 6px */
+  opacity: 0.55;
 }
 
-/* Dark mode adjustments */
+/* Dark mode keeps the same gestures — vellum already inverts via tokens */
 .dark .react-grid-placeholder {
-  background-color: var(--brand-muted);
-  opacity: 0.3;
+  background-color: var(--vellum);
+  opacity: 0.4;
+}
+
+/* Visual indicator during drag when approaching grid boundary — Azimuth wash */
+.workboard-grid-constrained.at-boundary {
+  box-shadow: inset 0 -4px 8px -4px var(--azimuth);
 }
 
 /* =============================================
@@ -595,12 +602,8 @@
  * ============================================= */
 
 /* Constrained grid - prevents panels from expanding beyond calculated height */
+/* The .at-boundary indicator is defined above using the Azimuth token */
 .workboard-grid-constrained {
   overflow: hidden;               /* Prevent panels from escaping grid bounds */
   position: relative;             /* Contain absolute positioned children */
-}
-
-/* Visual indicator during drag when approaching grid boundary */
-.workboard-grid-constrained.at-boundary {
-  box-shadow: inset 0 -4px 8px -4px var(--brand);
 }

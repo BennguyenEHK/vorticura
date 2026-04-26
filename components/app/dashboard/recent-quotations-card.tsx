@@ -1,8 +1,12 @@
 // =============================================
-// Recent Quotations Card Component
+// Recent Quotations Card — Mission Control ledger
 // =============================================
-// Displays a table of recent quotations with status badges
-// Used in the dashboard recent activity section
+// Renders recent quotations as a Mission Control ledger:
+// - Mono ALL-CAPS column heads
+// - Hairline rule between rows, vellum hover
+// - Tabular numerals for amounts (right-aligned)
+// - Rectangular hairline status pills with a leading instrument-dot
+// Replaces the previous rounded grid + colored pill aesthetic.
 
 import { Button } from "@/components/ui/button";
 import {
@@ -12,107 +16,133 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 // =============================================
 // Types
 // =============================================
 
-// Quotation status type
 export type QuotationStatus = "draft" | "pending" | "complete";
 
-// Quotation data structure for table rows
 export interface QuotationData {
-  id: string;                 // Quotation ID (e.g., "Q-2024-001")
-  client: string;             // Client name
-  amount: string;             // Formatted amount (e.g., "$45,200")
-  status: QuotationStatus;    // Current status
-  date: string;               // Formatted date (e.g., "Jan 24, 2026")
+  id: string;                  // Quotation reference (e.g., "Q-2024-001")
+  client: string;              // Client name
+  amount: string;              // Formatted amount (e.g., "$45,200")
+  status: QuotationStatus;     // Pipeline status
+  date: string;                // Formatted date (e.g., "Jan 24, 2026")
 }
 
-// Component props
 interface RecentQuotationsCardProps {
-  quotations: QuotationData[];  // Array of quotation data
-  onViewAll?: () => void;       // Optional callback for "View all" button
+  quotations: QuotationData[];
+  onViewAll?: () => void;
 }
 
 // =============================================
-// Status Styles
+// Status pill palette
 // =============================================
-
-// Status badge styling based on quotation status (using design tokens)
-const statusStyles: Record<QuotationStatus, string> = {
-  draft: "bg-status-draft text-status-draft-foreground",
-  pending: "bg-status-pending text-status-pending-foreground",
-  complete: "bg-status-complete text-status-complete-foreground",
+// Mission Control rule: never more than two chromatic colors in a viewport.
+// Draft = signal amber (live data). Pending = azimuth (interaction). Complete = verdigris.
+const STATUS_STYLES: Record<
+  QuotationStatus,
+  { dot: string; text: string; border: string; label: string }
+> = {
+  draft:    { dot: "bg-signal",    text: "text-ink",       border: "border-signal/50",    label: "DRAFT" },
+  pending:  { dot: "bg-azimuth",   text: "text-azimuth",   border: "border-azimuth/40",   label: "PENDING" },
+  complete: { dot: "bg-verdigris", text: "text-verdigris", border: "border-verdigris/40", label: "COMPLETE" },
 };
 
 // =============================================
-// Recent Quotations Card Component
+// Recent Quotations Card
 // =============================================
 
 /**
- * RecentQuotationsCard - Displays a table of recent quotations
- * Uses design tokens from globals.css for all styling
+ * RecentQuotationsCard — Procurement ledger for the most recent quotations.
+ * Uses the Table primitive so it inherits the Mission Control row treatment.
  */
 export function RecentQuotationsCard({
   quotations,
-  onViewAll
+  onViewAll,
 }: RecentQuotationsCardProps) {
   return (
-    <Card className="lg:col-span-2 bg-card">
-      {/* Card header with title and description */}
-      <CardHeader>
-        <CardTitle className="text-foreground">Recent Quotations</CardTitle>
-        <CardDescription>Your latest quotation activity</CardDescription>
+    // Spans 2/3 of the dashboard activity row
+    <Card className="lg:col-span-2">
+      {/* Header — display serif title, body description */}
+      <CardHeader className="pb-4">
+        <CardTitle>Recent Quotations</CardTitle>
+        <CardDescription>Latest activity across the open pipeline</CardDescription>
       </CardHeader>
 
-      {/* Card content with table */}
-      <CardContent>
-        <div className="space-y-4">
-          {/* Table header row */}
-          <div className="grid grid-cols-5 text-xs font-medium text-muted-foreground uppercase tracking-wider border-b border-border pb-2">
-            <span>ID</span>
-            <span>Client</span>
-            <span>Amount</span>
-            <span>Status</span>
-            <span>Date</span>
-          </div>
+      {/* Body — full-width ledger table, no horizontal padding so the rules run edge-to-edge */}
+      <CardContent className="pb-0 px-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>ID</TableHead>
+              <TableHead>Client</TableHead>
+              {/* Amount column right-aligned for ledger alignment */}
+              <TableHead className="text-right">Amount</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Date</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {quotations.map((quote) => {
+              const status = STATUS_STYLES[quote.status];
+              return (
+                <TableRow key={quote.id}>
+                  {/* ID — mono data, ink color */}
+                  <TableCell className="font-data text-ink tracking-[0.02em]">
+                    {quote.id}
+                  </TableCell>
+                  {/* Client — body grotesque, ink */}
+                  <TableCell className="font-body text-ink">
+                    {quote.client}
+                  </TableCell>
+                  {/* Amount — mono tabular, right-aligned (ledger convention) */}
+                  <TableCell className="font-data text-ink text-right tabular-nums">
+                    {quote.amount}
+                  </TableCell>
+                  {/* Status — rectangular hairline pill with leading dot + mono caps */}
+                  <TableCell>
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 ${status.border}`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 ${status.dot}`}
+                        aria-hidden="true"
+                      />
+                      <span
+                        className={`font-data text-[10px] tracking-[0.16em] ${status.text}`}
+                      >
+                        {status.label}
+                      </span>
+                    </span>
+                  </TableCell>
+                  {/* Date — graphite, body grotesque, right-aligned */}
+                  <TableCell className="font-body text-graphite text-right">
+                    {quote.date}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
 
-          {/* Table data rows */}
-          {quotations.map((quote) => (
-            <div
-              key={quote.id}
-              className="grid grid-cols-5 items-center py-2 text-sm hover:bg-muted rounded-lg px-1 transition-colors"
-            >
-              {/* Quotation ID */}
-              <span className="font-medium text-foreground">{quote.id}</span>
-              {/* Client name */}
-              <span className="text-body">{quote.client}</span>
-              {/* Amount */}
-              <span className="text-foreground">{quote.amount}</span>
-              {/* Status badge */}
-              <span>
-                <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${statusStyles[quote.status]}`}
-                >
-                  {/* Capitalize first letter of status */}
-                  {quote.status.charAt(0).toUpperCase() + quote.status.slice(1)}
-                </span>
-              </span>
-              {/* Date */}
-              <span className="text-muted-foreground">{quote.date}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* View all link */}
-        <div className="mt-4 pt-4 border-t border-border">
+        {/* Footer link — sits below the table inside its own padded zone */}
+        <div className="mt-2 px-6 py-4 border-t border-rule">
           <Button
             variant="link"
-            className="px-0 text-brand hover:text-brand-hover"
+            className="px-0 h-auto"
             onClick={onViewAll}
           >
-            View all quotations &rarr;
+            View all quotations →
           </Button>
         </div>
       </CardContent>

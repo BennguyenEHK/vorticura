@@ -1,10 +1,11 @@
 "use client";
 
 // =============================================
-// RFQ Queue Item Component
+// RFQ Queue Item — Mission Control queue row
 // =============================================
-// Individual RFQ item in the sidebar queue
-// Shows client name, stage, and status indicator
+// Each row is a compact ledger entry: square instrument-status icon, mono
+// reference, body-grotesque metadata. Active row is marked by a 2px Azimuth
+// bar at the left edge — same gesture as the sidebar nav. No glow, no halo.
 
 import Link from "next/link";
 import { Circle, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
@@ -19,119 +20,103 @@ interface RFQQueueItemProps {
 }
 
 /**
- * Status icon mapping based on queue status
- * Uses design tokens for colors
+ * Status icon mapping — driven entirely by Mission Control tokens.
+ * Active = verdigris, Waiting = signal, Action = azimuth, Complete = graphite,
+ * Error = ember.
  */
 const STATUS_ICONS: Record<QueueStatus, { icon: typeof Circle; className: string }> = {
-  active: {
-    icon: Circle,
-    className: "text-status-complete-foreground fill-status-complete-foreground", // Green
-  },
-  waiting: {
-    icon: Clock,
-    className: "text-status-draft", // Amber
-  },
-  action: {
-    icon: AlertCircle,
-    className: "text-brand", // Sky blue - needs attention
-  },
-  completed: {
-    icon: CheckCircle2,
-    className: "text-muted-foreground", // Gray
-  },
-  error: {
-    icon: AlertCircle,
-    className: "text-error", // Red
-  },
+  active:    { icon: Circle,         className: "text-verdigris fill-verdigris" },
+  waiting:   { icon: Clock,          className: "text-signal" },
+  action:    { icon: AlertCircle,    className: "text-azimuth" },
+  completed: { icon: CheckCircle2,   className: "text-graphite" },
+  error:     { icon: AlertCircle,    className: "text-ember" },
 };
 
 /**
- * RFQQueueItem - Single RFQ in the queue list
- * Links to workspace for that RFQ
+ * RFQQueueItem — A single procurement queue row in the sidebar.
  */
 export function RFQQueueItem({
   rfq,
   isCollapsed = false,
   isActive = false,
 }: RFQQueueItemProps) {
-  // Get prefetch function from workspace data context
   const { prefetchWorkspace } = useWorkspaceData();
 
-  // Get status icon and styling (derived from stage)
+  // Resolve status icon + tone
   const statusConfig = STATUS_ICONS[rfq.status];
   const StatusIcon = statusConfig.icon;
 
-  // URL-encode rfq_reference to survive spaces / slashes (e.g. "RFQ PK 22501")
+  // URL-encode rfq_reference so spaces / slashes survive routing
   const workspaceHref = `/workspace/${encodeURIComponent(rfq.rfqReference)}`;
 
   return (
     <Link
       href={workspaceHref}
       className={`
-        flex items-center gap-3 px-3 py-2 rounded-lg
-        transition-all group relative
+        relative flex items-start gap-3 px-5 py-2.5
+        transition-colors group font-body
         ${isActive
-          ? "bg-sidebar-accent text-sidebar-accent-foreground"
-          : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          ? "bg-vellum text-ink"
+          : "text-graphite hover:bg-vellum hover:text-ink"
         }
       `}
       title={isCollapsed ? `${rfq.rfqReference}: ${rfq.clientName}` : undefined}
       onMouseEnter={() => {
-        // Prefetch workspace payload on hover — server resolves rfqId from reference
-          // Notify in-page listeners (visible in browser console) that uiReload was invoked
-          try {
-            const eventDetail = { uiType: 'workspace', rfqReference: rfq.rfqReference };
-            console.log('[RFQQueueItem] dispatching in-page uiReload event:', eventDetail);
-            window.dispatchEvent(new CustomEvent('quoteflow:uiReload', { detail: eventDetail }));
-          } catch (evtErr) {
-            // Non-fatal: window may be undefined during SSR (guarded by click handler runtime)
-            console.warn('[RFQQueueItem] failed to dispatch uiReload event:', evtErr);
-          }
+        // Notify in-page listeners + prefetch the workspace payload
+        try {
+          const eventDetail = { uiType: 'workspace', rfqReference: rfq.rfqReference };
+          console.log('[RFQQueueItem] dispatching in-page uiReload event:', eventDetail);
+          window.dispatchEvent(new CustomEvent('quoteflow:uiReload', { detail: eventDetail }));
+        } catch (evtErr) {
+          console.warn('[RFQQueueItem] failed to dispatch uiReload event:', evtErr);
+        }
         prefetchWorkspace(rfq.rfqReference);
       }}
     >
-      {/* Status indicator icon */}
-      <StatusIcon className={`h-4 w-4 flex-shrink-0 ${statusConfig.className}`} />
+      {/* Active marker — 2px Azimuth bar flush to the left edge */}
+      {isActive && (
+        <span
+          className="absolute left-0 top-0 bottom-0 w-[2px] bg-azimuth"
+          aria-hidden="true"
+        />
+      )}
 
-      {/* Content - hidden when collapsed */}
+      {/* Status indicator icon — sits at the same vertical as the reference line */}
+      <StatusIcon
+        className={`h-3.5 w-3.5 flex-shrink-0 mt-1 ${statusConfig.className}`}
+        strokeWidth={1.5}
+      />
+
+      {/* Body — multi-line metadata, hidden when collapsed */}
       {!isCollapsed && (
         <div className="flex-1 min-w-0">
           {/* RFQ reference + unread badge */}
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium truncate">
+            {/* Mono caps reference — instrument code feel */}
+            <span className="font-data text-[11px] tracking-[0.06em] uppercase text-ink truncate">
               {rfq.rfqReference}
             </span>
+            {/* Unread count — small Azimuth square (rectangular, not pill) */}
             {rfq.unreadCount > 0 && (
-              <span className="flex-shrink-0 h-4 min-w-4 px-1 rounded-full bg-brand text-brand-foreground text-xs flex items-center justify-center">
+              <span className="flex-shrink-0 h-4 min-w-4 px-1 rounded-[2px] bg-azimuth text-paper font-data text-[10px] flex items-center justify-center">
                 {rfq.unreadCount}
               </span>
             )}
           </div>
 
-          {/* Client name */}
-          <p className="text-xs text-muted-foreground truncate">{rfq.clientName}</p>
-          {/* Client email */}
-          <p className="text-xs text-muted-foreground truncate" title={rfq.clientEmail}>
+          {/* Client name — body grotesque */}
+          <p className="text-xs text-graphite truncate mt-0.5">{rfq.clientName}</p>
+          {/* Client email — mono for technical metadata */}
+          <p className="font-data text-[11px] text-graphite truncate" title={rfq.clientEmail}>
             {rfq.clientEmail}
           </p>
-          {/* RFQ subject */}
-          <p className="text-xs text-muted-foreground truncate" title={rfq.subject}>
+          {/* Subject — body grotesque truncated */}
+          <p className="text-xs text-graphite truncate" title={rfq.subject}>
             {rfq.subject}
           </p>
-          {/* Stage label */}
-          <p className="text-xs text-muted-foreground truncate italic">{rfq.stageLabel}</p>
+          {/* Stage label — italicized graphite for state metadata */}
+          <p className="text-xs text-graphite/80 truncate italic">{rfq.stageLabel}</p>
         </div>
-      )}
-
-      {/* Active indicator bar */}
-      {isActive && (
-        <div
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r bg-brand"
-          style={{
-            boxShadow: "0 0 8px oklch(0.685 0.169 237.323 / 0.3)",
-          }}
-          aria-hidden="true"
-        />
       )}
     </Link>
   );

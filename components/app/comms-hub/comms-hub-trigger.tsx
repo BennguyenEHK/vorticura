@@ -7,7 +7,9 @@
 // Shows badge with unread count and connection status
 
 import { useState, useEffect } from "react";
-import { Radio, Check, AlertCircle } from "lucide-react";
+// Only the Radio glyph survives the redesign — connection / unread state are
+// rendered as Mission Control instrument squares, not paired icons.
+import { Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { CommsHubStatus } from "@/types/comms";
 
@@ -66,34 +68,34 @@ export function CommsHubTrigger({
       variant="ghost"
       size="icon"
       onClick={onClick}
-      className={`h-9 w-9 relative ${isOpen ? "bg-secondary" : ""}`}
+      className={`h-9 w-9 relative ${isOpen ? "bg-vellum" : ""}`}
       aria-label="Communications hub"
       aria-expanded={isOpen}
       aria-haspopup="true"
     >
       {/* Main icon */}
-      <Radio className="h-4 w-4" />
+      <Radio className="h-4 w-4" strokeWidth={1.5} />
 
-      {/* Connection status indicator (green dot or error) */}
+      {/* Connection status — square instrument lamp (verdigris up / ember error / graphite idle) */}
       {status && (
         <span
           className={`
-            absolute top-1 right-1 h-2 w-2 rounded-full
+            absolute top-1.5 right-1.5 w-1.5 h-1.5
             ${hasError
-              ? "bg-error"
+              ? "bg-ember"
               : hasConnected
-                ? "bg-status-complete-foreground"
-                : "bg-muted-foreground"
+                ? "bg-verdigris"
+                : "bg-graphite"
             }
           `}
           aria-hidden="true"
         />
       )}
 
-      {/* Unread count badge */}
+      {/* Unread count — rectangular Azimuth badge (no pill shape) */}
       {unreadCount > 0 && (
         <span
-          className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-destructive text-destructive-foreground text-xs flex items-center justify-center"
+          className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-[2px] bg-ember text-paper font-data text-[10px] flex items-center justify-center"
           aria-label={`${unreadCount} unread messages`}
         >
           {unreadCount > 9 ? "9+" : unreadCount}

@@ -98,18 +98,19 @@ export function RFQQueueList({
   // Toggle expanded state
   const toggleExpanded = () => setIsExpanded(!isExpanded);
 
-  // Collapsed view - just show badge with count
+  // Collapsed view — just an instrument square with a count badge
   if (isCollapsed) {
     return (
       <div className="flex justify-center py-2">
-        {/* relative class anchors the absolute-positioned badge */}
+        {/* Square instrument tile (rounded-sm = 6px) */}
         <div
-          className="relative flex items-center justify-center h-10 w-10 rounded-lg bg-sidebar-accent"
+          className="relative flex items-center justify-center h-10 w-10 rounded-sm border border-rule bg-vellum"
           title={`${total} RFQs in queue`}
         >
-          <Inbox className="h-5 w-5 text-muted-foreground" />
+          <Inbox className="h-4 w-4 text-graphite" strokeWidth={1.5} />
+          {/* Badge — rectangular Azimuth square (no pill shape) */}
           {total > 0 && (
-            <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-brand text-brand-foreground text-xs flex items-center justify-center">
+            <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-[2px] bg-azimuth text-paper font-data text-[10px] flex items-center justify-center">
               {total}
             </span>
           )}
@@ -118,16 +119,15 @@ export function RFQQueueList({
     );
   }
 
-  // Loading state
+  // Loading skeleton — vellum rectangles with a soft pulse
   if (isLoading) {
     return (
-      <div className="px-3 py-4">
+      <div className="px-5 py-3">
         <div className="space-y-2">
-          {/* Skeleton loaders */}
           {[...Array(initialLimit)].map((_, i) => (
             <div
               key={i}
-              className="h-16 rounded-lg bg-sidebar-accent animate-pulse"
+              className="h-16 rounded-sm border border-rule bg-vellum animate-pulse"
             />
           ))}
         </div>
@@ -135,22 +135,22 @@ export function RFQQueueList({
     );
   }
 
-  // Empty state
+  // Empty state — neutral instrument message
   if (rfqs.length === 0) {
     return (
-      <div className="px-3 py-4 text-center">
-        <Inbox className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-        <p className="text-sm text-muted-foreground">No RFQs in queue</p>
+      <div className="px-5 py-6 text-center">
+        <Inbox className="h-7 w-7 mx-auto text-graphite mb-2" strokeWidth={1.5} />
+        <p className="font-body text-sm text-graphite">No RFQs in queue</p>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col">
-      {/* Scrollable RFQ list */}
+      {/* Scrollable RFQ list — no inter-row gap; items have their own padding */}
       <div
         className={`
-          space-y-1 overflow-y-auto
+          overflow-y-auto
           ${isExpanded ? "max-h-64" : "max-h-auto"}
         `}
       >
@@ -164,13 +164,13 @@ export function RFQQueueList({
         ))}
       </div>
 
-      {/* Expand/collapse button if more items available */}
+      {/* Expand/collapse — mono caps ghost button at the bottom of the list */}
       {(hasMore || isExpanded) && (
         <Button
           variant="ghost"
           size="sm"
           onClick={toggleExpanded}
-          className="mt-2 w-full text-xs text-muted-foreground hover:text-foreground"
+          className="mt-2 mx-3 micro-label text-graphite hover:text-ink"
         >
           {isExpanded ? (
             <>

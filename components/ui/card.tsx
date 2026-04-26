@@ -1,13 +1,22 @@
+// =============================================
+// Card — Mission Control surface
+// =============================================
+// Cards are paper artifacts: vellum surface, hairline rule, sharp corners.
+// No shadow, no rounded-2xl. Weight comes from the warm vellum fill against
+// the paper page background — exactly the gesture that makes a Bloomberg/Mercury
+// surface feel "considered" instead of "v0 template."
+// All colors resolve from Mission Control tokens in app/globals.css.
+
 import * as React from "react"
 import { clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 
-// Utility function to merge Tailwind classes safely
+// Tailwind class merger (handles overrides cleanly)
 function cn(...inputs: (string | undefined | null | boolean)[]) {
   return twMerge(clsx(inputs))
 }
 
-// Card container component with rounded corners and shadow
+// Card container — vellum on paper, 1px rule, 6px corners, zero shadow
 const Card = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
@@ -15,8 +24,8 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      // Card base styles: rounded corners, border, shadow (using design tokens)
-      "rounded-2xl border border-border bg-card text-card-foreground shadow-sm",
+      // Mission Control surface: vellum + hairline rule + sharp corners + no shadow
+      "rounded-sm border border-rule bg-vellum text-ink",
       className
     )}
     {...props}
@@ -24,24 +33,20 @@ const Card = React.forwardRef<
 ))
 Card.displayName = "Card"
 
-// Card header section for title and description
+// Card header — generous padding, column flex with subtle gap
 const CardHeader = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn(
-      // Header padding and flex layout
-      "flex flex-col space-y-1.5 p-6",
-      className
-    )}
+    className={cn("flex flex-col gap-1.5 p-6", className)}
     {...props}
   />
 ))
 CardHeader.displayName = "CardHeader"
 
-// Card title component for main heading
+// Card title — editorial serif (font-display) at h3 weight, tight tracking
 const CardTitle = React.forwardRef<
   HTMLHeadingElement,
   React.HTMLAttributes<HTMLHeadingElement>
@@ -49,8 +54,8 @@ const CardTitle = React.forwardRef<
   <h3
     ref={ref}
     className={cn(
-      // Title typography styles (using design tokens)
-      "text-2xl font-semibold leading-none tracking-tight text-foreground",
+      // Display serif gives the card a magazine-grade headline tone
+      "font-display text-ink text-xl leading-none tracking-[-0.01em]",
       className
     )}
     {...props}
@@ -58,52 +63,40 @@ const CardTitle = React.forwardRef<
 ))
 CardTitle.displayName = "CardTitle"
 
-// Card description component for subtitle text
+// Card description — body grotesque, graphite tone
 const CardDescription = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLParagraphElement>
 >(({ className, ...props }, ref) => (
   <p
     ref={ref}
-    className={cn(
-      // Description typography styles (using design tokens)
-      "text-sm text-muted-foreground",
-      className
-    )}
+    className={cn("font-body text-sm text-graphite", className)}
     {...props}
   />
 ))
 CardDescription.displayName = "CardDescription"
 
-// Card content section for main body content
+// Card body content — header already pads top, so omit top padding here
 const CardContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn(
-      // Content padding with no top padding (header handles spacing)
-      "p-6 pt-0",
-      className
-    )}
+    className={cn("p-6 pt-0", className)}
     {...props}
   />
 ))
 CardContent.displayName = "CardContent"
 
-// Card footer section for actions or additional info
+// Card footer — usually action row, sits below content with no top padding
 const CardFooter = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn(
-      // Footer layout with top padding
-      "flex items-center p-6 pt-0",
-      className
-    )}
+    className={cn("flex items-center p-6 pt-0", className)}
     {...props}
   />
 ))

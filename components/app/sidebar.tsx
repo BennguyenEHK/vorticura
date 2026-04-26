@@ -1,11 +1,12 @@
 "use client";
 
 // =============================================
-// App Sidebar Component
+// App Sidebar — Mission Control navigation rail
 // =============================================
-// Collapsible navigation sidebar for dashboard and workspace
-// Redesigned with: Dashboard, Workboard, RFQ Queue, Documents, System sections
-// Uses SidebarProvider context for shared collapsed state
+// Paper surface with hairline rule edges. Section heads are ALL-CAPS mono
+// micro-labels. Active item is marked by a 2px Azimuth bar at the left edge —
+// no glow, no rounded backgrounds, no gradient halos. Reads like a
+// flight-deck panel manifest, not a SaaS sidebar.
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -31,21 +32,18 @@ import { useWorkspaceData } from "@/hooks/workspace-data-context";
 // Navigation Configuration
 // =============================================
 
-// Navigation item type definition
 interface NavItem {
   name: string;
   icon: typeof LayoutDashboard;
   href: string;
 }
 
-// Navigation section type definition
 interface NavSection {
   title: string;
   items: NavItem[];
 }
 
-// Navigation menu structure with sections
-// Workspace link dropped — the RFQ Queue below is the entry point to each workspace
+// Section structure — mono caps section titles map to procurement domains
 const NAVIGATION_SECTIONS: NavSection[] = [
   {
     title: "Workspace",
@@ -69,7 +67,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   },
 ];
 
-// Props interface for sidebar customization
 interface SidebarProps {
   className?: string;
 }
@@ -79,25 +76,17 @@ interface SidebarProps {
 // =============================================
 
 /**
- * DashboardSidebar - Collapsible navigation sidebar for app
- * Features:
- * - Navigation sections: Workspace, Documents, System
- * - RFQ Queue with scrollable list (top 3 visible)
- * - Collapse/expand functionality
- * - Active route highlighting with brand accent
+ * DashboardSidebar — Mission Control navigation rail.
+ * Sections: Workspace · RFQ Queue · Documents · System.
+ * Active marker: 2px Azimuth bar pinned to the left edge.
  */
 export function DashboardSidebar({ className = "" }: SidebarProps) {
-  // Get collapsed state and toggle function from context
   const { collapsed, toggleSidebar } = useSidebar();
-
-  // Get current pathname for active state
   const pathname = usePathname();
 
-  // Check if a nav item is active (exact match or starts with)
+  // Active state — exact match for /dashboard, prefix match for nested routes
   const isActive = (href: string): boolean => {
-    if (href === "/dashboard") {
-      return pathname === "/dashboard";
-    }
+    if (href === "/dashboard") return pathname === "/dashboard";
     return pathname.startsWith(href);
   };
 
@@ -105,16 +94,16 @@ export function DashboardSidebar({ className = "" }: SidebarProps) {
     <aside
       className={`
         fixed left-0 top-16 h-[calc(100vh-64px)]
-        border-r border-sidebar-border
-        bg-sidebar
+        border-r border-rule
+        bg-paper
         transition-all duration-300
         flex flex-col
         ${collapsed ? SIDEBAR_WIDTH_CLASSES.collapsed : SIDEBAR_WIDTH_CLASSES.expanded}
         ${className}
       `}
     >
-      {/* Collapse/Expand toggle button */}
-      <div className="flex justify-end p-4 flex-shrink-0">
+      {/* Collapse/expand toggle — sits flush right with a hairline tray */}
+      <div className="flex justify-end p-3 flex-shrink-0 border-b border-rule">
         <Button
           variant="ghost"
           size="icon"
@@ -130,29 +119,27 @@ export function DashboardSidebar({ className = "" }: SidebarProps) {
         </Button>
       </div>
 
-      {/* Main navigation content */}
-      <div className="flex-1 overflow-y-auto px-3">
-        <nav className="space-y-6" role="navigation">
-          {/* Workspace Section (Dashboard + Workboard) */}
+      {/* Main navigation column */}
+      <div className="flex-1 overflow-y-auto py-5">
+        <nav className="space-y-7" role="navigation">
+          {/* Section: Workspace (Dashboard) */}
           <NavSectionComponent
             section={NAVIGATION_SECTIONS[0]}
             collapsed={collapsed}
             isActive={isActive}
           />
 
-          {/* RFQ Queue Section */}
+          {/* Section: RFQ Queue (live list) */}
           <div>
-            {/* Section title - hidden when collapsed */}
+            {/* Section eyebrow — mono caps with a tiny inbox icon at the right */}
             {!collapsed && (
-              <div className="flex items-center justify-between px-3 mb-2">
-                <h3 className="text-xs uppercase tracking-wider text-muted-foreground">
-                  RFQ Queue
-                </h3>
-                <Inbox className="h-3 w-3 text-muted-foreground" />
+              <div className="flex items-center justify-between px-5 mb-3">
+                <span className="micro-label text-graphite">RFQ Queue</span>
+                <Inbox className="h-3 w-3 text-graphite" />
               </div>
             )}
 
-            {/* RFQ Queue list — active item is derived from the URL segment (decoded) */}
+            {/* Queue list — items derived from URL */}
             <RFQQueueList
               isCollapsed={collapsed}
               activeRfqReference={
@@ -164,14 +151,14 @@ export function DashboardSidebar({ className = "" }: SidebarProps) {
             />
           </div>
 
-          {/* Documents Section */}
+          {/* Section: Documents */}
           <NavSectionComponent
             section={NAVIGATION_SECTIONS[1]}
             collapsed={collapsed}
             isActive={isActive}
           />
 
-          {/* System Section */}
+          {/* Section: System */}
           <NavSectionComponent
             section={NAVIGATION_SECTIONS[2]}
             collapsed={collapsed}
@@ -179,6 +166,13 @@ export function DashboardSidebar({ className = "" }: SidebarProps) {
           />
         </nav>
       </div>
+
+      {/* Footer rule — version stamp gives the rail a craftsmanship signal */}
+      {!collapsed && (
+        <div className="px-5 py-4 border-t border-rule">
+          <span className="micro-label text-graphite">VORTICURA · OPS · v0.1</span>
+        </div>
+      )}
     </aside>
   );
 }
@@ -194,27 +188,28 @@ interface NavSectionComponentProps {
 }
 
 /**
- * NavSectionComponent - Renders a navigation section with items
+ * NavSectionComponent — Renders a single navigation section.
+ * Section title is a mono micro-label; items are body-grotesque rows with
+ * an Azimuth left bar marking the active route.
  */
 function NavSectionComponent({
   section,
   collapsed,
   isActive,
 }: NavSectionComponentProps) {
-  // Get prefetch function from workspace data context
   const { prefetchDashboard } = useWorkspaceData();
 
   return (
     <div>
-      {/* Section title - hidden when collapsed */}
+      {/* Mono-caps section title — instrument-label gesture */}
       {!collapsed && (
-        <h3 className="px-3 mb-2 text-xs uppercase tracking-wider text-muted-foreground">
+        <h3 className="px-5 mb-3 micro-label text-graphite">
           {section.title}
         </h3>
       )}
 
-      {/* Menu items within section */}
-      <div className="space-y-1">
+      {/* Item list */}
+      <div className="space-y-px">
         {section.items.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
@@ -224,49 +219,35 @@ function NavSectionComponent({
               key={item.name}
               href={item.href}
               className={`
-                w-full flex items-center gap-3 px-3 py-2 rounded-lg
-                transition-all relative group
+                relative w-full flex items-center gap-3 px-5 py-2
+                transition-colors group font-body text-sm
                 ${active
-                  ? "text-sidebar-foreground"
-                  : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  ? "text-ink bg-vellum"
+                  : "text-graphite hover:bg-vellum hover:text-ink"
                 }
               `}
               title={collapsed ? item.name : undefined}
               aria-current={active ? "page" : undefined}
               onMouseEnter={() => {
-                // Prefetch dashboard data on hover
-                if (item.href === "/dashboard") {
-                  prefetchDashboard();
-                }
+                if (item.href === "/dashboard") prefetchDashboard();
               }}
             >
-              {/* Active indicator bar - brand accent color */}
+              {/* Active marker — 2px Azimuth bar flush to the left edge (no glow) */}
               {active && (
-                <div
-                  className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r bg-brand"
-                  style={{
-                    boxShadow: "0 0 8px oklch(0.685 0.169 237.323 / 0.3)",
-                  }}
+                <span
+                  className="absolute left-0 top-0 bottom-0 w-[2px] bg-azimuth"
                   aria-hidden="true"
                 />
               )}
 
-              {/* Icon with glow effect for active state */}
-              <div className="relative flex-shrink-0">
-                <Icon
-                  className={`h-5 w-5 ${active ? "relative z-10 text-brand" : ""}`}
-                />
-                {/* Glow effect behind active icon */}
-                {active && (
-                  <div
-                    className="absolute inset-0 blur-md bg-brand-light opacity-20"
-                    aria-hidden="true"
-                  />
-                )}
-              </div>
+              {/* Icon — same stroke regardless of state, ink on active */}
+              <Icon
+                className={`h-4 w-4 flex-shrink-0 ${active ? "text-azimuth" : "text-graphite group-hover:text-ink"}`}
+                strokeWidth={1.5}
+              />
 
-              {/* Item label - hidden when collapsed */}
-              {!collapsed && <span className="text-sm">{item.name}</span>}
+              {/* Label — hidden when collapsed */}
+              {!collapsed && <span>{item.name}</span>}
             </Link>
           );
         })}

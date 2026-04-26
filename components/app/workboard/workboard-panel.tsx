@@ -1,10 +1,12 @@
 "use client";
 
 // =============================================
-// Workboard Panel
+// Workboard Panel — Mission Control card
 // =============================================
-// Generic panel wrapper component
-// Provides consistent styling and panel header
+// Each grid panel is a vellum-on-paper surface with a single hairline rule
+// border. Sharp 6px corners, no drop shadow, no rounded-2xl. Depth comes from
+// the warm vellum fill against the paper page — exactly the gesture that
+// distinguishes a "considered" surface from a v0 template.
 
 import { type ReactNode } from "react";
 import { PanelHeader } from "./panel-header";
@@ -24,12 +26,8 @@ interface WorkboardPanelProps {
 }
 
 /**
- * WorkboardPanel - Generic wrapper for workboard panels
- * Features:
- * - Consistent card styling
- * - Header with drag handle
- * - Minimize/close controls
- * - Overflow handling
+ * WorkboardPanel — Vellum surface, hairline rule, sharp corners, no shadow.
+ * Header carries the drag handle and the maximize/close instrument controls.
  */
 export function WorkboardPanel({
   id,
@@ -44,14 +42,14 @@ export function WorkboardPanel({
     <div
       className={`
         h-full
-        bg-card rounded-lg border border-border
-        shadow-sm
+        bg-vellum text-ink
+        rounded-sm border border-rule
         flex flex-col overflow-hidden
-        transition-all duration-200
+        transition-colors duration-200
         ${className}
       `}
     >
-      {/* Panel header with drag handle */}
+      {/* Panel header with drag handle + controls */}
       <PanelHeader
         id={id}
         title={title}
@@ -60,7 +58,7 @@ export function WorkboardPanel({
         isClosable={isClosable}
       />
 
-      {/* Panel content - hidden when minimized */}
+      {/* Panel body — hidden when minimized */}
       {!isMinimized && (
         <div className="flex-1 overflow-auto min-h-0">{children}</div>
       )}
