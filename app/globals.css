@@ -290,8 +290,13 @@
    * Page surface: warm off-white paper, never pure #FFFFFF.
    * ============================================= */
   --ink: oklch(0.158 0.014 240);                 /* #0B0E14 — navigational ink */
-  --paper: oklch(0.957 0.005 85);                /* #F6F4EE — warm paper page bg */
-  --vellum: oklch(0.927 0.008 85);               /* #EFEBE2 — card surface (one step darker) */
+  /* Paper: lowered from 0.957 to 0.93 — moves the page surface from "bright */
+  /* off-white" to a calmer "linen" tone. Reduces eye strain in long sessions */
+  /* and sits closer to premium B2B references (Mercury, Linear, Stripe). */
+  --paper: oklch(0.93 0.006 85);                 /* ≈#EBE7DD — warm linen page bg */
+  /* Vellum: lowered from 0.927 to 0.885 — widens the paper-to-card gap from */
+  /* ~3% to ~5% lightness, giving cards visible weight without shadows. */
+  --vellum: oklch(0.885 0.009 85);               /* ≈#DAD5CA — kraft card surface */
   --graphite: oklch(0.36 0.011 250);             /* #3A3F49 — body copy */
   --rule: oklch(0.22 0.012 250 / 12%);           /* hairline rules at 12% alpha */
   --rule-strong: oklch(0.22 0.012 250 / 30%);    /* stronger hairline (column heads) */

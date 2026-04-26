@@ -131,7 +131,9 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
   const { collapsed } = useSidebar();
 
   return (
-    <div className="min-h-screen bg-background">
+    // Outer shell paints Mission Control paper so no surface (gutter, scroll
+    // overshoot, etc.) ever falls back to the legacy --background white.
+    <div className="min-h-screen bg-paper">
       {/* Fixed top navigation bar */}
       <DashboardTopBar />
 
@@ -139,13 +141,14 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
       <DashboardSidebar />
 
       {/* Main content area - dynamic margin based on sidebar state */}
+      {/* Single source of paper paint — children no longer need to repaint */}
       <main
         className={`
           ${collapsed ? MAIN_MARGIN_CLASSES.collapsed : MAIN_MARGIN_CLASSES.expanded}
           pt-16
           min-h-screen
           transition-all duration-300
-          bg-muted
+          bg-paper text-ink
         `}
       >
         {/* Content wrapper with consistent padding */}

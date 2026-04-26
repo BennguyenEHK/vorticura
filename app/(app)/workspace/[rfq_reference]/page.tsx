@@ -138,7 +138,8 @@ export default function WorkspacePage({ params }: WorkspacePageProps) {
 
   return (
     <RFQProvider rfqReference={rfqReference}>
-      <div className="bg-paper text-ink min-h-full">
+      {/* Layout owns the paper background; this wrapper just stacks header + grid. */}
+      <div>
         {/* Workspace header */}
         <WorkspaceHeader rfqReference={rfqReference} />
 

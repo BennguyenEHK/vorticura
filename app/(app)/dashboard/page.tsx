@@ -86,8 +86,8 @@ const quickActions: ActionData[] = [
  */
 export default function DashboardPage() {
   return (
-    // Outer page paint: warm paper background, ink foreground, generous breathing room
-    <div className="bg-paper text-ink min-h-full space-y-8">
+    // Layout owns the paper background; this wrapper just spaces the page sections.
+    <div className="space-y-8">
       {/* ===== Editorial header ===== */}
       <div className="flex items-end justify-between gap-6 flex-wrap">
         <div>
