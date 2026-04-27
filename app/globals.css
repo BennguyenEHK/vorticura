@@ -290,13 +290,13 @@
    * Page surface: warm off-white paper, never pure #FFFFFF.
    * ============================================= */
   --ink: oklch(0.158 0.014 240);                 /* #0B0E14 — navigational ink */
-  /* Paper: lowered from 0.957 to 0.93 — moves the page surface from "bright */
-  /* off-white" to a calmer "linen" tone. Reduces eye strain in long sessions */
-  /* and sits closer to premium B2B references (Mercury, Linear, Stripe). */
-  --paper: oklch(0.93 0.006 85);                 /* ≈#EBE7DD — warm linen page bg */
-  /* Vellum: lowered from 0.927 to 0.885 — widens the paper-to-card gap from */
-  /* ~3% to ~5% lightness, giving cards visible weight without shadows. */
-  --vellum: oklch(0.885 0.009 85);               /* ≈#DAD5CA — kraft card surface */
+  /* Paper: kraft beige page surface. Dropped one more step (0.93 → 0.91) so */
+  /* the page recedes and panels can lift forward. Still warm, never grey. */
+  --paper: oklch(0.91 0.006 85);                 /* ≈#E5E1D6 — kraft page bg */
+  /* Vellum: FLIPPED above paper (was 0.885 → 0.97). Cards now sit ~6% */
+  /* lighter than the page — conventional B2B "card lifts toward user" */
+  /* gesture, but in cream not pure white. Buttons + tiles stop submerging. */
+  --vellum: oklch(0.97 0.004 85);                /* ≈#F7F4EC — cream card surface */
   --graphite: oklch(0.36 0.011 250);             /* #3A3F49 — body copy */
   --rule: oklch(0.22 0.012 250 / 12%);           /* hairline rules at 12% alpha */
   --rule-strong: oklch(0.22 0.012 250 / 30%);    /* stronger hairline (column heads) */
@@ -429,11 +429,18 @@
    * Same hue family, lifted for dark surfaces.
    * ============================================= */
   --ink: oklch(0.92 0.005 85);                    /* #EDEBE3 — paper inverted to fg */
-  --paper: oklch(0.06 0.012 240);                 /* #0A0C11 — near-black with cyan undertone */
-  --vellum: oklch(0.10 0.014 240);                /* #12161E — card surface */
+  /* Paper: lifted from near-black 0.06 to 0.13, with chroma boosted 0.012 → */
+  /* 0.020 to introduce a faint indigo-night undertone. Reads as a "deep */
+  /* universe" surface (think Hubble deep field) instead of a flat blackboard. */
+  --paper: oklch(0.13 0.020 240);                 /* ≈#1A1F2A — lifted indigo-night */
+  /* Vellum: lifted further (0.10 → 0.195) so cards visibly emerge from the */
+  /* page. ~6% lightness gap matches the light-mode card-lift convention. */
+  --vellum: oklch(0.195 0.022 240);               /* ≈#2A3140 — instrument-panel card */
   --graphite: oklch(0.72 0.013 250);              /* #A6ADBB — body copy on dark */
-  --rule: oklch(0.92 0.005 85 / 10%);             /* inverse hairline at 10% */
-  --rule-strong: oklch(0.92 0.005 85 / 25%);      /* stronger inverse hairline */
+  /* Rule: bumped from 10% to 14% alpha so hairline borders stay readable */
+  /* on the lifted vellum (without this, card edges disappear). */
+  --rule: oklch(0.92 0.005 85 / 14%);             /* inverse hairline at 14% */
+  --rule-strong: oklch(0.92 0.005 85 / 28%);      /* stronger inverse hairline at 28% */
   --azimuth: oklch(0.66 0.13 263);                /* #6E94F5 — lifted instrument blue */
   --azimuth-glow: oklch(0.75 0.13 263);           /* hover state on dark */
   --signal: oklch(0.81 0.13 82);                  /* #F0C04D — lifted amber */

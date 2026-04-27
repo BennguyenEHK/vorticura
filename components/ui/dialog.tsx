@@ -48,10 +48,11 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        // Slightly warm overlay — uses ink/60 so it carries the same hue family
+        // Mode-agnostic dim — must stay dark in both light and dark mode.
+        // (Using --ink would invert to a light overlay in dark mode.)
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-        "fixed inset-0 z-50 bg-ink/60",
+        "fixed inset-0 z-50 bg-black/60",
         className
       )}
       {...props}
