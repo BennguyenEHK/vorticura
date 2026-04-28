@@ -40,10 +40,11 @@ export function WorkboardPanel({
 }: WorkboardPanelProps) {
   return (
     <div
+      // border-rule-strong: 30% alpha hairline gives clear panel boundary on --paper bg (was 12% — nearly invisible).
       className={`
         h-full
         bg-vellum text-ink
-        rounded-sm border border-rule
+        rounded-sm border border-rule-strong
         flex flex-col overflow-hidden
         transition-colors duration-200
         ${className}

@@ -92,12 +92,14 @@ export function PanelHeader({
 
   return (
     <div
+      // bg-vellum: header matches body so the full panel lifts above --paper as one cream card.
+      // border-rule-strong: 30% alpha hairline separates header tray from content (was 12% — invisible).
       className={`
         panel-drag-handle
         flex items-center justify-between
         px-3 py-2
-        border-b border-rule
-        bg-paper
+        border-b border-rule-strong
+        bg-vellum
         cursor-grab
         active:cursor-grabbing
         select-none
