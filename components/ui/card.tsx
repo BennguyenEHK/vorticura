@@ -24,8 +24,9 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      // Mission Control surface: vellum + hairline rule + sharp corners + no shadow
-      "rounded-sm border border-rule bg-vellum text-ink",
+      // Mission Control surface: vellum + 30% alpha hairline + sharp corners + no shadow
+      // border-rule-strong (30%) instead of border-rule (12%) — consistent with workboard panels
+      "rounded-sm border border-rule-strong bg-vellum text-ink",
       className
     )}
     {...props}

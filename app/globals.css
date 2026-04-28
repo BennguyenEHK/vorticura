@@ -290,13 +290,15 @@
    * Page surface: warm off-white paper, never pure #FFFFFF.
    * ============================================= */
   --ink: oklch(0.158 0.014 240);                 /* #0B0E14 — navigational ink */
-  /* Paper: kraft beige page surface. Dropped one more step (0.93 → 0.91) so */
-  /* the page recedes and panels can lift forward. Still warm, never grey. */
-  --paper: oklch(0.91 0.006 85);                 /* ≈#E5E1D6 — kraft page bg */
-  /* Vellum: FLIPPED above paper (was 0.885 → 0.97). Cards now sit ~6% */
-  /* lighter than the page — conventional B2B "card lifts toward user" */
-  /* gesture, but in cream not pure white. Buttons + tiles stop submerging. */
-  --vellum: oklch(0.97 0.004 85);                /* ≈#F7F4EC — cream card surface */
+  /* Paper: raised from 0.91 → 0.955. L=0.91 fell below the perceptual    */
+  /* threshold where warm chroma reads as "craft" (~L≥0.94) and instead    */
+  /* read as "yellowed/dirty". L=0.955 lands in the clean warm-cream zone   */
+  /* used by Mercury/Ramp/Stripe. Panel separation is now carried by        */
+  /* border-rule-strong (30%) instead of a heavy background contrast.       */
+  --paper: oklch(0.955 0.007 85);               /* ≈#F4F1EB — clean warm cream */
+  /* Vellum: raised from 0.97 → 0.988 so the paper→vellum gap (0.033) stays */
+  /* clearly visible while cards reach near-white with faint warmth.         */
+  --vellum: oklch(0.988 0.003 85);              /* ≈#FBFAF8 — near-white cream card */
   --graphite: oklch(0.36 0.011 250);             /* #3A3F49 — body copy */
   --rule: oklch(0.22 0.012 250 / 12%);           /* hairline rules at 12% alpha */
   --rule-strong: oklch(0.22 0.012 250 / 30%);    /* stronger hairline (column heads) */
