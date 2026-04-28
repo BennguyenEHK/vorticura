@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRFQContext } from '@/hooks/rfq-context';
 import { usePreview } from '@/hooks/preview-context';
+import { useWorkflow } from '@/hooks/workflow-context';
 import { useWorkspaceData } from '@/hooks/workspace-data-context';
 import { uiReload } from '@/lib/actions/ui-reload-actions';
 import { hydrateDocumentFromWorkspace } from '@/hooks/use-preview-sse';
@@ -12,6 +13,7 @@ export function WorkspacePreviewHydrator() {
   const rfqContext = useRFQContext();
   const rfqReference = rfqContext?.rfqReference;
   const preview = usePreview();
+  const { setSteps } = useWorkflow();        // seed WorkflowContext from payload on mount
   const { getCachedData } = useWorkspaceData();
 
   useEffect(() => {
@@ -45,6 +47,10 @@ export function WorkspacePreviewHydrator() {
         const doc = hydrateDocumentFromWorkspace(payload.previewType, payload.preview);
         if (doc) {
           preview.actions.loadDocument(doc);
+        }
+        // Seed live workflow steps from server-computed array
+        if (payload.workflowSteps?.length) {
+          setSteps(payload.workflowSteps);
         }
       }
     };

@@ -22,6 +22,7 @@ const workspacePayload: WorkspacePayload = {
   previewType: 'analysis',
   preview: null,
   workflow: null,
+  workflowSteps: [],   // computed step array — empty in test stub
   pricing: null,
   ai: [],
 };

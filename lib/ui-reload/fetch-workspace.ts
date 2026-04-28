@@ -12,7 +12,9 @@ import { getRfqByReference, getData, getUiState, getAiConversations } from '@/li
 import { getServerActionWorkspace } from '@/lib/middleware/get-workspace';
 import { loadProcessorInput } from '@/lib/data-loader';
 import { getFetchIntent } from './stage-map';
-import type { WorkspacePayload, PanelFetchIntent, PreviewType } from '@/types/ui-reload';
+import { DEFAULT_WORKFLOW_STEPS, STEP_TO_STAGE_MAP } from '@/types/workflow';
+import type { WorkflowStep } from '@/types/workflow';
+import type { WorkspacePayload, PanelFetchIntent, PreviewType, RFQStage } from '@/types/ui-reload';
 
 // =============================================
 // Types
@@ -37,6 +39,35 @@ const PREVIEW_TABLE_MAP: Record<PreviewType, { table: string; idColumn: string }
   email:            { table: 'emailTable',     idColumn: 'rfqId' },  // email_content    lives on email_table
   quotation:        { table: 'quotations',     idColumn: 'rfqId' },  // quotation handled via data-loader (full shape)
 };
+
+// =============================================
+// Workflow Step Computation
+// =============================================
+
+// Canonical stage order — determines step status by comparing indices
+const STAGE_ORDER: RFQStage[] = [
+  'ingestion', 'user_validation', 'outbound_rfq', 'supplier_discovery',
+  'supplier_validation', 'awaiting_response', 'supplier_response',
+  'awaiting_quotation', 'quotation_processing', 'customer_quotation', 'final_actions',
+];
+
+/**
+ * Maps currentStage → WorkflowStep[].
+ * Steps whose target stage is before currentStage → completed.
+ * Steps whose target stage equals currentStage    → in_progress.
+ * Steps whose target stage is after currentStage  → pending.
+ */
+function computeWorkflowSteps(currentStage: string): WorkflowStep[] {
+  const currentIdx = STAGE_ORDER.indexOf(currentStage as RFQStage);
+  return DEFAULT_WORKFLOW_STEPS.map((step): WorkflowStep => {
+    const stepIdx = STAGE_ORDER.indexOf(STEP_TO_STAGE_MAP[step.id]);
+    const status: WorkflowStep['status'] =
+      currentIdx < stepIdx  ? 'pending'
+      : currentIdx === stepIdx ? 'in_progress'
+      : 'completed';
+    return { ...step, status };
+  });
+}
 
 // =============================================
 // Main Fetcher
@@ -114,6 +145,7 @@ export async function fetchWorkspace(
       previewType: lastPreviewType,
       preview,
       workflow,
+      workflowSteps: computeWorkflowSteps(currentStage), // computed from DB stage → drives WorkflowPanel
       pricing,
       ai: ai as unknown[],
     };

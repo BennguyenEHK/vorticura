@@ -134,6 +134,12 @@
   --color-ember: var(--ember);                   /* text-ember = oxidized error red */
   --color-verdigris: var(--verdigris);           /* text-verdigris = aged copper success */
 
+  /* ----- Neon Accent Tokens (glow layer) ----- */
+  --color-neon-cyan: var(--neon-cyan);       /* text-neon-cyan / bg-neon-cyan / border-neon-cyan */
+  --color-neon-emerald: var(--neon-emerald); /* text-neon-emerald / bg-neon-emerald             */
+  --color-neon-violet: var(--neon-violet);   /* text-neon-violet / bg-neon-violet               */
+  --color-neon-amber: var(--neon-amber);     /* text-neon-amber / bg-neon-amber                 */
+
   /* ----- Chart Tokens ----- */
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -307,6 +313,16 @@
   --signal: oklch(0.79 0.13 82);                 /* #E8B33A — amber for live data only */
   --ember: oklch(0.46 0.16 28);                  /* #B43A2E — oxidized red error */
   --verdigris: oklch(0.49 0.06 173);             /* #3D7A6A — aged copper success */
+
+  /* ----- Neon Glow Layer — light mode (subtle electric accents on warm paper) ----- */
+  --neon-cyan:    oklch(0.70 0.20 195);   /* #00BFDA electric cyan */
+  --neon-emerald: oklch(0.72 0.22 155);   /* #00D68F electric emerald */
+  --neon-violet:  oklch(0.65 0.25 290);   /* #A855F7 electric violet */
+  --neon-amber:   oklch(0.82 0.18 85);    /* #FFD000 electric amber */
+  /* box-shadow glow values — subtle so warm paper stays legible */
+  --neon-glow-sm:     0 0 6px oklch(0.70 0.20 195 / 35%);
+  --neon-glow-md:     0 0 12px oklch(0.70 0.20 195 / 45%), 0 0 24px oklch(0.70 0.20 195 / 18%);
+  --neon-glow-accept: 0 0 8px oklch(0.72 0.22 155 / 40%), 0 0 16px oklch(0.72 0.22 155 / 18%);
 }
 
 /* =============================================
@@ -448,6 +464,16 @@
   --signal: oklch(0.81 0.13 82);                  /* #F0C04D — lifted amber */
   --ember: oklch(0.62 0.16 28);                   /* #E06A5C — lifted ember */
   --verdigris: oklch(0.66 0.06 165);              /* #7BB39B — lifted verdigris */
+
+  /* ----- Neon Glow Layer — dark mode (full immersion glow on deep-universe surface) ----- */
+  --neon-cyan:    oklch(0.75 0.22 195);   /* slightly lighter for dark bg readability */
+  --neon-emerald: oklch(0.78 0.24 155);
+  --neon-violet:  oklch(0.72 0.28 290);
+  --neon-amber:   oklch(0.85 0.20 85);
+  /* box-shadow glow values — strong in dark mode for full neon immersion */
+  --neon-glow-sm:     0 0 10px oklch(0.75 0.22 195 / 70%), 0 0 20px oklch(0.75 0.22 195 / 35%);
+  --neon-glow-md:     0 0 16px oklch(0.75 0.22 195 / 85%), 0 0 32px oklch(0.75 0.22 195 / 45%), 0 0 64px oklch(0.75 0.22 195 / 15%);
+  --neon-glow-accept: 0 0 12px oklch(0.78 0.24 155 / 85%), 0 0 24px oklch(0.78 0.24 155 / 45%), 0 0 48px oklch(0.78 0.24 155 / 15%);
 }
 
 /* =============================================
@@ -506,6 +532,27 @@
   50% { box-shadow: 0 0 0 6px transparent; }
 }
 
+/* Neon glow pulse — used on processing/loading states (Accept button, saving indicator) */
+@keyframes neon-pulse {
+  0%, 100% { box-shadow: var(--neon-glow-sm); }
+  50%       { box-shadow: var(--neon-glow-md); }
+}
+
+/* Neon text flicker — realistic electrical flicker for AI status labels */
+@keyframes neon-flicker {
+  0%, 96%, 100% { opacity: 1; }
+  97%            { opacity: 0.35; }
+  98%            { opacity: 0.9; }
+  99%            { opacity: 0.5; }
+}
+
+/* Scanning line sweeping downward over the blurred document overlay */
+@keyframes scanner-line {
+  0%   { top: 0;    opacity: 0.8; }
+  90%  { opacity: 0.6; }
+  100% { top: 100%; opacity: 0; }
+}
+
 /* =============================================
  * UTILITY CLASSES
  * ============================================= */
@@ -526,6 +573,15 @@
   .animate-signal-pulse {
     animation: signal-pulse 2s ease-in-out infinite;
   }
+
+  /* ---- Neon glow box-shadow helpers ---- */
+  .neon-glow-sm     { box-shadow: var(--neon-glow-sm); }
+  .neon-glow-md     { box-shadow: var(--neon-glow-md); }
+  .neon-glow-accept { box-shadow: var(--neon-glow-accept); }
+  /* Neon animation helpers */
+  .animate-neon-pulse   { animation: neon-pulse   2s ease-in-out infinite; }
+  .animate-neon-flicker { animation: neon-flicker 4s ease-in-out infinite; }
+  .animate-scanner      { animation: scanner-line 1.8s linear infinite; }
 
   /* Editorial micro-label: ALL-CAPS mono with wide tracking — the "instrument label" */
   .micro-label {

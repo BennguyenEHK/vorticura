@@ -1,5 +1,7 @@
 // Shared types for the UI reload subsystem.
 
+import type { WorkflowStep } from '@/types/workflow';
+
 export type UiType = 'dashboard' | 'workspace' | 'rfq_queue';
 
 // Matches rfq_analysis.current_stage values.
@@ -38,6 +40,7 @@ export interface WorkspacePayload {
   previewType: PreviewType | null;
   preview: unknown | null;
   workflow: unknown | null;
+  workflowSteps: WorkflowStep[];   // Computed from currentStage — drives WorkflowPanelContent
   pricing: unknown | null;
   ai: unknown[];
 }

@@ -8,7 +8,7 @@
 'use client';
 
 import { useCallback, useState, useRef, useEffect } from 'react';
-import { FileText, Mail, Search, BarChart3, MessageSquarePlus, Check, RefreshCw, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { FileText, Mail, Search, BarChart3, MessageSquarePlus, Check, RefreshCw, X, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { handleHTTPRequest } from '@/lib/data-processor';
 
@@ -86,6 +86,11 @@ interface PreviewPanelContentProps {
 export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps) {
   const { state, actions } = usePreview();
   const [isSaving, setIsSaving] = useState(false);
+
+  // Accept loading state — drives the overlay + futuristic button morph
+  const [isAccepting, setIsAccepting]       = useState(false);
+  const [acceptProgress, setAcceptProgress] = useState(0);
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null); // fake progress timer
 
   // History panel state
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -308,26 +313,41 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
     setInlineNotes(prev => prev.filter(n => n.id !== id));
   }, []);
 
-  // Accept: always use ACCEPT_REJECT_MAP action (proceed/send) per spec
-  // manual_update is handled separately by handleSave — accept = advance pipeline
+  // Accept: advance pipeline + drive futuristic loading overlay
+  // Fake progress races to ~85% (exponential deceleration), snaps to 100% on response
   const handleAccept = useCallback(async () => {
     if (!state.activeDocument) return;
     const docType = state.activeDocument.type;
     const mapping = ACCEPT_REJECT_MAP[docType];
     if (!mapping) return;
 
-    // Always use the mapped accept action (proceed/send) — never override
-    const actionType = mapping.accept;
+    setIsAccepting(true);
+    setAcceptProgress(0);
+    // Tick every 120ms: each tick adds (85 - current) * 8% so it asymptotically approaches 85%
+    progressTimerRef.current = setInterval(() => {
+      setAcceptProgress(prev => {
+        if (prev >= 85) { clearInterval(progressTimerRef.current!); return prev; }
+        return prev + (85 - prev) * 0.08;
+      });
+    }, 120);
 
     try {
       await handleHTTPRequest({
         data_type: docType,
-        action_type: actionType as any,
-        quotation_id: 'quotation_id' in (state.activeDocument.data as any) ? (state.activeDocument.data as any).quotation_id : undefined,
-        rfq_id: 'rfq_id' in (state.activeDocument.data as any) ? (state.activeDocument.data as any).rfq_id : undefined,
+        action_type: mapping.accept as any,
+        quotation_id: 'quotation_id' in (state.activeDocument.data as any)
+          ? (state.activeDocument.data as any).quotation_id : undefined,
+        rfq_id: 'rfq_id' in (state.activeDocument.data as any)
+          ? (state.activeDocument.data as any).rfq_id : undefined,
       });
+      setAcceptProgress(100); // snap to full on success
+      setTimeout(() => { setIsAccepting(false); setAcceptProgress(0); }, 500);
     } catch (err) {
       actions.setError(err instanceof Error ? err.message : 'Action failed');
+      setIsAccepting(false);
+      setAcceptProgress(0);
+    } finally {
+      clearInterval(progressTimerRef.current!);
     }
   }, [state.activeDocument, actions]);
 
@@ -443,6 +463,25 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
       {/* DOCUMENT CONTENT — Routes to correct component               */}
       {/* ============================================================ */}
       <div ref={contentRef} className="flex-1 overflow-auto bg-background p-4 relative select-text">
+        {/* === ACCEPT LOADING OVERLAY — blurs previous HTML doc while AI processes next step === */}
+        {isAccepting && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 backdrop-blur-sm bg-background/60">
+            {/* Thin neon progress bar that fills left-to-right */}
+            <div className="w-64 h-[2px] bg-border rounded-full overflow-hidden">
+              <div
+                className="h-full bg-neon-emerald neon-glow-accept transition-all duration-200 ease-out"
+                style={{ width: `${acceptProgress}%` }}
+              />
+            </div>
+            {/* Scanning line sweeping downward — signals active AI computation */}
+            <div className="animate-scanner absolute left-0 w-full h-px bg-neon-cyan/40 pointer-events-none" />
+            {/* Flickering micro-label showing live percentage */}
+            <span className="micro-label text-neon-cyan animate-neon-flicker">
+              AI PROCESSING · {Math.round(acceptProgress)}%
+            </span>
+          </div>
+        )}
+
         {/* Floating "Add Note" tooltip on text selection */}
         {selection && !showNotePopover && (
           <div
@@ -615,9 +654,29 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
                 Regenerate
               </Button>
             ) : (
-              <Button size="sm" onClick={handleAccept} className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700">
-                <Check className="w-3.5 h-3.5" />
-                Accept
+              /* Futuristic Accept button: morphs into neon spinner+% while AI processes */
+              <Button
+                size="sm"
+                onClick={handleAccept}
+                disabled={isAccepting}
+                className={`gap-1.5 relative overflow-hidden transition-all duration-300 ${
+                  isAccepting
+                    ? 'border border-neon-emerald text-neon-emerald bg-neon-emerald/10 animate-neon-pulse cursor-not-allowed'
+                    : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                }`}
+              >
+                {isAccepting ? (
+                  /* Spinning ring + live percentage while waiting for SSE response */
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span className="font-data tabular-nums text-xs">{Math.round(acceptProgress)}%</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    Accept
+                  </>
+                )}
               </Button>
             )}
           </div>
