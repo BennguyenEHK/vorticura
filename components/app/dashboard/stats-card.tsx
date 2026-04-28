@@ -47,16 +47,16 @@ export function StatsCard({ stat }: StatsCardProps) {
 
   // Direction-driven palette for the change pill
   const isPositive = stat.changeType === "positive";
-  const pillTextColor = isPositive ? "text-verdigris" : "text-ember";
-  const pillBorderColor = isPositive ? "border-verdigris/40" : "border-ember/40";
-  const pillDotColor = isPositive ? "bg-verdigris" : "bg-ember";
+  const pillTextColor = isPositive ? "text-neon-emerald" : "text-ember";
+  const pillBorderColor = isPositive ? "border-neon-emerald/40" : "border-ember/40";
+  const pillDotColor = isPositive ? "bg-neon-emerald" : "bg-ember";
 
   return (
-    <Card className="relative overflow-hidden">
-      {/* Origin marker — 6px ink square pinned to the top-left edge */}
-      {/* Reads as an instrument lamp / ledger anchor */}
+    <Card className="group relative overflow-hidden">
+      {/* Origin marker — neon-cyan pulsing LED lamp pinned to the top-left edge */}
+      {/* Electric signal dot: signals this tile is live / AI-connected */}
       <span
-        className="absolute top-0 left-0 w-1.5 h-1.5 bg-ink"
+        className="absolute top-0 left-0 w-1.5 h-1.5 bg-neon-cyan neon-glow-sm animate-neon-pulse"
         aria-hidden="true"
       />
 
@@ -72,8 +72,8 @@ export function StatsCard({ stat }: StatsCardProps) {
 
       {/* Value + change — tabular mono number, then a hairline rectangular pill */}
       <CardContent className="pb-5">
-        {/* Big number — mono, tight leading, ink color */}
-        <div className="font-data text-ink text-[2rem] leading-none tabular-nums tracking-[-0.02em]">
+        {/* Big number — mono, tight leading; glows neon-amber on hover (live data signal) */}
+        <div className="font-data text-ink text-[2rem] leading-none tabular-nums tracking-[-0.02em] group-hover:text-neon-amber transition-colors duration-500">
           {stat.value}
         </div>
 

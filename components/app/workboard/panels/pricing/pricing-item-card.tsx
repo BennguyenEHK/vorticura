@@ -138,8 +138,12 @@ export function PricingItemCard({
 
       {/* Item metadata */}
       <div className="mt-2 pt-2 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
-        <span>Qty: {item.qty}</span>
-        <span>Unit: {formatNumber(item.bidder_unit_price)} {item.currency_code}</span>
+        <span>Qty: <span className="font-data tabular-nums text-ink">{item.qty}</span></span>
+        <span className="flex items-center gap-1">
+          <span className="text-graphite">Unit:</span>
+          <span className="font-data tabular-nums text-neon-amber neon-glow-sm">{formatNumber(item.bidder_unit_price)}</span>
+          <span className="text-graphite">{item.currency_code}</span>
+        </span>
       </div>
     </div>
   );

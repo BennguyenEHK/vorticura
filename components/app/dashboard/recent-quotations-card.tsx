@@ -53,9 +53,9 @@ const STATUS_STYLES: Record<
   QuotationStatus,
   { dot: string; text: string; border: string; label: string }
 > = {
-  draft:    { dot: "bg-signal",    text: "text-ink",       border: "border-signal/50",    label: "DRAFT" },
-  pending:  { dot: "bg-azimuth",   text: "text-azimuth",   border: "border-azimuth/40",   label: "PENDING" },
-  complete: { dot: "bg-verdigris", text: "text-verdigris", border: "border-verdigris/40", label: "COMPLETE" },
+  draft:    { dot: "bg-neon-amber",                   text: "text-neon-amber",    border: "border-neon-amber/40",    label: "DRAFT" },
+  pending:  { dot: "bg-neon-cyan animate-neon-pulse", text: "text-neon-cyan",     border: "border-neon-cyan/40",     label: "PENDING" },
+  complete: { dot: "bg-neon-emerald",                 text: "text-neon-emerald",  border: "border-neon-emerald/40",  label: "COMPLETE" },
 };
 
 // =============================================
@@ -96,7 +96,10 @@ export function RecentQuotationsCard({
             {quotations.map((quote) => {
               const status = STATUS_STYLES[quote.status];
               return (
-                <TableRow key={quote.id}>
+                <TableRow
+                  key={quote.id}
+                  className={quote.status === "pending" ? "bg-neon-cyan/[0.025]" : ""}
+                >
                   {/* ID — mono data, ink color */}
                   <TableCell className="font-data text-ink tracking-[0.02em]">
                     {quote.id}

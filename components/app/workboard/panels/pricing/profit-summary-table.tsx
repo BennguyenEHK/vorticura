@@ -104,8 +104,8 @@ export function ProfitSummaryTable({ className = "" }: ProfitSummaryTableProps) 
                     {item?.qty || 0}
                   </TableCell>
                   <TableCell
-                    className={`py-2 text-xs text-right font-medium ${
-                      isPositive ? "text-success" : "text-error"
+                    className={`py-2 text-xs text-right font-data tabular-nums font-medium ${
+                      isPositive ? "text-neon-emerald" : "text-error"
                     }`}
                   >
                     {isPositive ? "+" : ""}
@@ -120,10 +120,12 @@ export function ProfitSummaryTable({ className = "" }: ProfitSummaryTableProps) 
 
       {/* Total row */}
       <div className="mt-2 pt-2 border-t border-border flex items-center justify-between">
-        <span className="text-xs font-medium text-foreground">Total Profit</span>
+        <span className="micro-label text-graphite">Total Profit</span>
         <span
-          className={`text-sm font-bold ${
-            totalProfit >= 0 ? "text-success" : "text-error"
+          className={`font-data text-sm font-bold tabular-nums ${
+            totalProfit >= 0
+              ? "text-neon-emerald neon-glow-accept animate-neon-flicker"
+              : "text-error"
           }`}
         >
           {totalProfit >= 0 ? "+" : ""}

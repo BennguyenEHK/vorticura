@@ -95,7 +95,7 @@ export function PanelHeader({
       // bg-vellum: header matches body so the full panel lifts above --paper as one cream card.
       // border-rule-strong: 30% alpha hairline separates header tray from content (was 12% — invisible).
       className={`
-        panel-drag-handle
+        panel-drag-handle group
         flex items-center justify-between
         px-3 py-2
         border-b border-rule-strong
@@ -107,12 +107,12 @@ export function PanelHeader({
     >
       {/* Left side: drag grip + icon + mono caps title */}
       <div className="flex items-center gap-2.5">
-        {/* Drag grip — graphite tone, indicates this row is the drag handle */}
-        <GripVertical className="w-4 h-4 text-graphite" strokeWidth={1.5} />
+        {/* Drag grip — graphite at rest, neon-cyan on hover (instrument lamp) */}
+        <GripVertical className="w-4 h-4 text-graphite/60 group-hover:text-neon-cyan transition-colors duration-200" strokeWidth={1.5} />
 
-        {/* Panel icon — single-weight Lucide stroke */}
+        {/* Panel icon — neon-cyan/50 at rest, full neon on hover */}
         {IconComponent && (
-          <IconComponent className="w-4 h-4 text-graphite" strokeWidth={1.5} />
+          <IconComponent className="w-4 h-4 text-neon-cyan/50 group-hover:text-neon-cyan transition-colors duration-200" strokeWidth={1.5} />
         )}
 
         {/* Panel title — mono ALL-CAPS, wide tracking (instrument label) */}

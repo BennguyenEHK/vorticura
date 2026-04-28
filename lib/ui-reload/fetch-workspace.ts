@@ -1,3 +1,4 @@
+
 // =============================================
 // WORKSPACE DATA FETCHER - Stage-aware parallel loader
 // =============================================
@@ -145,7 +146,7 @@ export async function fetchWorkspace(
       previewType: lastPreviewType,
       preview,
       workflow,
-      workflowSteps: computeWorkflowSteps(currentStage), // computed from DB stage → drives WorkflowPanel
+      workflowSteps: computeWorkflowSteps(currentStage),
       pricing,
       ai: ai as unknown[],
     };

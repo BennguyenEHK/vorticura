@@ -46,7 +46,7 @@ export function WorkboardPanel({
         bg-vellum text-ink
         rounded-sm border border-rule-strong
         flex flex-col overflow-hidden
-        transition-colors duration-200
+        panel-neon-hover
         ${className}
       `}
     >

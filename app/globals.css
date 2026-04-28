@@ -583,6 +583,15 @@
   .animate-neon-flicker { animation: neon-flicker 4s ease-in-out infinite; }
   .animate-scanner      { animation: scanner-line 1.8s linear infinite; }
 
+  /* Panel neon hover — AI workboard panel glows cyan on focus/hover */
+  .panel-neon-hover {
+    transition: border-color 300ms ease, box-shadow 300ms ease;
+  }
+  .panel-neon-hover:hover {
+    border-color: color-mix(in oklch, var(--neon-cyan), transparent 72%);
+    box-shadow: var(--neon-glow-sm);
+  }
+
   /* Editorial micro-label: ALL-CAPS mono with wide tracking — the "instrument label" */
   .micro-label {
     font-family: var(--font-data);
@@ -607,6 +616,21 @@
 .workboard-grid {
   background: transparent;
   min-height: 100%;
+  /* Ambient neon-cyan dot matrix — deep-universe readout texture */
+  background-image: radial-gradient(
+    circle,
+    color-mix(in oklch, var(--neon-cyan), transparent 92%) 1px,
+    transparent 1px
+  );
+  background-size: 28px 28px;
+}
+.dark .workboard-grid {
+  background-image: radial-gradient(
+    circle,
+    color-mix(in oklch, var(--neon-cyan), transparent 88%) 1px,
+    transparent 1px
+  );
+  background-size: 28px 28px;
 }
 
 /* Resize handle styling for react-grid-layout */

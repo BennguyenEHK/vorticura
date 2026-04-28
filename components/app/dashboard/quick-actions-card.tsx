@@ -56,14 +56,13 @@ export function QuickActionsCard({ actions }: QuickActionsCardProps) {
             <Button
               key={index}
               variant="outline"
-              // Full width, left-aligned, square-ish height for a panel-control feel
-              className="w-full justify-start h-11"
+              className="group w-full justify-start h-11 hover:border-neon-cyan/40 hover:[box-shadow:var(--neon-glow-sm)] transition-all duration-200"
               onClick={action.onClick}
             >
-              {/* Icon — graphite stroke, single weight */}
-              <Icon className="mr-2 h-4 w-4 text-graphite" strokeWidth={1.5} />
-              {/* Label — body grotesque, ink */}
-              <span className="font-body text-sm text-ink">{action.label}</span>
+              {/* Icon — graphite at rest, neon-cyan on hover */}
+              <Icon className="mr-2 h-4 w-4 text-graphite group-hover:text-neon-cyan transition-colors duration-200" strokeWidth={1.5} />
+              {/* Label — neon-cyan on hover */}
+              <span className="font-body text-sm text-ink group-hover:text-neon-cyan transition-colors duration-200">{action.label}</span>
             </Button>
           );
         })}

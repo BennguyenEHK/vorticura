@@ -67,8 +67,8 @@ export function SupplierSearchDocument({ data, isEditing, onFieldChange }: Suppl
                     key={`${item.item_id}-${item.supplier_name}-${index}`}
                     className="flex items-start gap-3 px-3 py-2.5 rounded-lg bg-green-50/60 border border-green-100 hover:bg-green-50 transition-colors"
                   >
-                    {/* Item number pill */}
-                    <span className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-600 text-white text-[11px] font-bold mt-0.5">
+                    {/* Item number pill — neon-emerald ring with glow */}
+                    <span className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full bg-neon-emerald/15 text-neon-emerald border border-neon-emerald/40 text-[11px] font-bold mt-0.5 neon-glow-sm">
                       {item.item_id || index + 1}
                     </span>
 
@@ -84,12 +84,12 @@ export function SupplierSearchDocument({ data, isEditing, onFieldChange }: Suppl
 
                     {/* Price + delivery — right section */}
                     <div className="shrink-0 flex flex-col items-end gap-1">
-                      {/* Unit price badge */}
-                      <span className="text-[13px] font-semibold text-gray-700 whitespace-nowrap">
+                      {/* Unit price — neon-amber (live AI-sourced financial signal) */}
+                      <span className="font-data text-[13px] font-semibold tabular-nums text-neon-amber whitespace-nowrap neon-glow-sm">
                         ${item.bidder_unit_price.toFixed(2)}
                       </span>
-                      {/* Delivery time */}
-                      <span className="text-[10px] font-medium px-1.5 py-0.5 bg-green-100 text-green-700 rounded border border-green-200 whitespace-nowrap">
+                      {/* Delivery time — neon-cyan (active pipeline status) */}
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 bg-neon-cyan/10 text-neon-cyan rounded border border-neon-cyan/25 whitespace-nowrap">
                         {item.delivery_time || 'N/A'}
                       </span>
                     </div>

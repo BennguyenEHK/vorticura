@@ -181,7 +181,7 @@ export function transformResultToDocument(result: ProcessorResult): DocumentData
           item_id: (item.item_id as number) || 0,
           supplier_name: (item.supplier_name as string) || '',
           bidder_description: (item.bidder_description as string) || '',
-          bidder_unit_price: (item.bidder_unit_price as number) || 0,
+          bidder_unit_price: Number(item.bidder_unit_price) || 0,
           delivery_time: (item.delivery_time as string) || '',
           contact_email: (item.contact_email as string) || '',
           contact_phone: (item.contact_phone as string) || '',
