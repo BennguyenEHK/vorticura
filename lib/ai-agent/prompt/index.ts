@@ -12,9 +12,8 @@ export {
 } from './analyze-rfq';
 
 export {
-  SEARCH_SUPPLIERS_PROMPT,
-  buildSearchUserMessage,
-  buildResearchUserMessage,
+  EXTRACT_SUPPLIER_FROM_SNIPPETS_PROMPT,
+  buildExtractUserMessage,
 } from './search-suppliers';
 
 export {

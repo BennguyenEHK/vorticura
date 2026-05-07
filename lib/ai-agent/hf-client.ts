@@ -16,10 +16,11 @@
 
 import { InferenceClient } from '@huggingface/inference';
 
-// Re-export prompts from centralized modules for backward compatibility
+// Re-export prompts from centralized modules for backward compatibility.
+// SEARCH_SUPPLIERS_PROMPT removed — supplier search now uses the RAG path
+// (lib/services/search/ + EXTRACT_SUPPLIER_FROM_SNIPPETS_PROMPT) directly.
 export {
   ANALYZE_RFQ_PROMPT as ANALYSIS_SYSTEM_PROMPT,
-  SEARCH_SUPPLIERS_PROMPT as SUPPLIER_SEARCH_SYSTEM_PROMPT,
   RESPOND_SERVICES_PROMPT as SUPPLIER_RESPOND_SYSTEM_PROMPT,
 } from './prompt';
 
