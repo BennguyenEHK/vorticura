@@ -1,15 +1,16 @@
 // =============================================
-// AI SERVER CLIENT - Remote inference via Railway
+// AI SERVER CLIENT — vLLM OpenAI-compatible inference
 // =============================================
-// Replaces the @xenova/transformers in-process model with an HTTP client
-// that calls the self-hosted FastAPI + llama.cpp server on Railway.
-// Keeps the same chatCompletion<T> interface — all callers unchanged.
+// Talks to the self-hosted vLLM server (RunPod) via the OpenAI
+// /v1/chat/completions protocol. Same chatCompletion<T> contract as
+// hf-client.ts so all callers (analysis, supplier-search, respond) stay
+// identical regardless of AI_MODE.
 //
-// Usage: import { getLocalModel } from '@/lib/ai-agent/local-model';
-//        const result = await getLocalModel().chatCompletion<T>(systemPrompt, userMsg);
+// Server-side reference: ../../vorticura-ai-server/Documents/ai-deploy.md
 
 const AI_SERVER_URL = process.env.AI_SERVER_URL;
 const AI_API_KEY = process.env.AI_API_KEY;
+const AI_MODEL_ID = process.env.AI_MODEL_ID || 'vorticura';
 
 // =============================================
 // LocalAIModel Class
@@ -21,18 +22,22 @@ export class LocalAIModel {
   // Chat Completion (mirrors hfChatCompletion<T>)
   // =============================================
 
-  async chatCompletion<T>(systemPrompt: string, userMessage: string): Promise<T> {
+  async chatCompletion<T>(
+    systemPrompt: string,
+    userMessage: string,
+    maxTokens = 1024,
+  ): Promise<T> {
     if (!AI_SERVER_URL) {
       throw new Error('[ai-server] AI_SERVER_URL is not configured. Set it in your environment variables.');
     }
 
     if (process.env.DEBUG_LOCAL_MODEL) {
-      console.log(`[ai-server] chatCompletion: message length=${userMessage.length} chars`);
+      console.log(`[ai-server] chatCompletion: message length=${userMessage.length} chars, max_tokens=${maxTokens}`);
     } else {
-      console.log('[ai-server] chatCompletion: sending request to Railway...');
+      console.log('[ai-server] chatCompletion: sending request to vLLM...');
     }
 
-    const raw = await this.generate(systemPrompt, userMessage);
+    const raw = await this.generate(systemPrompt, userMessage, maxTokens);
     return this.parseJSON<T>(raw);
   }
 
@@ -40,16 +45,28 @@ export class LocalAIModel {
   // Internal Helpers
   // =============================================
 
-  private async generate(systemPrompt: string, userMessage: string): Promise<string> {
+  private async generate(
+    systemPrompt: string,
+    userMessage: string,
+    maxTokens: number,
+  ): Promise<string> {
     const startTime = Date.now();
 
-    const response = await fetch(`${AI_SERVER_URL}/generate`, {
+    const response = await fetch(`${AI_SERVER_URL}/v1/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(AI_API_KEY ? { 'X-API-Key': AI_API_KEY } : {}),
+        ...(AI_API_KEY ? { 'Authorization': `Bearer ${AI_API_KEY}` } : {}),
       },
-      body: JSON.stringify({ system: systemPrompt, user: userMessage }),
+      body: JSON.stringify({
+        model: AI_MODEL_ID,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+        temperature: 0.3,
+        max_tokens: maxTokens,
+      }),
     });
 
     if (!response.ok) {
@@ -61,7 +78,10 @@ export class LocalAIModel {
     }
 
     const data = await response.json();
-    const text = data.text as string;
+    const text: string = data?.choices?.[0]?.message?.content ?? '';
+    if (!text) {
+      throw new Error(`[ai-server] Empty response from vLLM: ${JSON.stringify(data).slice(0, 300)}`);
+    }
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[ai-server] Received ${text.length} chars in ${elapsed}s`);
 
@@ -88,6 +108,14 @@ export class LocalAIModel {
     }
 
     const jsonStr = cleaned.slice(start, end);
+
+    // Detect truncated arrays before throwing a misleading SyntaxError
+    const openCount = (jsonStr.match(/\[/g) || []).length;
+    const closeCount = (jsonStr.match(/\]/g) || []).length;
+    if (openCount !== closeCount) {
+      throw new Error(`[ai-server] Truncated JSON output detected (${openCount} '[' vs ${closeCount} ']'). Increase max_tokens.`);
+    }
+
     return JSON.parse(jsonStr) as T;
   }
 }
