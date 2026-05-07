@@ -462,122 +462,128 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
       {/* ============================================================ */}
       {/* DOCUMENT CONTENT — Routes to correct component               */}
       {/* ============================================================ */}
-      <div ref={contentRef} className="flex-1 overflow-auto bg-background p-4 relative select-text">
-        {/* === ACCEPT LOADING OVERLAY — blurs previous HTML doc while AI processes next step === */}
+      <div className="flex-1 relative overflow-hidden">
+        <div
+          ref={contentRef}
+          className={`absolute inset-0 ${isAccepting ? 'overflow-hidden' : 'overflow-auto'} bg-background p-4 select-text`}
+        >
+          {/* Floating "Add Note" tooltip on text selection */}
+          {selection && !showNotePopover && (
+            <div
+              className="absolute z-10 animate-in fade-in-0 zoom-in-95 duration-150"
+              style={{ top: Math.max(0, selection.position.top), left: Math.max(0, selection.position.left) }}
+              // Block mousedown from collapsing the text selection before click fires
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              <Button
+                size="sm"
+                className="h-8 gap-1.5 bg-primary text-primary-foreground shadow-lg"
+                // preventDefault on mousedown keeps the selection alive — browser would otherwise collapse it on button press
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setShowNotePopover(true)}
+              >
+                <MessageSquarePlus className="w-3.5 h-3.5" />
+                Add Note
+              </Button>
+            </div>
+          )}
+
+          {/* Note input popover */}
+          {showNotePopover && selection && (
+            <div
+              className="absolute z-20 w-64 bg-popover border border-border rounded-lg shadow-xl p-3 animate-in fade-in-0 zoom-in-95 duration-150"
+              style={{ top: Math.max(0, selection.position.top), left: Math.max(0, Math.min(selection.position.left, 200)) }}
+              // Keep selection alive for popover chrome clicks — textarea still receives focus normally
+              onMouseDown={(e) => { if (e.target === e.currentTarget) e.preventDefault(); }}
+            >
+              <div className="mb-2">
+                <p className="text-xs text-muted-foreground mb-1">Selected:</p>
+                <p className="text-xs text-foreground bg-muted/50 px-2 py-1 rounded border-l-2 border-primary truncate">
+                  &quot;{selection.text.substring(0, 50)}{selection.text.length > 50 ? '...' : ''}&quot;
+                </p>
+              </div>
+              <textarea ref={noteInputRef} value={noteInput} onChange={e => setNoteInput(e.target.value)}
+                placeholder="Your feedback..."
+                className="w-full h-16 px-2 py-1.5 text-xs bg-card border border-border rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-ring" />
+              <div className="flex justify-end gap-1.5 mt-2">
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleCancelNote}>Cancel</Button>
+                <Button size="sm" className="h-7 text-xs" onClick={handleSaveNote} disabled={!noteInput.trim()}>Save</Button>
+              </div>
+            </div>
+          )}
+
+          {state.isLoading && (
+            <div className="flex items-center justify-center h-full text-muted-foreground">
+              Loading document...
+            </div>
+          )}
+
+          {state.error && (
+            <div className="flex items-center justify-center h-full text-error text-sm">
+              {state.error}
+            </div>
+          )}
+
+          {!state.activeDocument && !state.isLoading && !state.error && (
+            <BlankDocument />
+          )}
+
+          {/* Route to correct document component based on data_type */}
+          {state.activeDocument && (
+            <>
+              {state.activeDocument.type === 'quotation' && (
+                <QuotationDocument
+                  data={state.activeDocument.data}
+                  isEditing={state.isEditing}
+                  onFieldChange={actions.updateField}
+                />
+              )}
+
+              {state.activeDocument.type === 'email' && (
+                <EmailDocument
+                  data={state.activeDocument.data}
+                  isEditing={state.isEditing}
+                  onFieldChange={actions.updateField}
+                />
+              )}
+
+              {state.activeDocument.type === 'rfq_analysis' && (
+                <RfqAnalysisDocument
+                  data={state.activeDocument.data}
+                  isEditing={state.isEditing}
+                  onFieldChange={actions.updateField}
+                />
+              )}
+
+              {state.activeDocument.type === 'supplier_search' && (
+                <SupplierSearchDocument
+                  data={state.activeDocument.data}
+                  isEditing={state.isEditing}
+                  onFieldChange={actions.updateField}
+                />
+              )}
+            </>
+          )}
+        </div>
+
         {isAccepting && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 backdrop-blur-sm bg-background/60">
-            {/* Thin neon progress bar that fills left-to-right */}
+          <div
+            aria-busy="true"
+            role="status"
+            aria-live="polite"
+            className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 backdrop-blur-sm bg-background/60 pointer-events-auto"
+          >
             <div className="w-64 h-[2px] bg-border rounded-full overflow-hidden">
               <div
                 className="h-full bg-neon-emerald neon-glow-accept transition-all duration-200 ease-out"
                 style={{ width: `${acceptProgress}%` }}
               />
             </div>
-            {/* Scanning line sweeping downward — signals active AI computation */}
             <div className="animate-scanner absolute left-0 w-full h-px bg-neon-cyan/40 pointer-events-none" />
-            {/* Flickering micro-label showing live percentage */}
             <span className="micro-label text-neon-cyan animate-neon-flicker">
               AI PROCESSING · {Math.round(acceptProgress)}%
             </span>
           </div>
-        )}
-
-        {/* Floating "Add Note" tooltip on text selection */}
-        {selection && !showNotePopover && (
-          <div
-            className="absolute z-10 animate-in fade-in-0 zoom-in-95 duration-150"
-            style={{ top: Math.max(0, selection.position.top), left: Math.max(0, selection.position.left) }}
-            // Block mousedown from collapsing the text selection before click fires
-            onMouseDown={(e) => e.preventDefault()}
-          >
-            <Button
-              size="sm"
-              className="h-8 gap-1.5 bg-primary text-primary-foreground shadow-lg"
-              // preventDefault on mousedown keeps the selection alive — browser would otherwise collapse it on button press
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => setShowNotePopover(true)}
-            >
-              <MessageSquarePlus className="w-3.5 h-3.5" />
-              Add Note
-            </Button>
-          </div>
-        )}
-
-        {/* Note input popover */}
-        {showNotePopover && selection && (
-          <div
-            className="absolute z-20 w-64 bg-popover border border-border rounded-lg shadow-xl p-3 animate-in fade-in-0 zoom-in-95 duration-150"
-            style={{ top: Math.max(0, selection.position.top), left: Math.max(0, Math.min(selection.position.left, 200)) }}
-            // Keep selection alive for popover chrome clicks — textarea still receives focus normally
-            onMouseDown={(e) => { if (e.target === e.currentTarget) e.preventDefault(); }}
-          >
-            <div className="mb-2">
-              <p className="text-xs text-muted-foreground mb-1">Selected:</p>
-              <p className="text-xs text-foreground bg-muted/50 px-2 py-1 rounded border-l-2 border-primary truncate">
-                &quot;{selection.text.substring(0, 50)}{selection.text.length > 50 ? '...' : ''}&quot;
-              </p>
-            </div>
-            <textarea ref={noteInputRef} value={noteInput} onChange={e => setNoteInput(e.target.value)}
-              placeholder="Your feedback..."
-              className="w-full h-16 px-2 py-1.5 text-xs bg-card border border-border rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-ring" />
-            <div className="flex justify-end gap-1.5 mt-2">
-              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleCancelNote}>Cancel</Button>
-              <Button size="sm" className="h-7 text-xs" onClick={handleSaveNote} disabled={!noteInput.trim()}>Save</Button>
-            </div>
-          </div>
-        )}
-
-        {state.isLoading && (
-          <div className="flex items-center justify-center h-full text-muted-foreground">
-            Loading document...
-          </div>
-        )}
-
-        {state.error && (
-          <div className="flex items-center justify-center h-full text-error text-sm">
-            {state.error}
-          </div>
-        )}
-
-        {!state.activeDocument && !state.isLoading && !state.error && (
-          <BlankDocument />
-        )}
-
-        {/* Route to correct document component based on data_type */}
-        {state.activeDocument && (
-          <>
-            {state.activeDocument.type === 'quotation' && (
-              <QuotationDocument
-                data={state.activeDocument.data}
-                isEditing={state.isEditing}
-                onFieldChange={actions.updateField}
-              />
-            )}
-
-            {state.activeDocument.type === 'email' && (
-              <EmailDocument
-                data={state.activeDocument.data}
-                isEditing={state.isEditing}
-                onFieldChange={actions.updateField}
-              />
-            )}
-
-            {state.activeDocument.type === 'rfq_analysis' && (
-              <RfqAnalysisDocument
-                data={state.activeDocument.data}
-                isEditing={state.isEditing}
-                onFieldChange={actions.updateField}
-              />
-            )}
-
-            {state.activeDocument.type === 'supplier_search' && (
-              <SupplierSearchDocument
-                data={state.activeDocument.data}
-                isEditing={state.isEditing}
-                onFieldChange={actions.updateField}
-              />
-            )}
-          </>
         )}
       </div>
 

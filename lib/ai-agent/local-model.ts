@@ -8,6 +8,8 @@
 //
 // Server-side reference: ../../vorticura-ai-server/Documents/ai-deploy.md
 
+import { jsonrepair } from 'jsonrepair';
+
 const AI_SERVER_URL = process.env.AI_SERVER_URL;
 const AI_API_KEY = process.env.AI_API_KEY;
 const AI_MODEL_ID = process.env.AI_MODEL_ID || 'vorticura';
@@ -26,18 +28,19 @@ export class LocalAIModel {
     systemPrompt: string,
     userMessage: string,
     maxTokens = 1024,
+    schema?: object,  // Optional JSON-Schema for vLLM xgrammar guided decoding (locks output shape)
   ): Promise<T> {
     if (!AI_SERVER_URL) {
       throw new Error('[ai-server] AI_SERVER_URL is not configured. Set it in your environment variables.');
     }
 
     if (process.env.DEBUG_LOCAL_MODEL) {
-      console.log(`[ai-server] chatCompletion: message length=${userMessage.length} chars, max_tokens=${maxTokens}`);
+      console.log(`[ai-server] chatCompletion: message length=${userMessage.length} chars, max_tokens=${maxTokens}, guided=${schema ? 'yes' : 'no'}`);
     } else {
       console.log('[ai-server] chatCompletion: sending request to vLLM...');
     }
 
-    const raw = await this.generate(systemPrompt, userMessage, maxTokens);
+    const raw = await this.generate(systemPrompt, userMessage, maxTokens, schema);
     return this.parseJSON<T>(raw);
   }
 
@@ -49,8 +52,30 @@ export class LocalAIModel {
     systemPrompt: string,
     userMessage: string,
     maxTokens: number,
+    schema?: object,
   ): Promise<string> {
     const startTime = Date.now();
+
+    // Body construction: when a schema is supplied we use vLLM's xgrammar
+    // guided_json (stricter — enforces field shapes); otherwise fall back to
+    // the looser response_format json_object grammar. Mixing both is invalid.
+    const body: Record<string, unknown> = {
+      model: AI_MODEL_ID,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+      temperature: 0.3,
+      max_tokens: maxTokens,
+    };
+    if (schema) {
+      // vLLM accepts guided_json under extra_body in the OpenAI-compat layer.
+      // xgrammar is set as guided-decoding-backend on the pod start command.
+      body.extra_body = { guided_json: schema };
+    } else {
+      // Default JSON-object mode keeps existing analysis/respond callers working
+      body.response_format = { type: 'json_object' };
+    }
 
     const response = await fetch(`${AI_SERVER_URL}/v1/chat/completions`, {
       method: 'POST',
@@ -58,15 +83,7 @@ export class LocalAIModel {
         'Content-Type': 'application/json',
         ...(AI_API_KEY ? { 'Authorization': `Bearer ${AI_API_KEY}` } : {}),
       },
-      body: JSON.stringify({
-        model: AI_MODEL_ID,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage },
-        ],
-        temperature: 0.3,
-        max_tokens: maxTokens,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -82,8 +99,19 @@ export class LocalAIModel {
     if (!text) {
       throw new Error(`[ai-server] Empty response from vLLM: ${JSON.stringify(data).slice(0, 300)}`);
     }
+    // vLLM tells us directly when generation hit the token cap. Fail fast with
+    // a clear message rather than letting parseJSON throw a misleading bracket
+    // / syntax error downstream.
+    const finishReason: string | undefined = data?.choices?.[0]?.finish_reason;
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`[ai-server] Received ${text.length} chars in ${elapsed}s`);
+    console.log(`[ai-server] Received ${text.length} chars in ${elapsed}s (finish_reason=${finishReason ?? 'unknown'})`);
+
+    if (finishReason === 'length') {
+      throw new Error(
+        `[ai-server] Output truncated: vLLM hit max_tokens cap (${maxTokens}). ` +
+        `Received ${text.length} chars before stop. Increase max_tokens for this caller.`
+      );
+    }
 
     return text;
   }
@@ -116,7 +144,23 @@ export class LocalAIModel {
       throw new Error(`[ai-server] Truncated JSON output detected (${openCount} '[' vs ${closeCount} ']'). Increase max_tokens.`);
     }
 
-    return JSON.parse(jsonStr) as T;
+    try {
+      return JSON.parse(jsonStr) as T;
+    } catch (firstErr) {
+      try {
+        const repaired = jsonrepair(jsonStr);
+        return JSON.parse(repaired) as T;
+      } catch (secondErr) {
+        console.error(
+          `[ai-server] parseJSON failed after repair attempt.\n` +
+          `  primary: ${firstErr instanceof Error ? firstErr.message : firstErr}\n` +
+          `  repair:  ${secondErr instanceof Error ? secondErr.message : secondErr}\n` +
+          `  --- raw head (600) ---\n${raw.slice(0, 600)}\n` +
+          `  --- raw tail (400) ---\n${raw.slice(-400)}`
+        );
+        throw firstErr;
+      }
+    }
   }
 }
 

@@ -18,6 +18,10 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET() {
   const encoder = new TextEncoder();
+  // Hoisted so the ReadableStream `cancel` handler (fired by the runtime when
+  // the client disconnects cleanly — tab close, navigation, HMR) can run
+  // teardown. Without this, listeners leak on every clean disconnect.
+  let cleanup: () => void = () => {};
 
   const stream = new ReadableStream({
     start(controller) {
@@ -36,13 +40,6 @@ export async function GET() {
       // Subscribe to preview updates
       eventBus.on('preview-update', onUpdate);
 
-      // Cleanup helper: unsubscribe + close stream
-      const cleanup = () => {
-        eventBus.off('preview-update', onUpdate);
-        clearInterval(heartbeat);
-        try { controller.close(); } catch { /* already closed */ }
-      };
-
       // Heartbeat every 15s — SSE comment line keeps connection alive
       const heartbeat = setInterval(() => {
         try {
@@ -52,6 +49,17 @@ export async function GET() {
           cleanup();
         }
       }, 15_000);
+
+      // Cleanup helper: unsubscribe + close stream. Idempotent — safe to call
+      // from both the enqueue-catch path and the `cancel` handler below.
+      cleanup = () => {
+        eventBus.off('preview-update', onUpdate);
+        clearInterval(heartbeat);
+        try { controller.close(); } catch { /* already closed */ }
+      };
+    },
+    cancel() {
+      cleanup();
     },
   });
 

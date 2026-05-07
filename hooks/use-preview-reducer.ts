@@ -126,7 +126,15 @@ function previewReducer(state: PreviewState, action: PreviewAction): PreviewStat
       return { ...state, isLoading: action.isLoading };
 
     case 'SET_ERROR':
-      return { ...state, error: action.error, isLoading: false };
+      // Clear activeDocument when an error is set so the error message becomes
+      // visible — otherwise it stacks behind the previously-loaded document
+      // branch and the user can't see that processing failed.
+      return {
+        ...state,
+        error: action.error,
+        isLoading: false,
+        activeDocument: action.error ? null : state.activeDocument,
+      };
 
     case 'CLEAR':
       return initialState;
