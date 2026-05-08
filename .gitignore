@@ -48,3 +48,6 @@ lib/ai-agent/ai-model/
 
 # Temporary files created by local tooling (Claude/tmp scripts)
 tmpclaude-*
+
+# diagnostic / dev-only scripts (contain DB connection logic, not for repo)
+/scripts/diagnose-email-connections.mjs

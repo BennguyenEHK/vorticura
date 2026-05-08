@@ -7,6 +7,7 @@
 // Appears when clicking the Comms Hub trigger in topbar
 
 import { useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { X, Plus, Mail, Clock, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChannelItem } from "./channel-item";
@@ -50,6 +51,9 @@ export function CommsHubDropdown({
   const [showProviderPicker, setShowProviderPicker] = useState(false);
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+
+  // Router for navigation
+  const router = useRouter();
 
   // Ref for click-outside handling
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -212,8 +216,9 @@ export function CommsHubDropdown({
                       key={channel.id}
                       channel={channel}
                       onSettings={() => {
-                        console.log("Settings for:", channel.id);
-                        // TODO: Open settings modal
+                        console.log('[comms-hub] navigating to settings for channel', channel.id);
+                        onClose();
+                        router.push('/settings');
                       }}
                     />
                   ))}
