@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/client';
 import { emailConnections } from '@/lib/db/schema';
-import { eq, and, lt, sql } from 'drizzle-orm';
+import { eq, and, lt, or, isNull, sql } from 'drizzle-orm';
 import {
   refreshGoogleToken,
   refreshMicrosoftToken,
@@ -121,6 +121,10 @@ export async function GET(request: NextRequest) {
       summary.errors.push('GOOGLE_PUBSUB_TOPIC not configured - Gmail watches cannot be renewed');
     } else {
       const twentyFourHoursFromNow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      // Match rows whose Gmail watch is expiring soon OR was never registered.
+      // `lt(NULL, x)` evaluates to NULL in Postgres, so without the isNull()
+      // branch a connection where the initial setupGmailWatch() failed would
+      // never be retried by this cron.
       const expiringGmailWatches = await db
         .select()
         .from(emailConnections)
@@ -128,7 +132,10 @@ export async function GET(request: NextRequest) {
           and(
             eq(emailConnections.provider, 'gmail'),
             eq(emailConnections.status, 'active'),
-            lt(emailConnections.subscriptionExpires, twentyFourHoursFromNow)
+            or(
+              isNull(emailConnections.subscriptionExpires),
+              lt(emailConnections.subscriptionExpires, twentyFourHoursFromNow)
+            )
           )
         );
 
