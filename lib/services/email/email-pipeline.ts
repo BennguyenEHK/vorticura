@@ -8,7 +8,7 @@
 // Dataflow:
 //   rawMessage (Buffer/JSON) → extractContent → checkDuplicate → extractAttachments
 //   → classifyType → buildPayload → handleHTTPRequest → onSuccess → SSE emit
-
+import './pdfjs-polyfill';
 import { simpleParser, type ParsedMail, type Attachment } from 'mailparser';
 import { getDocument, type PDFDocumentProxy } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import sharp from 'sharp';
