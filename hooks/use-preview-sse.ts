@@ -13,11 +13,27 @@ interface UsePreviewSSEOptions {
 }
 
 /**
- * Hook that connects to /api/preview-stream SSE endpoint
- * Transforms ProcessorResult → DocumentData and dispatches to reducer
+ * Hook that connects to /api/preview-stream SSE endpoint.
+ * Transforms ProcessorResult → DocumentData and dispatches to reducer.
+ *
+ * The EventSource is opened once on mount and kept for the lifetime of the
+ * component. Callbacks are stored in refs so they can change (e.g., when the
+ * parent re-renders due to progress timers) without closing and re-opening the
+ * connection. Reconnecting mid-pipeline drops any Redis Pub/Sub event that
+ * arrives during the reconnect window — keeping the connection stable is what
+ * makes the cross-instance SSE delivery reliable in production.
  */
 export function usePreviewSSE({ onDocumentReceived, onError }: UsePreviewSSEOptions) {
   const eventSourceRef = useRef<EventSource | null>(null);
+  // Refs hold the latest callbacks — updated every render without triggering
+  // the subscription effect. This is the standard React pattern for stable
+  // event listeners that need access to current closure values.
+  const onDocumentReceivedRef = useRef(onDocumentReceived);
+  const onErrorRef = useRef(onError);
+
+  // Keep refs current without causing a re-subscription
+  useEffect(() => { onDocumentReceivedRef.current = onDocumentReceived; });
+  useEffect(() => { onErrorRef.current = onError; });
 
   useEffect(() => {
     const eventSource = new EventSource('/api/preview-stream');
@@ -29,14 +45,14 @@ export function usePreviewSSE({ onDocumentReceived, onError }: UsePreviewSSEOpti
 
         // Skip error results
         if (!result.success || result.status === 'error') {
-          onError?.(result.error || 'Processing failed');
+          onErrorRef.current?.(result.error || 'Processing failed');
           return;
         }
 
         // Transform ProcessorResult → DocumentData based on data_type
         const document = transformResultToDocument(result);
         if (document) {
-          onDocumentReceived(document);
+          onDocumentReceivedRef.current(document);
         }
       } catch (err) {
         console.error('[SSE] Failed to parse event:', err);
@@ -51,7 +67,7 @@ export function usePreviewSSE({ onDocumentReceived, onError }: UsePreviewSSEOpti
       eventSource.close();
       eventSourceRef.current = null;
     };
-  }, [onDocumentReceived, onError]);
+  }, []); // Mount/unmount only — callbacks accessed via refs above
 }
 
 // ---------------------------------------------

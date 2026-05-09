@@ -405,7 +405,7 @@ export async function checkDuplicateInDB(
   try {
     const count = await getCount(
       'emailTable',
-      { message_id: messageId },
+      { messageId },  // Drizzle table uses camelCase; snake_case key is silently skipped
       workspace
     );
     return count > 0;
