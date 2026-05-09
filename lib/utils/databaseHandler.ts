@@ -314,7 +314,13 @@ export function buildIncomingEmailPayload(data: Record<string, unknown>, update 
   if (data.email_body_text != null) payload.emailBodyText = String(data.email_body_text);
   if (data.attachments_parsed != null) payload.attachmentsParsed = data.attachments_parsed;
   if (data.classification_type != null) payload.classificationType = String(data.classification_type);
-  if (data.classification_confidence != null) payload.classificationConfidence = String(data.classification_confidence);
+  if (data.classification_confidence != null) {
+    // The pipeline produces 'high'/'medium'/'low' labels; the DB column is numeric(4,3).
+    // Map labels to canonical probabilities so PostgreSQL can cast them correctly.
+    const raw = String(data.classification_confidence);
+    const labelToNumeric: Record<string, string> = { high: '0.900', medium: '0.700', low: '0.500' };
+    payload.classificationConfidence = labelToNumeric[raw] ?? raw;
+  }
   if (data.rfq_id != null) {
     const rfqId = parseInt(String(data.rfq_id), 10);
     if (!isNaN(rfqId)) payload.rfqId = rfqId;
