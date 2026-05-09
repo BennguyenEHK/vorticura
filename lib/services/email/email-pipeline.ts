@@ -563,25 +563,30 @@ export async function processEmailMessage(
     // Step 3: Extract attachment content (PDF text, image thumbnails)
     const processedAttachments = await extractAttachmentContent(email.rawAttachments);
 
-    // Step 3.5: Emit notification to UI — fire-and-forget, never throw
-    try {
-      const payload = {
-        id: email.messageId || `msg-${Date.now()}`,
-        fromName: email.fromName || '',
-        fromEmail: email.from || 'unknown',
-        subject: email.subject || '(no subject)',
-        preview: (email.textBody || '').slice(0, 160),
-        timestamp: Date.now(),
-      };
-      console.log('[comms-notify][emit] new email', { id: payload.id, fromEmail: payload.fromEmail });
-      eventBus.emit('comms-update', payload);
-    } catch (notifyErr) {
-      console.warn('[comms-notify][emit] failed', notifyErr);
-    }
-
-    // Step 4: Classify email type
+    // Step 4: Classify email type (must run before notification so we can filter)
     const classification = classifyEmailType(email, processedAttachments);
     console.log(`[email-pipeline] Classified: ${classification.actionType} (${classification.confidence})`);
+
+    // Step 4.5: Emit toast notification — only for RFQ emails (i.e. from customers or
+    // containing RFQ in subject/body). Supplier responds and unclassified newsletters
+    // are intentionally excluded — they are noise for the sales operator who owns the
+    // topbar notification queue.
+    if (classification.actionType === 'handleRFQ') {
+      try {
+        const notifPayload = {
+          id: email.messageId || `msg-${Date.now()}`,
+          fromName: email.fromName || '',
+          fromEmail: email.from || 'unknown',
+          subject: email.subject || '(no subject)',
+          preview: (email.textBody || '').slice(0, 160),
+          timestamp: Date.now(),
+        };
+        console.log('[comms-notify][emit] RFQ email → toast', { id: notifPayload.id, fromEmail: notifPayload.fromEmail, confidence: classification.confidence });
+        eventBus.emit('comms-update', notifPayload);
+      } catch (notifyErr) {
+        console.warn('[comms-notify][emit] failed', notifyErr);
+      }
+    }
 
     // Step 5: Build processor payload
     const payload = buildIncomingEmailPayload(email, processedAttachments, classification, workspace);

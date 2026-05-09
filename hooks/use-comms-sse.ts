@@ -1,7 +1,7 @@
 "use client";
 // Subscribes to /api/comms-stream and invokes a callback for each incoming notification.
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 export interface CommsNotification {
   id: string;
@@ -12,7 +12,17 @@ export interface CommsNotification {
   timestamp: number;
 }
 
+/**
+ * Opens a single persistent /api/comms-stream EventSource for the lifetime of
+ * the consuming component. The callback is stored in a ref so callers are free
+ * to pass inline functions or unstable references without causing a reconnect.
+ */
 export function useCommsSSE(onNotification: (n: CommsNotification) => void) {
+  // Ref holds the latest callback — updated every render, never triggers
+  // the subscription effect.
+  const onNotificationRef = useRef(onNotification);
+  useEffect(() => { onNotificationRef.current = onNotification; });
+
   useEffect(() => {
     const es = new EventSource('/api/comms-stream');
     console.log('[comms-notify][hook] connecting to /api/comms-stream');
@@ -21,7 +31,7 @@ export function useCommsSSE(onNotification: (n: CommsNotification) => void) {
       try {
         const data = JSON.parse(event.data) as CommsNotification;
         console.log('[comms-notify][hook] received', { id: data.id, fromEmail: data.fromEmail, subject: data.subject });
-        onNotification(data);
+        onNotificationRef.current(data);
       } catch (err) {
         console.error('[comms-notify][hook] parse error', err);
       }
@@ -35,5 +45,5 @@ export function useCommsSSE(onNotification: (n: CommsNotification) => void) {
       console.log('[comms-notify][hook] closing connection');
       es.close();
     };
-  }, [onNotification]);
+  }, []); // Mount/unmount only — callback accessed via ref above
 }
