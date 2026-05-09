@@ -6,9 +6,16 @@
 // Mirrors the structure of preview-stream/route.ts
 
 import { eventBus } from '@/lib/event-bus';
+import { randomUUID } from 'crypto';
 
 // Disable static optimization — SSE must be dynamic
 export const dynamic = 'force-dynamic';
+// Node.js runtime — Edge can't run ioredis (TCP)
+export const runtime = 'nodejs';
+// Hold the streaming function open as long as Vercel allows so SSE clients
+// reconnect less often (each reconnect leaks a tiny window where Redis
+// Pub/Sub events can be missed).
+export const maxDuration = 300;
 
 /**
  * GET /api/comms-stream
@@ -17,15 +24,17 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET() {
   const encoder = new TextEncoder();
+  const connId = randomUUID().slice(0, 8);
   // Hoisted so the ReadableStream `cancel` handler can run teardown
   let cleanup: () => void = () => {};
 
   const stream = new ReadableStream({
     start(controller) {
+      console.log(`[sse:comms ${connId}] subscribed`);
       // Forward event bus messages as SSE data frames
       const onUpdate = (data: unknown) => {
         try {
-          console.log('[comms-notify][sse] forwarding event', { id: (data as any)?.id });
+          console.log(`[sse:comms ${connId}] frame id=${(data as any)?.id} type=${(data as any)?.type}`);
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
           );
@@ -50,6 +59,7 @@ export async function GET() {
 
       // Cleanup helper: unsubscribe + close stream. Idempotent.
       cleanup = () => {
+        console.log(`[sse:comms ${connId}] cleanup`);
         eventBus.off('comms-update', onUpdate);
         clearInterval(heartbeat);
         try { controller.close(); } catch { /* already closed */ }
@@ -63,9 +73,12 @@ export async function GET() {
   // Return SSE-compatible response headers
   return new Response(stream, {
     headers: {
-      'Content-Type': 'text/event-stream',   // SSE MIME type
+      'Content-Type': 'text/event-stream',       // SSE MIME type
       'Cache-Control': 'no-cache, no-transform', // Prevent caching/buffering
-      'Connection': 'keep-alive',             // Persistent connection
+      'Connection': 'keep-alive',                // Persistent connection
+      // Disable proxy buffering so SSE chunks reach the browser immediately
+      // (Vercel/Nginx can otherwise hold a streamed body until the buffer fills).
+      'X-Accel-Buffering': 'no',
     },
   });
 }

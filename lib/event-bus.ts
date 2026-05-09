@@ -93,7 +93,16 @@ class RedisEventBus extends EventEmitter {
         const eventName = channel.slice(CHANNEL_PREFIX.length);
         const envelope = JSON.parse(message) as Envelope;
         // Skip messages we ourselves published — we already delivered them locally in emit()
-        if (envelope.origin === this.processId) return;
+        if (envelope.origin === this.processId) {
+          console.log(`[event-bus][sub ${this.processId.slice(0, 8)}] skip self-echo channel=${eventName}`);
+          return;
+        }
+        // Listener count is the diagnostic that tells us whether the SSE route on
+        // THIS instance is actually subscribed when the cross-process emit lands.
+        const listenerCount = this.listenerCount(eventName);
+        console.log(
+          `[event-bus][sub ${this.processId.slice(0, 8)}] pmessage channel=${eventName} from=${envelope.origin.slice(0, 8)} listeners=${listenerCount}`,
+        );
         // Fan out to in-process listeners (SSE routes subscribed via eventBus.on)
         super.emit(eventName, envelope.data);
       } catch (err) {
@@ -166,10 +175,25 @@ class RedisEventBus extends EventEmitter {
       const envelope: Envelope = { origin: this.processId, data: normalized };
       const payload = JSON.stringify(envelope);
       try {
-        await this.publisher.publish(CHANNEL_PREFIX + eventName, payload);
+        // Upstash returns the number of subscribers that received the publish.
+        // 0 means NO Vercel instance currently has an SSE connection open for
+        // this channel — the visible symptom is "DB writes succeed, UI never
+        // refreshes until F5". Logging this lets us tell that case apart from
+        // a publish/network failure.
+        const receivers = await this.publisher.publish(CHANNEL_PREFIX + eventName, payload);
+        console.log(
+          `[event-bus][pub ${this.processId.slice(0, 8)}] publish channel=${eventName} receivers=${receivers}`,
+        );
       } catch (err) {
         console.warn(`[event-bus] publish failed for "${eventName}":`, formatError(err));
       }
+    } else {
+      // Most useful failure mode: REDIS_URL missing in Vercel env → fallback to
+      // in-process EventEmitter → cross-instance fan-out impossible. Each emit
+      // logs once so this state is visible in Vercel logs after a few clicks.
+      console.warn(
+        `[event-bus][pub] no publisher (REDIS_URL unset?) — channel=${eventName} delivered in-process only`,
+      );
     }
 
     return localResult;
