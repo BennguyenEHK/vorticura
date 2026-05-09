@@ -1,11 +1,15 @@
 // =============================================
 // GMAIL INBOX POLL — Manual / Cron Sync
 // =============================================
-// POST /api/cron/sync-gmail
+// GET /api/cron/sync-gmail
 //
 // Dual-mode authentication:
-//   • Vercel Cron  → Authorization: Bearer {CRON_SECRET}  → syncs ALL active companies
+//   • cron-job.org → Authorization: Bearer {CRON_SECRET}  → syncs ALL active companies
 //   • Browser call → auth_token cookie (Sync Inbox button) → syncs caller's company only
+//
+// WHY GET? Matches the sibling cron routes (cleanup-ai-conversations, refresh-tokens)
+// and cron-job.org's default request method. Using POST caused 405 Method Not Allowed
+// on every cron tick, which auto-disabled the job after the failure threshold.
 //
 // WHY dual-mode? /api/cron is declared PUBLIC in middleware.ts so middleware exits
 // early and never injects x-company-id. Instead of relying on that header, this
@@ -31,9 +35,9 @@ import {
 } from '@/lib/services/email/gmail-client';
 import { processEmailMessage } from '@/lib/services/email/email-pipeline';
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   // ── Step 1: Authenticate the caller ─────────────────────────────────────
-  // Vercel Cron sends "Authorization: Bearer <CRON_SECRET>"; browser sends a cookie.
+  // cron-job.org sends "Authorization: Bearer <CRON_SECRET>"; browser sends a cookie.
   const cronSecret = process.env.CRON_SECRET;
 
   // isCronCall is true only when CRON_SECRET is configured AND the header matches

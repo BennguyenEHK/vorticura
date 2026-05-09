@@ -119,7 +119,7 @@ export function CommsHubDropdown({
   async function handleSyncInbox() {
     setSyncing(true);
     try {
-      const res  = await fetch('/api/cron/sync-gmail', { method: 'POST' });
+      const res  = await fetch('/api/cron/sync-gmail', { method: 'GET' });
       const data = await res.json();
       if (data.totalProcessed > 0) {
         // Re-fetch messages to show newly synced emails

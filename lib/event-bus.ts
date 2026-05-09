@@ -141,6 +141,40 @@ class RedisEventBus extends EventEmitter {
     return localResult;
   }
 
+  /**
+   * Awaitable emit — same delivery as emit() but the caller can `await` cross-process
+   * publish completion. Required on Vercel/serverless: a fire-and-forget publish is
+   * dropped when the runtime freezes the function instance after the response is sent,
+   * so SSE listeners on other instances never receive the event. Use this from server
+   * actions / API routes that emit immediately before returning.
+   */
+  async emitAsync(event: string | symbol, ...args: unknown[]): Promise<boolean> {
+    const eventName = String(event);
+    const rawPayload = args.length === 1 ? args[0] : args;
+
+    let normalized: unknown;
+    try {
+      normalized = JSON.parse(JSON.stringify(rawPayload));
+    } catch (err) {
+      console.warn(`[event-bus] payload for "${eventName}" is not JSON-serializable:`, formatError(err));
+      return super.emit(event, rawPayload);
+    }
+
+    const localResult = super.emit(event, normalized);
+
+    if (this.publisher) {
+      const envelope: Envelope = { origin: this.processId, data: normalized };
+      const payload = JSON.stringify(envelope);
+      try {
+        await this.publisher.publish(CHANNEL_PREFIX + eventName, payload);
+      } catch (err) {
+        console.warn(`[event-bus] publish failed for "${eventName}":`, formatError(err));
+      }
+    }
+
+    return localResult;
+  }
+
   /** Graceful shutdown — disconnects both clients cleanly. Optional; processes exit anyway. */
   async close(): Promise<void> {
     try { await this.subscriber?.quit(); } catch { /* already closed */ }

@@ -205,7 +205,7 @@ export async function handleHTTPRequest(input: ProcessorInput): Promise<Processo
       };
 
       // Emit SSE for pipeline-chain result (use chainResult's data_type as it's what was actually processed)
-      emitProcessorResult(finalResult, chainResult.data_type as DataType, validatedInput);
+      await emitProcessorResult(finalResult, chainResult.data_type as DataType, validatedInput);
 
       return finalResult;
     }
@@ -270,7 +270,7 @@ export async function handleHTTPRequest(input: ProcessorInput): Promise<Processo
       session_id: sessionId,
       processing_time_ms: Date.now() - startTime,
     };
-    emitProcessorResult(finalResult, dataType, normalizedInput);
+    await emitProcessorResult(finalResult, dataType, normalizedInput);
 
     return finalResult;
   } catch (error) {
@@ -385,7 +385,7 @@ const DATA_TYPE_TO_PREVIEW: Record<string, PreviewType> = {
  * Persists last_preview_type onto rfq_analysis BEFORE the SSE emit so a parallel
  * workspace hydration sees the freshest preview tag.
  */
-function emitProcessorResult(result: ProcessorResult, _dataType: DataType, input: ProcessorInput): void {
+async function emitProcessorResult(result: ProcessorResult, _dataType: DataType, input: ProcessorInput): Promise<void> {
   // ── Persist last_preview_type before emit ──
   // Only update when we have rfq_id + workspace + a known preview-type mapping.
   const resultDataPre = result.data as Record<string, unknown> | undefined;
@@ -413,13 +413,16 @@ function emitProcessorResult(result: ProcessorResult, _dataType: DataType, input
     });
   }
 
-  // Always emit preview-update for UI real-time rendering
-  eventBus.emit('preview-update', result);
+  // Always emit preview-update for UI real-time rendering.
+  // Awaited so the Redis PUBLISH completes BEFORE the server action returns —
+  // otherwise Vercel freezes the function instance and the publish is dropped,
+  // leaving SSE listeners on other instances without the update.
+  await eventBus.emitAsync('preview-update', result);
 
   // Emit all-items-available when respond_service indicates readiness for quotation
   const resultData = result.data as Record<string, unknown> | undefined;
   if (resultData?.all_items_available === true) {
-    eventBus.emit('comms-update', {
+    await eventBus.emitAsync('comms-update', {
       type: 'all-items-available',
       rfq_id: resultData.rfq_id,
       message: 'All supplier items are now available. Ready for quotation pricing.',
