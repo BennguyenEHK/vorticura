@@ -381,6 +381,10 @@ export function encryptToken(plaintext: string): string {
  * @returns Original plaintext token
  */
 export function decryptToken(encryptedStr: string): string {
+  // Guard against null/undefined — indicates schema drift or a missing DB column
+  if (encryptedStr == null) {
+    throw new Error('Token value is null or undefined — the connection row is missing its token column. Re-authenticate the email account to fix this.');
+  }
   // Validate TOKEN_ENCRYPTION_KEY exists and is exactly 64 hex characters (32 bytes)
   if (!TOKEN_ENCRYPTION_KEY) {
     throw new Error('TOKEN_ENCRYPTION_KEY is required for token decryption (must be 64 hex characters for AES-256-GCM)');
