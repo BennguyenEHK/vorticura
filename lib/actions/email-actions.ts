@@ -14,6 +14,8 @@ import { eq, and } from 'drizzle-orm';
 import { decryptToken, refreshGoogleToken, refreshMicrosoftToken, encryptToken } from '@/lib/services/email/oauth-helper';
 import { sendGmailMessage } from '@/lib/services/email/gmail-client';
 import { sendOutlookMessage } from '@/lib/services/email/outlook-client';
+import { hfChatCompletion } from '@/lib/ai-agent/hf-client';
+import { GENERATE_EMAIL_PROMPT, buildEmailUserMessage, buildRegenerateEmailUserMessage } from '@/lib/ai-agent/prompt/generate-email';
 
 // ---------------------------------------------
 // Configuration
@@ -36,7 +38,7 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
   const timestamp = new Date().toISOString();
 
   try {
-    const { action_type, quotation_id, rfq_reference, email, workspace } = input;
+    const { action_type, quotation_id, rfq_id, rfq_reference, email, workspace } = input;
 
     // Handle incoming_email routing (handleUnknown → processEmail)
     // Map incoming_email fields to email fields for processing
@@ -56,11 +58,38 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
     const effectiveActionType = isFromIncomingEmail ? 'generate' : action_type;
 
     switch (effectiveActionType) {
-      case 'generate':
+      case 'generate': {
+        // Call AI to generate supplier inquiry email from RFQ context
+        const generated = await hfChatCompletion<{ subject: string; email_body: string }>(
+          GENERATE_EMAIL_PROMPT,
+          buildEmailUserMessage({
+            emailType: 'supplier_inquiry',
+            rfqReference: rfq_reference || `RFQ-${rfq_id ?? 'unknown'}`,
+            recipientName: '',
+            recipientCompany: '',
+            senderCompany: '',
+            context: input.reference_content || '',
+          })
+        );
+        resultData = { to: '', subject: generated.subject, body: generated.email_body };
+        emailStatus = 'draft';
+        break;
+      }
       case 're_generate': {
-        // Generate email draft from template
-        const draft = generateDraftFromTemplate(input);
-        resultData = draft;
+        // Re-generate email with user feedback via AI
+        const generated = await hfChatCompletion<{ subject: string; email_body: string }>(
+          GENERATE_EMAIL_PROMPT,
+          buildRegenerateEmailUserMessage({
+            emailType: 'supplier_inquiry',
+            previousEmail: JSON.stringify(effectiveEmail ?? {}),
+            generalFeedback: String(input.ai_comments?.general_feedback ?? ''),
+            inlineNotes: (input.ai_comments?.inline_notes ?? []).map((n: Record<string, unknown>) => ({
+              selectedText: String(n.selected_text ?? n.selectedText ?? ''),
+              comment: String(n.comment ?? ''),
+            })),
+          })
+        );
+        resultData = { to: effectiveEmail?.recipient_email ?? '', subject: generated.subject, body: generated.email_body };
         emailStatus = 'draft';
         break;
       }
@@ -99,7 +128,7 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
       status: 'completed',
       session_id: '',
       processing_time_ms: Date.now() - startTime,
-      data: resultData,
+      data: { ...(resultData as Record<string, unknown>), rfq_id: rfq_id ?? null },
       timestamp,
     };
 
@@ -109,6 +138,7 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
         await modifyDatabase({
           data_type: 'email',
           quotation_id,
+          rfq_id,          // FK linkage: satisfies chk_email_has_parent constraint
           rfq_reference,
           email: {
             subject: effectiveEmail?.subject || '',
@@ -142,32 +172,6 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
 
     return errorResult;
   }
-}
-
-// ---------------------------------------------
-// Draft Generation
-// ---------------------------------------------
-
-/**
- * Generate email draft from template using ProcessorInput data
- */
-function generateDraftFromTemplate(input: ProcessorInput): EmailDraftData {
-  // Handle incoming_email routing — use incoming_email fields as draft source
-  if (input.data_type === 'incoming_email' && input.incoming_email) {
-    return {
-      to: input.incoming_email.from_email,
-      subject: `RE: ${input.incoming_email.subject || '(no subject)'}`,
-      body: input.incoming_email.email_body_text || '',
-    };
-  }
-
-  // Standard email input — use provided content as the draft
-  const email = input.email;
-  return {
-    to: email?.recipient_email || '',
-    subject: email?.subject || '',
-    body: email?.email_content || '',
-  };
 }
 
 // ---------------------------------------------

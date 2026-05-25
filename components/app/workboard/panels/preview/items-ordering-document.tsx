@@ -8,13 +8,14 @@
 
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   ChevronRight, ChevronDown, Package, Trophy, XCircle,
   Clock, Sparkles, Send, RefreshCw, ThumbsDown, ArrowRight, Check, Star,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { handleHTTPRequest } from '@/lib/data-processor';
+import { generateAIThreadSummary, generateAIDraftReply } from '@/lib/actions/thread-ai-actions';
 import type { ItemsOrderingDocumentData, ItemsOrderingSupplier, ItemsOrderingItem } from '@/types/preview';
 
 // ─── Status display config (badge colors per procurement state) ───────────────
@@ -60,6 +61,10 @@ export function ItemsOrderingDocument({ data }: ItemsOrderingDocumentProps) {
   // Draft reply state
   const [showDraft, setShowDraft] = useState(false);
   const [draftReply, setDraftReply] = useState('');
+  // AI-generated thread summaries keyed `${itemId}-${idx}`
+  const [aiSummaries, setAiSummaries]       = useState<Record<string, string>>({});
+  const [summaryLoading, setSummaryLoading] = useState<Record<string, boolean>>({});
+  const [draftLoading, setDraftLoading]     = useState(false);
   // Split percentage: upper panel height (clamped 25–75)
   const [splitPct, setSplitPct] = useState(60);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -123,6 +128,60 @@ export function ItemsOrderingDocument({ data }: ItemsOrderingDocumentProps) {
     });
   }, [data.rfq_id]);
 
+  // Resolve the selected supplier + parent item for the lower panel handlers
+  const selectedItem     = selected ? data.items.find(i => i.item_id === selected.itemId) ?? null : null;
+  const selectedSupplier = selectedItem ? selectedItem.suppliers[selected!.idx] ?? null : null;
+
+  // Auto-load AI thread summary when operator selects a supplier row
+  useEffect(() => {
+    if (!selected) return;
+    const key = `${selected.itemId}-${selected.idx}`;
+    if (aiSummaries[key] || summaryLoading[key]) return; // already loaded/loading
+    const item = data.items.find(i => i.item_id === selected.itemId);
+    const supplier = item?.suppliers[selected.idx];
+    if (!supplier || supplier.thread.length === 0) return; // nothing to summarize
+    setSummaryLoading(prev => ({ ...prev, [key]: true }));
+    generateAIThreadSummary(supplier.thread, supplier.supplier_name, item!.item_name)
+      .then(summary => setAiSummaries(prev => ({ ...prev, [key]: summary })))
+      .catch(() => {}) // silent fail — summary is decorative
+      .finally(() => setSummaryLoading(prev => ({ ...prev, [key]: false })));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, data.items]);
+
+  // Toggle draft panel; trigger AI pre-fill if opening an empty draft
+  const handleToggleDraft = useCallback(() => {
+    const nowShowing = !showDraft;
+    setShowDraft(nowShowing);
+    if (nowShowing && !draftReply && selectedSupplier && selectedItem) {
+      setDraftLoading(true);
+      generateAIDraftReply(selectedSupplier.thread, selectedSupplier.supplier_name, selectedItem.item_name)
+        .then(reply => setDraftReply(reply))
+        .catch(() => {})
+        .finally(() => setDraftLoading(false));
+    }
+  }, [showDraft, draftReply, selectedSupplier, selectedItem]);
+
+  // Send the draft reply via email pipeline
+  const handleSendReply = useCallback(async () => {
+    if (!selectedSupplier?.contact_email || !draftReply.trim() || !data.rfq_id) return;
+    await handleHTTPRequest({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data_type: 'email' as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      action_type: 'send' as any,
+      rfq_id: data.rfq_id,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      email: {
+        recipient_email: selectedSupplier.contact_email,
+        subject: `RE: Item Inquiry - ${selectedItem?.item_name ?? ''}`,
+        email_content: draftReply,
+        email_status: 'sent',
+      } as any,
+    });
+    setShowDraft(false);
+    setDraftReply('');
+  }, [selectedSupplier, draftReply, data.rfq_id, selectedItem]);
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   // Resolve status with local overrides applied
@@ -153,9 +212,7 @@ export function ItemsOrderingDocument({ data }: ItemsOrderingDocumentProps) {
   const progressPct = data.summary.total_items > 0
     ? Math.round(((quoted + awarded) / data.summary.total_items) * 100) : 0;
 
-  // Resolve the selected supplier + its current status
-  const selectedItem     = selected ? data.items.find(i => i.item_id === selected.itemId) : null;
-  const selectedSupplier = selectedItem ? selectedItem.suppliers[selected!.idx] : null;
+  // Resolve the current status for the already-selected supplier (selectedItem/selectedSupplier computed above)
   const selectedStatus   = selected && selectedSupplier
     ? getStatus(selected.itemId, selected.idx, selectedSupplier.status) : 'sent';
 
@@ -348,9 +405,12 @@ export function ItemsOrderingDocument({ data }: ItemsOrderingDocumentProps) {
               supplierIdx={selected!.idx}
               showDraft={showDraft}
               draftReply={draftReply}
-              onToggleDraft={() => setShowDraft(v => !v)}
+              onToggleDraft={handleToggleDraft}
               onDraftChange={setDraftReply}
               onUpdateStatus={updateStatus}
+              aiSummary={selected ? (aiSummaries[`${selected.itemId}-${selected.idx}`] ?? selectedSupplier?.ai_summary ?? null) : null}
+              draftLoading={draftLoading}
+              onSendReply={handleSendReply}
             />
           ) : (
             // Empty state when no row is selected
@@ -382,11 +442,15 @@ interface EmailThreadPanelProps {
   onToggleDraft: () => void;
   onDraftChange: (v: string) => void;
   onUpdateStatus: (itemId: number, idx: number, status: SupplierStatus) => void;
+  aiSummary: string | null;       // AI summary of thread (lazy loaded)
+  draftLoading: boolean;          // AI draft generation in progress
+  onSendReply: () => void;        // Send the draft reply
 }
 
 function EmailThreadPanel({
   supplier, status, itemName, itemId, supplierIdx,
   showDraft, draftReply, onToggleDraft, onDraftChange, onUpdateStatus,
+  aiSummary, draftLoading, onSendReply,
 }: EmailThreadPanelProps) {
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -403,10 +467,10 @@ function EmailThreadPanel({
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
 
         {/* AI-generated thread summary (shown when present) */}
-        {supplier.ai_summary && (
+        {aiSummary && (
           <div className="flex items-start gap-2 px-3 py-2.5 bg-[#0f2744] border border-[#1e3a5f] rounded-lg">
             <Sparkles className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
-            <p className="text-[11px] text-blue-300 leading-relaxed">{supplier.ai_summary}</p>
+            <p className="text-[11px] text-blue-300 leading-relaxed">{aiSummary}</p>
           </div>
         )}
 
@@ -458,9 +522,10 @@ function EmailThreadPanel({
             <textarea
               value={draftReply}
               onChange={e => onDraftChange(e.target.value)}
-              placeholder="AI will pre-fill based on conversation context. Edit before sending…"
+              disabled={draftLoading}
+              placeholder={draftLoading ? 'AI is drafting a reply…' : 'Edit before sending…'}
               rows={4}
-              className="w-full bg-[#0d1117] text-[11px] text-gray-200 placeholder-gray-700 p-3 resize-none outline-none border-0 leading-relaxed block"
+              className="w-full bg-[#0d1117] text-[11px] text-gray-200 placeholder-gray-700 p-3 resize-none outline-none border-0 leading-relaxed block disabled:opacity-60"
             />
             <div className="flex items-center justify-end gap-2 px-3 py-2 bg-[#111827] border-t border-[#1f2937]">
               <Button
@@ -473,7 +538,9 @@ function EmailThreadPanel({
               </Button>
               <Button
                 size="sm"
-                className="h-6 text-[10px] bg-blue-600 hover:bg-blue-700 text-white gap-1 px-3"
+                onClick={onSendReply}
+                disabled={draftLoading || !draftReply.trim()}
+                className="h-6 text-[10px] bg-blue-600 hover:bg-blue-700 text-white gap-1 px-3 disabled:opacity-50"
               >
                 <Send className="w-2.5 h-2.5" />
                 Send Reply

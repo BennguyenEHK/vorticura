@@ -306,6 +306,14 @@ export async function handleHTTPRequest(input: ProcessorInput): Promise<Processo
  * @param input - Validated input with action_type = 'proceed'
  * @returns ProcessorResult from the next processor in the pipeline
  */
+// Maps which rfq_analysis.current_stage to set AFTER each pipeline step completes.
+// Fired fire-and-forget after nextProcessor() succeeds — must not block SSE emit.
+const PIPELINE_COMPLETED_STAGE: Partial<Record<string, RFQStage>> = {
+  supplier_search: 'supplier_discovery',   // rfq_analysis accepted → supplier search ran
+  email:           'items_ordering',        // supplier_search accepted → email generated
+  quotation:       'quotation_processing',  // respond_service → quotation generated
+};
+
 async function executePipelineChain(input: ProcessorInput): Promise<ProcessorResult> {
   const { data_type, workspace } = input;
   // Look up what comes next in the pipeline
@@ -361,7 +369,18 @@ async function executePipelineChain(input: ProcessorInput): Promise<ProcessorRes
     : nextInput;
 
   // Execute the next processor directly (no re-validation, no recursive handleHTTPRequest)
-  return nextProcessor(finalInput);
+  const result = await nextProcessor(finalInput);
+
+  // Advance current_stage after successful pipeline step (fire-and-forget)
+  if (result.success) {
+    const nextStage = PIPELINE_COMPLETED_STAGE[typeTransfer.nextDataType];
+    if (nextStage) {
+      void updateData('rfqAnalysis', { rfqId }, { currentStage: nextStage }, workspace)
+        .catch(err => console.warn('[pipeline] stage advance failed:', err));
+    }
+  }
+
+  return result;
 }
 
 // =============================================
