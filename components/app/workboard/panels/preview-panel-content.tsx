@@ -334,7 +334,7 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
     }, 120);
 
     try {
-      await handleHTTPRequest({
+      const result = await handleHTTPRequest({
         data_type: docType as any, // items_ordering excluded via ACCEPT_REJECT_MAP guard above
         action_type: mapping.accept as any,
         quotation_id: 'quotation_id' in (state.activeDocument.data as any)
@@ -342,6 +342,14 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
         rfq_id: 'rfq_id' in (state.activeDocument.data as any)
           ? (state.activeDocument.data as any).rfq_id : undefined,
       });
+      // handleHTTPRequest returns { success:false, error } on server failures (it does not throw).
+      // Surface the error so silent failures (e.g. "no recipient addresses found") become visible.
+      if (!result.success) {
+        actions.setError(result.error || 'Action failed');
+        setIsAccepting(false);
+        setAcceptProgress(0);
+        return;
+      }
       setAcceptProgress(100); // snap to full on success
       setTimeout(() => { setIsAccepting(false); setAcceptProgress(0); }, 500);
     } catch (err) {

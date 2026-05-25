@@ -46,6 +46,11 @@ import { getServerActionWorkspace } from './middleware/get-workspace';
 // ========== PIPELINE CHAINING ==========
 import { loadProcessorInput } from './data-loader';
 
+// ========== POST-SEND PREVIEW BUILDER ==========
+// After email/send completes, attach the freshly-built items_ordering payload to the
+// SSE result so the preview panel can transition without a full workspace reload.
+import { buildItemsOrderingPreview } from './ui-reload/items-ordering-builder';
+
 // =============================================
 // Types
 // =============================================
@@ -438,14 +443,39 @@ async function emitProcessorResult(result: ProcessorResult, _dataType: DataType,
     });
   }
 
+  // After a successful email/send, attach the items_ordering payload to result.data
+  // so the SSE transform on the client can switch the preview panel to the
+  // procurement dashboard without waiting for a workspace reload. Built here once
+  // and inlined into the same event to avoid a second SSE round-trip.
+  let emitPayload: ProcessorResult = result;
+  if (
+    _dataType === 'email' &&
+    result.action_type === 'send' &&
+    result.success &&
+    typeof rfqIdForPreview === 'number' &&
+    rfqIdForPreview > 0 &&
+    input.workspace
+  ) {
+    try {
+      const itemsOrdering = await buildItemsOrderingPreview(rfqIdForPreview, input.workspace);
+      if (itemsOrdering) {
+        const merged = { ...(result.data as Record<string, unknown> | undefined), items_ordering: itemsOrdering };
+        emitPayload = { ...result, data: merged };
+      }
+    } catch (err) {
+      // Non-fatal: panel will still transition on next workspace reload via last_preview_type.
+      console.warn('[data-processor] items_ordering preview build failed:', err);
+    }
+  }
+
   // Always emit preview-update for UI real-time rendering.
   // Awaited so the Redis PUBLISH completes BEFORE the server action returns —
   // otherwise Vercel freezes the function instance and the publish is dropped,
   // leaving SSE listeners on other instances without the update.
-  await eventBus.emitAsync('preview-update', result);
+  await eventBus.emitAsync('preview-update', emitPayload);
 
   // Emit all-items-available when respond_service indicates readiness for quotation
-  const resultData = result.data as Record<string, unknown> | undefined;
+  const resultData = emitPayload.data as Record<string, unknown> | undefined;
   if (resultData?.all_items_available === true) {
     await eventBus.emitAsync('comms-update', {
       type: 'all-items-available',

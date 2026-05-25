@@ -12,6 +12,7 @@
 import { getRfqByReference, getData, getUiState, getAiConversations } from '@/lib/db/queries';
 import { getServerActionWorkspace } from '@/lib/middleware/get-workspace';
 import { loadProcessorInput } from '@/lib/data-loader';
+import { buildItemsOrderingPreview } from './items-ordering-builder';
 import { getFetchIntent } from './stage-map';
 import { DEFAULT_WORKFLOW_STEPS, STEP_TO_STAGE_MAP } from '@/types/workflow';
 import type { WorkflowStep } from '@/types/workflow';
@@ -266,6 +267,7 @@ async function fetchPreviewByType(
         to: email.recipientEmail,
         subject: email.subject,
         body: email.emailContent,
+        rfq_id: rfqId,  // required for Accept → send pipeline (mirrors analysis/suppliers_search shapes)
       };
     } catch (err) {
       console.warn(`[fetchWorkspace] email preview load failed:`, err);
@@ -273,50 +275,9 @@ async function fetchPreviewByType(
     }
   }
 
-  // Items ordering: fetch rfq_items + supplier_item_status and build grouped structure
+  // Items ordering: delegate to shared builder (reused by data-processor.ts after email/send)
   if (previewType === 'items_ordering') {
-    try {
-      const [rfqItems, supplierItems] = await Promise.all([
-        getData('rfqItems', { rfqId }, workspace),
-        getData('supplierItemStatus', { rfqId }, workspace),
-      ]);
-      const items = (rfqItems as Array<Record<string, unknown>>).map((rfqItem) => {
-        const itemId = Number(rfqItem.itemId);
-        const suppliers = (supplierItems as Array<Record<string, unknown>>)
-          .filter((si) => Number(si.itemId) === itemId)
-          .map((si) => ({
-            supplier_id: si.supplierId ? Number(si.supplierId) : null,
-            supplier_name: String(si.supplierName ?? ''),
-            unit_price: si.bidderUnitPrice ? Number(si.bidderUnitPrice) : null,
-            lead_time: si.deliveryTime ? String(si.deliveryTime) : null,
-            status: String(si.status ?? 'sent') as 'sent' | 'quoted' | 'awarded' | 'declined',
-            contact_email: si.contactEmail ? String(si.contactEmail) : null,
-            responded_at: si.respondedAt ? String(si.respondedAt) : null,
-            source_url: si.sourceUrl ? String(si.sourceUrl) : null,
-            ai_summary: null,
-            thread: [],
-          }));
-        return {
-          item_id: itemId,
-          item_name: String(rfqItem.companyDescription ?? ''),
-          rfq_qty: Number(rfqItem.qty ?? 0),
-          uom: String(rfqItem.uom ?? 'EA'),
-          currency_code: String(rfqItem.currencyCode ?? 'USD'),
-          suppliers,
-        };
-      });
-      const summary = {
-        total_items: items.length,
-        quoted_count: items.filter((i) => i.suppliers.some((s) => s.status === 'quoted' || s.status === 'awarded')).length,
-        awarded_count: items.filter((i) => i.suppliers.some((s) => s.status === 'awarded')).length,
-        declined_count: items.filter((i) => i.suppliers.length > 0 && i.suppliers.every((s) => s.status === 'declined')).length,
-        awaiting_count: items.filter((i) => i.suppliers.length > 0 && i.suppliers.every((s) => s.status === 'sent')).length,
-      };
-      return { rfq_id: rfqId, rfq_reference: String(rfqId), items, summary }; // rfq_reference resolved from rfqId; display label fetched upstream
-    } catch (err) {
-      console.warn('[fetchWorkspace] items_ordering preview load failed:', err);
-      return null;
-    }
+    return buildItemsOrderingPreview(rfqId, workspace);
   }
 
   // Fallback to rfq_analysis when type is unknown (analysis always exists in map)

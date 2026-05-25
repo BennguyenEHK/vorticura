@@ -150,9 +150,21 @@ export function transformResultToDocument(result: ProcessorResult): DocumentData
     }
 
     case 'email': {
-      // email-actions.ts returns: { to, subject, body }
+      // After email/send the server attaches the freshly-built items_ordering
+      // payload onto data.items_ordering (see data-processor.emitProcessorResult).
+      // Switch the preview to the procurement dashboard in that case — without
+      // this, the panel would stay on email and only reload via fetchWorkspace.
+      if (result.action_type === 'send' && data.items_ordering) {
+        return {
+          type: 'items_ordering',
+          data: data.items_ordering as ItemsOrderingDocumentData,
+        };
+      }
+
+      // email-actions.ts returns: { to, subject, body, rfq_id }
       const emailData: EmailDocumentData = {
         email_id: null,
+        rfq_id: (data.rfq_id as number) ?? null,   // carry rfq_id so Accept → send has it
         subject: (data.subject as string) || '',
         email_content: (data.body as string) || '',
         recipient_email: (data.to as string) || '',

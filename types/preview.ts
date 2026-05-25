@@ -87,6 +87,7 @@ export interface QuotationDocumentData {
 
 export interface EmailDocumentData {
   email_id: number | null;
+  rfq_id: number | null;       // required for Accept → send pipeline (mirrors SupplierSearchDocumentData)
   subject: string;
   email_content: string;
   recipient_email: string;
