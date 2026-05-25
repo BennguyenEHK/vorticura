@@ -132,7 +132,11 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
       timestamp,
     };
 
-    // Save to database (non-blocking), use effectiveEmail for field values
+    // Save to database (non-blocking).
+    // For generate/re_generate: resultData holds AI output {to,subject,body}; effectiveEmail is undefined.
+    // For send: resultData is {messageId}; effectiveEmail holds the original fields.
+    // Prefer resultData fields first, fall back to effectiveEmail so all cases are covered.
+    const rd = resultData as Record<string, unknown> | null;
     try {
       if (workspace) {
         await modifyDatabase({
@@ -141,9 +145,9 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
           rfq_id,          // FK linkage: satisfies chk_email_has_parent constraint
           rfq_reference,
           email: {
-            subject: effectiveEmail?.subject || '',
-            email_content: effectiveEmail?.email_content || '',
-            recipient_email: effectiveEmail?.recipient_email || '',
+            subject:          String(rd?.subject          ?? effectiveEmail?.subject          ?? ''),
+            email_content:    String(rd?.body             ?? effectiveEmail?.email_content    ?? ''),
+            recipient_email:  String(rd?.to               ?? effectiveEmail?.recipient_email  ?? ''),
             email_status: emailStatus,
           },
         }, workspace);
