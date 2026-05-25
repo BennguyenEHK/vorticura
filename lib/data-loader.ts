@@ -647,6 +647,46 @@ async function loadEmailRegenerateInput(
   } as Partial<ProcessorInput>;
 }
 
+/**
+ * email + send: Load draft content from email_table + all contact emails from supplier_item_status.
+ * Provides the populated `email` field (first supplier) and full `items_source` list for multi-send.
+ */
+async function loadEmailSendInput(
+  params: LoaderParams
+): Promise<Partial<ProcessorInput>> {
+  const { rfq_id, workspace } = params;
+  if (!rfq_id) throw new Error('[data-loader] rfq_id required for email/send');
+
+  // Fetch the draft email and all supplier contacts in parallel
+  const [emailRows, supplierRows] = await Promise.all([
+    getData('emailTable', { rfqId: rfq_id }, workspace),
+    getData('supplierItemStatus', { rfqId: rfq_id }, workspace),
+  ]);
+
+  const draft = emailRows[0] as Record<string, unknown> | undefined;
+  // Build items_source list so processEmail:send can loop over all recipients
+  const itemsSource = (supplierRows as Array<Record<string, unknown>>)
+    .filter(s => s.contactEmail)
+    .map(s => ({
+      contact_email: String(s.contactEmail ?? ''),
+      supplier_name: String(s.supplierName ?? ''),
+      rfq_id,
+    }));
+
+  // Populate `email` with draft content + first supplier as primary recipient
+  return {
+    rfq_id,
+    email: {
+      recipient_email: itemsSource[0]?.contact_email ?? '',
+      subject:         String(draft?.subject        ?? ''),
+      email_content:   String(draft?.emailContent   ?? ''),
+      email_status:    'sent',
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    items_source: itemsSource as any,  // full list consumed by processEmail for multi-send
+  } as unknown as Partial<ProcessorInput>;
+}
+
 // =============================================
 // 2-LEVEL PAYLOAD LOADERS MAP
 // =============================================
@@ -676,6 +716,7 @@ const PAYLOAD_LOADERS: Record<string, Record<string, BuilderFn>> = {
   email: {
     generate:    loadEmailGenerateInput,     // incomingEmails flow -> email-actions-json Input_1
     re_generate: loadEmailRegenerateInput,   // emailTable -> email-actions-json Input_2
+    send:        loadEmailSendInput,         // emailTable (draft) + supplierItemStatus (recipients)
   },
   // incoming_email is classified internally (no pipeline chain loads into it)
   incoming_email: {},

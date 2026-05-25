@@ -371,11 +371,13 @@ async function executePipelineChain(input: ProcessorInput): Promise<ProcessorRes
   // Execute the next processor directly (no re-validation, no recursive handleHTTPRequest)
   const result = await nextProcessor(finalInput);
 
-  // Advance current_stage after successful pipeline step (fire-and-forget)
+  // Advance current_stage after successful pipeline step.
+  // Awaited (not void) so this completes before emitProcessorResult runs its own
+  // lastPreviewType update — prevents two concurrent writes to the same rfq_analysis row.
   if (result.success) {
     const nextStage = PIPELINE_COMPLETED_STAGE[typeTransfer.nextDataType];
     if (nextStage) {
-      void updateData('rfqAnalysis', { rfqId }, { currentStage: nextStage }, workspace)
+      await updateData('rfqAnalysis', { rfqId }, { currentStage: nextStage }, workspace)
         .catch(err => console.warn('[pipeline] stage advance failed:', err));
     }
   }
@@ -409,7 +411,11 @@ async function emitProcessorResult(result: ProcessorResult, _dataType: DataType,
   // Only update when we have rfq_id + workspace + a known preview-type mapping.
   const resultDataPre = result.data as Record<string, unknown> | undefined;
   const rfqIdForPreview = resultDataPre?.rfq_id;
-  const previewTag = DATA_TYPE_TO_PREVIEW[_dataType];
+  // After email:send the operator is waiting for supplier responses → items_ordering panel.
+  // For all other email actions (generate/re_generate) keep the 'email' preview tag.
+  const previewTag = (_dataType === 'email' && result.action_type === 'send')
+    ? 'items_ordering' as PreviewType
+    : DATA_TYPE_TO_PREVIEW[_dataType];
   if (
     previewTag &&
     typeof rfqIdForPreview === 'number' &&

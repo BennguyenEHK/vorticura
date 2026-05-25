@@ -94,25 +94,36 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
         break;
       }
       case 'send': {
-        // Validate recipient field is present and non-empty
-        if (!effectiveEmail?.recipient_email || effectiveEmail.recipient_email.trim() === '') {
+        // Build recipient list: prefer items_source (multi-supplier), fall back to effectiveEmail
+        const recipients: string[] = (input.items_source ?? [])
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map((s) => String((s as any).contact_email ?? ''))
+          .filter(Boolean);
+        if (recipients.length === 0 && effectiveEmail?.recipient_email?.trim()) {
+          recipients.push(effectiveEmail.recipient_email.trim());
+        }
+        if (recipients.length === 0) {
           throw new Error(
-            'Cannot send email: no recipient address provided. ' +
-            'Please specify a valid recipient email or ensure the draft contains a "to" field.'
+            'Cannot send email: no recipient addresses found in supplier list. ' +
+            'Ensure supplier_item_status rows have contact_email set.'
           );
         }
 
-        // Send email via user's OAuth provider, fallback to generic API
-        const sendResult = await sendEmailViaProvider(
-          {
-            to: effectiveEmail.recipient_email,
-            subject: effectiveEmail?.subject || '',
-            body: effectiveEmail?.email_content || '',
-          },
-          workspace?.user_id,
-          workspace?.company_id,
+        // Send one email per supplier contact (same content, individual deliveries)
+        const sendResults = await Promise.all(
+          recipients.map((to) =>
+            sendEmailViaProvider(
+              {
+                to,
+                subject: effectiveEmail?.subject || '',
+                body:    effectiveEmail?.email_content || '',
+              },
+              workspace?.user_id,
+              workspace?.company_id,
+            )
+          )
         );
-        resultData = sendResult;
+        resultData = { recipients, messageIds: sendResults.map((r) => r.messageId) };
         emailStatus = 'sent';
         break;
       }
