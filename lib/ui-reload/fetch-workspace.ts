@@ -47,9 +47,7 @@ const PREVIEW_TABLE_MAP: Record<PreviewType, { table: string; idColumn: string }
 
 // Canonical stage order — determines step status by comparing indices
 const STAGE_ORDER: RFQStage[] = [
-  'ingestion', 'user_validation', 'outbound_rfq', 'supplier_discovery',
-  'supplier_validation', 'awaiting_response', 'supplier_response',
-  'awaiting_quotation', 'quotation_processing', 'customer_quotation', 'final_actions',
+  'report_analysis', 'supplier_discovery', 'items_ordering', 'quotation_processing',
 ];
 
 /**
@@ -99,7 +97,7 @@ export async function fetchWorkspace(
     }
 
     const rfqId = rfq.rfqId as number;
-    const currentStage = (rfq.currentStage || 'ingestion') as string;
+    const currentStage = (rfq.currentStage || 'report_analysis') as string; // default to stage 1
     // Default to 'analysis' when never persisted — matches the rfq_analysis fallback rule.
     const lastPreviewType = ((rfq.lastPreviewType as string | null) || 'analysis') as PreviewType;
 

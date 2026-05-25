@@ -7,20 +7,20 @@ function assertEq<T>(got: T, want: T, label: string) {
 }
 
 // `suppliers` is no longer a panel — preview content is driven by last_preview_type via tableMap
-const ingestion = getFetchIntent('ingestion');
-assertEq(ingestion.preview, true, 'ingestion preview');
-assertEq(ingestion.pricing, false, 'ingestion pricing');
+const reportAnalysis = getFetchIntent('report_analysis');
+assertEq(reportAnalysis.preview, true, 'report_analysis preview');
+assertEq(reportAnalysis.pricing, false, 'report_analysis pricing');
 
 const supplierDiscovery = getFetchIntent('supplier_discovery');
 assertEq(supplierDiscovery.preview, true, 'supplier_discovery preview');
 assertEq(supplierDiscovery.pricing, false, 'supplier_discovery pricing');
 
-const awaitingQuotation = getFetchIntent('awaiting_quotation');
-assertEq(awaitingQuotation.pricing, true, 'awaiting_quotation pricing');
+const quotationProcessing = getFetchIntent('quotation_processing');
+assertEq(quotationProcessing.pricing, true, 'quotation_processing pricing');
 
-const finalActions = getFetchIntent('final_actions');
-assertEq(finalActions.pricing, true, 'final_actions pricing');
-assertEq(finalActions.preview, true, 'final_actions preview');
+const quotationProcessing2 = getFetchIntent('quotation_processing');
+assertEq(quotationProcessing2.pricing, true, 'quotation_processing pricing');
+assertEq(quotationProcessing2.preview, true, 'quotation_processing preview');
 
 // Unknown stage falls back to a safe default.
 const unknown = getFetchIntent('not_a_stage' as any);

@@ -111,7 +111,7 @@ export const rfqAnalysis = pgTable('rfq_analysis', {
   closingTime: timestamp('closing_time', { withTimezone: false }),
 
   // Workflow queue state — drives the sidebar RFQ queue rendering
-  currentStage: varchar('current_stage', { length: 40 }).default('user_validation'),  // 11-stage workflow cursor
+  currentStage: varchar('current_stage', { length: 40 }).default('report_analysis'),  // 4-stage workflow cursor
   unreadCount: integer('unread_count').default(0),                                     // unseen updates badge
   // Last preview panel viewed by the user (drives fetch-workspace tableMap lookup)
   // Allowed values: 'analysis' | 'suppliers_search' | 'email' | 'quotation' | null (defaults to 'analysis')

@@ -433,9 +433,9 @@ export const DEFAULT_WORKFLOW_STEPS: Omit<WorkflowStep, 'result'>[] = [
 
 /** Map workflow step to RFQ stage */
 export const STEP_TO_STAGE_MAP: Record<WorkflowStepId, RFQStage> = {
-  analysis: 'user_validation',
-  email: 'outbound_rfq',
-  supplier_search: 'supplier_discovery',
-  quotation: 'quotation_processing',
-  pricing: 'customer_quotation',
+  analysis: 'report_analysis',        // Stage 1: AI analysis review gate
+  email: 'items_ordering',            // Stage 3: Supplier contact + awaiting responses
+  supplier_search: 'supplier_discovery', // Stage 2: AI supplier search
+  quotation: 'quotation_processing',  // Stage 4: Generate + send customer quote
+  pricing: 'quotation_processing',    // Stage 4: Review pricing, generate customer quote
 };

@@ -6,17 +6,10 @@ export type UiType = 'dashboard' | 'workspace' | 'rfq_queue';
 
 // Matches rfq_analysis.current_stage values.
 export type RFQStage =
-  | 'ingestion'
-  | 'user_validation'
+  | 'report_analysis'
   | 'supplier_discovery'
-  | 'supplier_validation'
-  | 'outbound_rfq'
-  | 'awaiting_response'
-  | 'supplier_response'
-  | 'awaiting_quotation'
-  | 'quotation_processing'
-  | 'customer_quotation'
-  | 'final_actions';
+  | 'items_ordering'
+  | 'quotation_processing';
 
 // What each stage wants the workspace page to fetch.
 // "Cumulative" — later stages inherit earlier fetches so the UI never regresses.

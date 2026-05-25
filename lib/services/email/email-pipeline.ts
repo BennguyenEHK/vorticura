@@ -591,20 +591,22 @@ export async function processEmailMessage(
     // Step 5: Build processor payload
     const payload = buildIncomingEmailPayload(email, processedAttachments, classification, workspace);
 
-    // Step 5.5: Persist raw email to incoming_emails table (before dispatch)
-    try {
-      await modifyDatabase({
-        data_type: 'incoming_email',
-        incoming_email: {
-          ...(payload.incoming_email as unknown as Record<string, unknown>),
-          classification_type: classification.actionType,
-          classification_confidence: classification.confidence,
-          processed_at: new Date().toISOString(),
-        },
-      }, workspace);
-    } catch (dbError) {
-      // Log but continue — email data is still in the payload for processing
-      console.error('[email-pipeline] Failed to persist incoming email:', dbError);
+    // Step 5.5: Persist raw email to incoming_emails table — only for classified (non-unknown) emails.
+    // handleUnknown emails (newsletters, spam, etc.) are not stored to keep the table clean.
+    if (classification.actionType !== 'handleUnknown') {
+      try {
+        await modifyDatabase({
+          data_type: 'incoming_email',
+          incoming_email: {
+            ...(payload.incoming_email as unknown as Record<string, unknown>),
+            classification_type: classification.actionType,
+            classification_confidence: classification.confidence,
+            processed_at: new Date().toISOString(),
+          },
+        }, workspace);
+      } catch (dbError) {
+        console.error('[email-pipeline] Failed to persist incoming email:', dbError);
+      }
     }
 
     // Step 6: Dispatch to data processor (handleHTTPRequest)
@@ -682,20 +684,21 @@ export async function processEmailFromJSON(
     // Step 5: Build processor payload
     const payload = buildIncomingEmailPayload(email, processedAttachments, classification, workspace);
 
-    // Step 5.5: Persist raw email to incoming_emails table (before dispatch)
-    try {
-      await modifyDatabase({
-        data_type: 'incoming_email',
-        incoming_email: {
-          ...(payload.incoming_email as unknown as Record<string, unknown>),
-          classification_type: classification.actionType,
-          classification_confidence: classification.confidence,
-          processed_at: new Date().toISOString(),
-        },
-      }, workspace);
-    } catch (dbError) {
-      // Log but continue — email data is still in the payload for processing
-      console.error('[email-pipeline] Failed to persist incoming email:', dbError);
+    // Step 5.5: Persist raw email to incoming_emails table — only for classified (non-unknown) emails.
+    if (classification.actionType !== 'handleUnknown') {
+      try {
+        await modifyDatabase({
+          data_type: 'incoming_email',
+          incoming_email: {
+            ...(payload.incoming_email as unknown as Record<string, unknown>),
+            classification_type: classification.actionType,
+            classification_confidence: classification.confidence,
+            processed_at: new Date().toISOString(),
+          },
+        }, workspace);
+      } catch (dbError) {
+        console.error('[email-pipeline] Failed to persist incoming email:', dbError);
+      }
     }
 
     // Step 6: Dispatch to data processor

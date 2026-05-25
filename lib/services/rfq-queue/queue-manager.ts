@@ -31,7 +31,6 @@ import {
 function statusFromStage(stage: RFQStage): QueueStatus {
   const cfg = STAGE_CONFIGS[stage];
   if (!cfg) return 'active';
-  if (stage === 'final_actions') return 'completed';
   if (cfg.isGate) return 'action';
   if (cfg.isAsync) return 'waiting';
   return 'active';
@@ -53,8 +52,8 @@ interface JoinedRow {
 function shapeRow(row: JoinedRow, workspace: WorkspaceContext): QueuedRFQ {
   const rfq = row.rfq_analysis ?? {};
   const cust = row.customers ?? {};
-  // Default to user_validation when DB row has no stage (rare — only for legacy rows)
-  const stage = (rfq.currentStage ?? 'user_validation') as RFQStage;
+  // Default to report_analysis when DB row has no stage (rare — only for legacy rows)
+  const stage = (rfq.currentStage ?? 'report_analysis') as RFQStage;
   // Coerce date columns — leftJoin may return ISO strings depending on driver settings
   const updatedAt = rfq.updatedAt ? new Date(rfq.updatedAt as string | Date) : new Date(0);
   const createdAt = rfq.createdAt ? new Date(rfq.createdAt as string | Date) : new Date(0);

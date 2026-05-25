@@ -5,17 +5,10 @@ import type { RFQStage, PanelFetchIntent } from '@/types/ui-reload';
 // `suppliers` was intentionally removed — suppliers is not a panel; preview content
 // is driven by rfq_analysis.last_preview_type via the tableMap in fetch-workspace.ts.
 export const STAGE_FETCH_INTENT: Record<RFQStage, PanelFetchIntent> = {
-  ingestion:            { preview: true,  workflow: true, pricing: false, ai: true },
-  user_validation:      { preview: true,  workflow: true, pricing: false, ai: true },
+  report_analysis:      { preview: true,  workflow: true, pricing: false, ai: true },
   supplier_discovery:   { preview: true,  workflow: true, pricing: false, ai: true },
-  supplier_validation:  { preview: true,  workflow: true, pricing: false, ai: true },
-  outbound_rfq:         { preview: true,  workflow: true, pricing: false, ai: true },
-  awaiting_response:    { preview: true,  workflow: true, pricing: false, ai: true },
-  supplier_response:    { preview: true,  workflow: true, pricing: false, ai: true },
-  awaiting_quotation:   { preview: true,  workflow: true, pricing: true,  ai: true },
+  items_ordering:       { preview: true,  workflow: true, pricing: false, ai: true },
   quotation_processing: { preview: true,  workflow: true, pricing: true,  ai: true },
-  customer_quotation:   { preview: true,  workflow: true, pricing: true,  ai: true },
-  final_actions:        { preview: true,  workflow: true, pricing: true,  ai: true },
 };
 
 const DEFAULT_INTENT: PanelFetchIntent = {

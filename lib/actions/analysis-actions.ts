@@ -163,8 +163,8 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
         required_currency: merged.required_currency,
         deadline_period: merged.deadline_period,
         closing_time: merged.closing_time,
-        // Newly-created rows land at Gate 1 (user_validation); existing rows keep their stage
-        current_stage: isNewRfq ? 'user_validation' : undefined,
+        // Newly-created rows land at Gate 1 (report_analysis); existing rows keep their stage
+        current_stage: isNewRfq ? 'report_analysis' : undefined,
         unread_count: isNewRfq ? 1 : undefined,
       },
       rfq_items: merged.rfq_items,
