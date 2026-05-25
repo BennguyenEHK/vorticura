@@ -749,11 +749,21 @@ function validateEmailRegenerate(input: ProcessorInput): ProcessorInput {
 /**
  * email + send: Validates email object with recipient/subject/content.
  * JSON shape: { quotation_id?, rfq_reference?, email: { recipient_email, subject, email_content } }
+ *
+ * Loader-enriched path: when `rfq_id` is supplied without an `email` object, the
+ * data-loader (loadEmailSendInput) will populate `email` from email_table and
+ * `items_source` from supplier_item_status AFTER validation runs. Mirrors the
+ * same loader-aware leniency used by validateRespondSupplier for items_source.
  */
 function validateEmailSend(input: ProcessorInput): ProcessorInput {
-  // email object is required for sending
+  // Loader-enriched path: rfq_id alone is sufficient — data-loader fills the rest
+  if (input.rfq_id && (!input.email || typeof input.email !== 'object')) {
+    return input;
+  }
+
+  // Direct path: email object is required when no rfq_id is supplied
   if (!input.email || typeof input.email !== 'object') {
-    throw new Error('email object is required for email/send');
+    throw new Error('email object is required for email/send (or pass rfq_id so the loader can populate it)');
   }
 
   // recipient_email — validated with basic format check
