@@ -5,7 +5,7 @@
 import { useEffect, useRef } from 'react';
 import type { ProcessorResult, DataType } from '@/lib/utils/validator';
 import type { PreviewType } from '@/types/ui-reload';
-import type { DocumentData, QuotationDocumentData, EmailDocumentData, RfqAnalysisDocumentData, SupplierSearchDocumentData } from '@/types/preview';
+import type { DocumentData, QuotationDocumentData, EmailDocumentData, RfqAnalysisDocumentData, SupplierSearchDocumentData, ItemsOrderingDocumentData } from '@/types/preview';
 
 interface UsePreviewSSEOptions {
   onDocumentReceived: (doc: DocumentData) => void;
@@ -213,7 +213,7 @@ export function transformResultToDocument(result: ProcessorResult): DocumentData
   }
 }
 
-const PREVIEW_TYPE_TO_DATA_TYPE: Record<PreviewType, DataType> = {
+const PREVIEW_TYPE_TO_DATA_TYPE: Partial<Record<PreviewType, DataType>> = {
   analysis: 'rfq_analysis',
   suppliers_search: 'supplier_search',
   email: 'email',
@@ -225,6 +225,12 @@ export function hydrateDocumentFromWorkspace(
   preview: unknown
 ): DocumentData | null {
   if (!previewType || !preview) return null;
+
+  // items_ordering is built from multiple tables in fetchPreviewByType — hydrate directly
+  if (previewType === 'items_ordering') {
+    return { type: 'items_ordering', data: preview as ItemsOrderingDocumentData };
+  }
+
   const dataType = PREVIEW_TYPE_TO_DATA_TYPE[previewType];
   if (!dataType) return null;
   return transformResultToDocument({

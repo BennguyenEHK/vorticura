@@ -131,6 +131,53 @@ export interface SupplierSearchDocumentData {
   }>;
 }
 
+// Thread message (outbound sent email or inbound supplier reply)
+export interface ThreadMessage {
+  direction: 'outbound' | 'inbound';
+  subject: string;
+  body: string;
+  from_email: string;
+  sent_at: string | null;
+}
+
+// Per-supplier row within an items_ordering item group
+export interface ItemsOrderingSupplier {
+  supplier_id: number | null;
+  supplier_name: string;
+  unit_price: number | null;        // bidder_unit_price from supplier_item_status
+  lead_time: string | null;         // delivery_time from supplier_item_status
+  status: 'sent' | 'quoted' | 'awarded' | 'declined';
+  contact_email: string | null;
+  responded_at: string | null;
+  source_url: string | null;
+  ai_summary: string | null;        // AI-generated thread summary for lower panel
+  thread: ThreadMessage[];          // full conversation for this supplier-item pair
+}
+
+// Per-item group row in the items_ordering split panel table
+export interface ItemsOrderingItem {
+  item_id: number;
+  item_name: string;                // company_description from rfq_items
+  rfq_qty: number;
+  uom: string;
+  currency_code: string;
+  suppliers: ItemsOrderingSupplier[];
+}
+
+// Document data for the items_ordering stage split-panel UI
+export interface ItemsOrderingDocumentData {
+  rfq_id: number | null;
+  rfq_reference: string;
+  items: ItemsOrderingItem[];
+  summary: {
+    total_items: number;
+    quoted_count: number;    // items with at least one quoted/awarded supplier
+    awarded_count: number;   // items with an awarded supplier
+    declined_count: number;  // items where all suppliers declined
+    awaiting_count: number;  // items where all suppliers are still 'sent'
+  };
+}
+
 // ---------------------------------------------
 // Union type for all document data
 // ---------------------------------------------
@@ -139,7 +186,8 @@ export type DocumentData =
   | { type: 'quotation'; data: QuotationDocumentData }
   | { type: 'email'; data: EmailDocumentData }
   | { type: 'rfq_analysis'; data: RfqAnalysisDocumentData }
-  | { type: 'supplier_search'; data: SupplierSearchDocumentData };
+  | { type: 'supplier_search'; data: SupplierSearchDocumentData }
+  | { type: 'items_ordering'; data: ItemsOrderingDocumentData };
 
 // ---------------------------------------------
 // Preview Panel State (with undo/redo)

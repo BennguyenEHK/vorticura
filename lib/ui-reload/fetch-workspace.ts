@@ -34,11 +34,12 @@ interface FetchWorkspaceResult {
 // Preview type → DB table descriptor.
 // Tells fetch-workspace which table + column carries the preview content for each type.
 // `null` (unset / unknown) defaults to rfq_analysis (per spec).
-const PREVIEW_TABLE_MAP: Record<PreviewType, { table: string; idColumn: string }> = {
-  analysis:         { table: 'rfqAnalysis',    idColumn: 'rfqId' },  // analysis_content lives on rfq_analysis
-  suppliers_search: { table: 'supplierSearch', idColumn: 'rfqId' },  // search_content   lives on supplier_search
-  email:            { table: 'emailTable',     idColumn: 'rfqId' },  // email_content    lives on email_table
-  quotation:        { table: 'quotations',     idColumn: 'rfqId' },  // quotation handled via data-loader (full shape)
+// items_ordering is excluded — it fetches from multiple tables handled inline in fetchPreviewByType
+const PREVIEW_TABLE_MAP: Partial<Record<PreviewType, { table: string; idColumn: string }>> = {
+  analysis:         { table: 'rfqAnalysis',    idColumn: 'rfqId' },
+  suppliers_search: { table: 'supplierSearch', idColumn: 'rfqId' },
+  email:            { table: 'emailTable',     idColumn: 'rfqId' },
+  quotation:        { table: 'quotations',     idColumn: 'rfqId' },
 };
 
 // =============================================
@@ -272,8 +273,54 @@ async function fetchPreviewByType(
     }
   }
 
-  // Fallback to rfq_analysis when type is unknown
-  const descriptor = PREVIEW_TABLE_MAP.analysis;
+  // Items ordering: fetch rfq_items + supplier_item_status and build grouped structure
+  if (previewType === 'items_ordering') {
+    try {
+      const [rfqItems, supplierItems] = await Promise.all([
+        getData('rfqItems', { rfqId }, workspace),
+        getData('supplierItemStatus', { rfqId }, workspace),
+      ]);
+      const items = (rfqItems as Array<Record<string, unknown>>).map((rfqItem) => {
+        const itemId = Number(rfqItem.itemId);
+        const suppliers = (supplierItems as Array<Record<string, unknown>>)
+          .filter((si) => Number(si.itemId) === itemId)
+          .map((si) => ({
+            supplier_id: si.supplierId ? Number(si.supplierId) : null,
+            supplier_name: String(si.supplierName ?? ''),
+            unit_price: si.bidderUnitPrice ? Number(si.bidderUnitPrice) : null,
+            lead_time: si.deliveryTime ? String(si.deliveryTime) : null,
+            status: String(si.status ?? 'sent') as 'sent' | 'quoted' | 'awarded' | 'declined',
+            contact_email: si.contactEmail ? String(si.contactEmail) : null,
+            responded_at: si.respondedAt ? String(si.respondedAt) : null,
+            source_url: si.sourceUrl ? String(si.sourceUrl) : null,
+            ai_summary: null,
+            thread: [],
+          }));
+        return {
+          item_id: itemId,
+          item_name: String(rfqItem.companyDescription ?? ''),
+          rfq_qty: Number(rfqItem.qty ?? 0),
+          uom: String(rfqItem.uom ?? 'EA'),
+          currency_code: String(rfqItem.currencyCode ?? 'USD'),
+          suppliers,
+        };
+      });
+      const summary = {
+        total_items: items.length,
+        quoted_count: items.filter((i) => i.suppliers.some((s) => s.status === 'quoted' || s.status === 'awarded')).length,
+        awarded_count: items.filter((i) => i.suppliers.some((s) => s.status === 'awarded')).length,
+        declined_count: items.filter((i) => i.suppliers.length > 0 && i.suppliers.every((s) => s.status === 'declined')).length,
+        awaiting_count: items.filter((i) => i.suppliers.length > 0 && i.suppliers.every((s) => s.status === 'sent')).length,
+      };
+      return { rfq_id: rfqId, rfq_reference: String(rfqId), items, summary }; // rfq_reference resolved from rfqId; display label fetched upstream
+    } catch (err) {
+      console.warn('[fetchWorkspace] items_ordering preview load failed:', err);
+      return null;
+    }
+  }
+
+  // Fallback to rfq_analysis when type is unknown (analysis always exists in map)
+  const descriptor = PREVIEW_TABLE_MAP.analysis!;
   try {
     const rows = await getData(descriptor.table, { [descriptor.idColumn]: rfqId }, workspace);
     const analysis = rows[0];

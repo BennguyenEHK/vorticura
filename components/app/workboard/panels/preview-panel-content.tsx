@@ -22,6 +22,7 @@ import {
   EmailDocument,
   RfqAnalysisDocument,
   SupplierSearchDocument,
+  ItemsOrderingDocument,
   DocumentToolbar,
   WorkboardHistory,
   BlankDocument,
@@ -39,6 +40,7 @@ const DOC_TYPE_TO_PREVIEW: Record<DocumentData['type'], PreviewType> = {
   supplier_search: 'suppliers_search',
   email:           'email',
   quotation:       'quotation',
+  items_ordering:  'items_ordering',
 };
 
 // ---------------------------------------------
@@ -134,7 +136,7 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
 
       // Build ProcessorInput for manual_update based on document type
       await handleHTTPRequest({
-        data_type: doc.type,
+        data_type: doc.type as any, // items_ordering is not a DataType; guarded by ACCEPT_REJECT_MAP above
         action_type: 'manual_update',
         quotation_id:
           doc.type === 'quotation'
@@ -333,7 +335,7 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
 
     try {
       await handleHTTPRequest({
-        data_type: docType,
+        data_type: docType as any, // items_ordering excluded via ACCEPT_REJECT_MAP guard above
         action_type: mapping.accept as any,
         quotation_id: 'quotation_id' in (state.activeDocument.data as any)
           ? (state.activeDocument.data as any).quotation_id : undefined,
@@ -373,7 +375,7 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
       };
 
       await handleHTTPRequest({
-        data_type: docType,
+        data_type: docType as any, // items_ordering excluded via ACCEPT_REJECT_MAP guard above
         action_type: mapping.reject as any,
         quotation_id: 'quotation_id' in (state.activeDocument.data as any) ? (state.activeDocument.data as any).quotation_id : undefined,
         rfq_id: 'rfq_id' in (state.activeDocument.data as any) ? (state.activeDocument.data as any).rfq_id : undefined,
@@ -562,6 +564,14 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
                   onFieldChange={actions.updateField}
                 />
               )}
+
+              {state.activeDocument.type === 'items_ordering' && (
+                <ItemsOrderingDocument
+                  data={state.activeDocument.data}
+                  isEditing={state.isEditing}
+                  onFieldChange={actions.updateField}
+                />
+              )}
             </>
           )}
         </div>
@@ -590,7 +600,7 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
       {/* ============================================================ */}
       {/* FOOTER: Feedback section + Accept/Reject actions             */}
       {/* ============================================================ */}
-      {state.activeDocument && (
+      {state.activeDocument && state.activeDocument.type !== 'items_ordering' && (
         <div className="px-4 pb-3 pt-2 border-t border-border space-y-3">
           {/* Collapsible feedback section */}
           <div className="border border-border rounded-lg overflow-hidden">

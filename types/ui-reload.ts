@@ -22,7 +22,7 @@ export interface PanelFetchIntent {
 }
 
 // Preview type tag persisted on rfq_analysis.last_preview_type — drives tableMap lookup
-export type PreviewType = 'analysis' | 'suppliers_search' | 'email' | 'quotation';
+export type PreviewType = 'analysis' | 'suppliers_search' | 'email' | 'quotation' | 'items_ordering';
 
 export interface WorkspacePayload {
   stage: RFQStage;
