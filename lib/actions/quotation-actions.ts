@@ -90,9 +90,10 @@ export async function processQuotation(input: ProcessorInput): Promise<Processor
 
 /**
  * Handle generate and update action_types
- * - Reads quotation_data (items, customer_info, commercial_terms)
+ * - Reads quotation_data (items, customer_info, commercial_terms, seller_info)
  * - Optionally runs pricing calculator if pricing_variables present
  * - Saves multi-table via modifyDatabase
+ * - Returns rfq_id and updated quotation_id from INSERT operation
  */
 async function handleGenerateOrUpdate(
   input: ProcessorInput,
@@ -141,6 +142,7 @@ async function handleGenerateOrUpdate(
   // Build quotation data for DB
   const quotationData: ModifyDatabaseInput['quotationData'] = {
     quotation_id: quotation_data.quotation_id,
+    rfq_id: rfq_id,
     rfq_reference: quotation_data.rfq_reference,
     commercial_terms: quotation_data.commercial_terms,
     quotation_status: action_type === 'generate' ? 'draft' : 'updated',
@@ -164,11 +166,12 @@ async function handleGenerateOrUpdate(
   // Return result data (rfq_id included so emitProcessorResult can update lastPreviewType + stage)
   return {
     rfq_id: rfq_id ?? null,
-    quotation_id: quotation_data.quotation_id,
+    quotation_id: quotationData.quotation_id ?? quotation_data.quotation_id ?? null,
     rfq_reference: quotation_data.rfq_reference,
     action_type,
     items: quotation_data.quotation_items,
     customer_info: quotation_data.customer_info,
+    seller_info: (quotation_data as unknown as Record<string, unknown>).seller_info,
     commercial_terms: quotation_data.commercial_terms,
     calculated_pricing: calculatedPricing,
     generated_at: timestamp,

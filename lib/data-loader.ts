@@ -318,8 +318,8 @@ async function loadQuotationGenerateInput(
       seller_info: {
         company_name: company?.companyName ?? '',
         address: company?.companyAddress ?? '',
-        tel: '',                             // user_company has no phone column in schema
-        phone: '',                           // user_company has no phone column in schema
+        tel: company?.companyNumber ?? '',     // user_company.company_number holds the seller phone
+        phone: company?.companyNumber ?? '',   // same column; some UI paths read .phone
         fax_number: company?.companyFax ?? '',
         email: company?.companyEmail ?? '',
       },
@@ -426,12 +426,12 @@ async function loadQuotationManualUpdateInput(
       page_number: '1',                                    // Default page 1
       commercial_terms: quotation.commercialTerms ?? '',   // Terms text
       seller_info: {
-        company_name: company?.companyName ?? '',           // Seller company name
-        address: company?.companyAddress ?? '',             // Seller address
-        tel: '',                                           // Seller tel (not in schema)
-        phone: '',                                         // Seller phone (not in schema)
-        fax_number: company?.companyFax ?? '',              // Seller fax
-        email: company?.companyEmail ?? '',                 // Seller email
+        company_name: company?.companyName ?? '',
+        address: company?.companyAddress ?? '',
+        tel: company?.companyNumber ?? '',
+        phone: company?.companyNumber ?? '',
+        fax_number: company?.companyFax ?? '',
+        email: company?.companyEmail ?? '',
       },
       customer_info: {
         company_name: customer?.companyName ?? '',          // Customer company name

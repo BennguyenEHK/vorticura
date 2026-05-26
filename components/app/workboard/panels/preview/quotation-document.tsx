@@ -35,12 +35,21 @@ function EditableField({
   type?: 'text' | 'number';
 }) {
   if (!isEditing) {
-    return <span className={className}>{type === 'number' ? Number(value).toLocaleString('vi-VN') : value}</span>;
+    if (type === 'number') {
+      const num = Number(value);
+      const safe = Number.isFinite(num) ? num : 0;
+      return <span className={className}>{safe.toLocaleString('vi-VN')}</span>;
+    }
+    return <span className={className}>{value ?? ''}</span>;
   }
+  const inputValue =
+    type === 'number'
+      ? (Number.isFinite(Number(value)) ? value : 0)
+      : (value ?? '');
   return (
     <input
       type={type}
-      value={value}
+      value={inputValue}
       onChange={(e) =>
         onFieldChange(path, type === 'number' ? Number(e.target.value) : e.target.value)
       }
