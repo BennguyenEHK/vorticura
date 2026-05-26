@@ -96,16 +96,19 @@ export function transformResultToDocument(result: ProcessorResult): DocumentData
         quotation_date: (data.generated_at as string) || new Date().toLocaleDateString('vi-VN'),
         page_number: '1',
         rfq_reference: (data.rfq_reference as string) || 'N/A',
-        seller_info: {
-          company_name: '',    // Loaded separately from CLIENT_COMPANY
-          address: '',
-          tel: '',
-          phone: '',
-          fax_number: '',
-          email: '',
-          logo_url: null,
-          signature_url: null,
-        },
+        seller_info: (() => {
+          const sellerInfo = (data.seller_info as Record<string, unknown>) || {};
+          return {
+            company_name: (sellerInfo.company_name as string) || '',
+            address: (sellerInfo.address as string) || '',
+            tel: (sellerInfo.tel as string) || (sellerInfo.phone as string) || '',
+            phone: (sellerInfo.phone as string) || '',
+            fax_number: (sellerInfo.fax_number as string) || '',
+            email: (sellerInfo.email as string) || '',
+            logo_url: (sellerInfo.logo_url as string) || null,
+            signature_url: (sellerInfo.signature_url as string) || null,
+          };
+        })(),
         customer_info: {
           company_name: (customerInfo.company_name as string) || 'N/A',
           attention_person: (customerInfo.attention_person as string) || 'N/A',

@@ -25,6 +25,7 @@ import type {
 import { DEFAULT_PRICING_VARIABLES } from "@/types/pricing";
 import { currencyService } from "@/lib/services/pricing";
 import { fetchQuotationForPricing } from "@/lib/actions/thread-ai-actions";
+import { usePreview } from "@/hooks/preview-context";
 
 // ---------------------------------------------
 // Context Creation
@@ -58,6 +59,14 @@ export function PricingPanelProvider({
   quotationId: propQuotationId,
   rfqId: propRfqId,
 }: PricingPanelProviderProps) {
+  // Subscribe to SSE preview so panel re-fetches when a quotation document arrives
+  const { state: previewState } = usePreview();
+  // Changes when a new quotation_id is broadcast; null when no quotation active
+  const previewQuotationKey =
+    previewState.activeDocument?.type === 'quotation'
+      ? ((previewState.activeDocument.data as unknown as Record<string, unknown>).quotation_id ?? 'pending')
+      : null;
+
   // Local state (replaces Zustand store)
   const [quotationId, setQuotationId] = useState<number | null>(propQuotationId ?? null);
   const [items, setItems] = useState<QuotationItem[]>([]);
@@ -84,6 +93,8 @@ export function PricingPanelProvider({
   }, [propQuotationId]);
 
   // Auto-load pricing data when the active RFQ changes.
+  // previewQuotationKey is a secondary dep: refreshes the panel as soon as a
+  // freshly-generated quotation document is broadcast via SSE.
   // Returns null gracefully when no quotation exists yet (still in items_ordering stage).
   useEffect(() => {
     if (!propRfqId) return;
@@ -108,7 +119,7 @@ export function PricingPanelProvider({
       })
       .finally(() => { if (!cancelled) setIsLoading(false); });
     return () => { cancelled = true; };
-  }, [propRfqId]);
+  }, [propRfqId, previewQuotationKey]);
 
   // --- Actions ---
 

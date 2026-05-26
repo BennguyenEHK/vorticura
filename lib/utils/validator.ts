@@ -946,17 +946,18 @@ export function validateInput(input: ProcessorInput): ProcessorInput {
  * @returns Deep-cloned normalized input
  */
 export function normalizeQuotationData(input: ProcessorInput): ProcessorInput {
-  const normalized = JSON.parse(JSON.stringify(input)) as ProcessorInput;
+  // Separate the workspace (class instance) before cloning;
+  // JSON-clone would drop prototype methods and silently break all DB writes.
+  const { workspace, ...rest } = input;
+  const normalized = JSON.parse(JSON.stringify(rest)) as ProcessorInput;
+  normalized.workspace = workspace; // re-attach the live class instance
 
-  // Only normalize if quotation_data with items exists
   const qd = normalized.quotation_data as QuotationData | undefined;
   if (qd?.quotation_items) {
     qd.quotation_items = qd.quotation_items.map((item) => {
-      // Normalize item_id to integer
       if (item.item_id !== undefined && item.item_id !== null) {
         item.item_id = parseInt(String(item.item_id), 10);
       }
-      // Ensure currency_code propagates to bidder_proposal
       if (item.currency_code !== undefined) {
         if (!item.bidder_proposal) {
           item.bidder_proposal = {} as QuotationItem['bidder_proposal'];
@@ -966,7 +967,6 @@ export function normalizeQuotationData(input: ProcessorInput): ProcessorInput {
       return item;
     });
   }
-
   return normalized;
 }
 

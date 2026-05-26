@@ -172,6 +172,7 @@ export function QuotationDocument({ data, isEditing, onFieldChange }: QuotationD
       {/*   Company's Requirement: Description | UOM | Qty             */}
       {/*   Bidder's Proposal: Description | Unit Price | Ext Price | Delivery */}
       {/* ============================================================ */}
+      <div className="overflow-x-auto">
       <table className="w-full border-collapse mb-5 text-left">
         <thead>
           {/* Scope of Supply header */}
@@ -316,6 +317,7 @@ export function QuotationDocument({ data, isEditing, onFieldChange }: QuotationD
           </tr>
         </tfoot>
       </table>
+      </div>
 
       {/* ============================================================ */}
       {/* TERMS AND CONDITIONS                                          */}

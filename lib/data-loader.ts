@@ -268,6 +268,14 @@ async function loadQuotationGenerateInput(
   const customerRows = await getData('customers', { rfqId: resolvedRfqId }, workspace);
   const customer = customerRows[0];
 
+  // Fetch seller company info
+  const companyRows = await getData(
+    'userCompany',
+    { companyId: workspace.getDatabaseFilter().company_id },
+    workspace
+  );
+  const company = companyRows[0];
+
   // rfq_reference lives on rfq_analysis (single source of truth)
   const analysisRows = await getData('rfqAnalysis', { rfqId: resolvedRfqId }, workspace);
   const rfqReference = String(analysisRows[0]?.rfqReference ?? '');
@@ -306,6 +314,14 @@ async function loadQuotationGenerateInput(
         phone: customer?.phone ?? '',                        // Customer phone
         fax_number: customer?.faxNumber ?? '',               // Customer fax
         customer_address: customer?.customerAddress ?? '',    // Customer address
+      },
+      seller_info: {
+        company_name: company?.companyName ?? '',
+        address: company?.companyAddress ?? '',
+        tel: '',                             // user_company has no phone column in schema
+        phone: '',                           // user_company has no phone column in schema
+        fax_number: company?.companyFax ?? '',
+        email: company?.companyEmail ?? '',
       },
       quotation_items: quotationItems,                       // Items with bidder proposals
       commercial_terms: quotation?.commercialTerms ?? '',    // Terms and conditions
