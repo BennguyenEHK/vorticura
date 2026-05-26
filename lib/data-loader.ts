@@ -221,45 +221,47 @@ async function loadSupplierSearchResearchInput(
 /**
  * quotation + generate/update: Load from quotations + rfqItems + supplierItemStatus(ordered) + customers + rfqAnalysis.
  * Builds the exact JSON shape of quotation_Inpt.json.
- * Uses quotation_id (not rfq_id) to identify the quotation.
- * Sources: quotations (quotation_id), rfqItems (company_requirement),
- *          supplierItemStatus (rfq_id + status=ordered), customers (customer_info), rfqAnalysis (rfq_reference)
+ * When no quotation record exists yet (first generate from items_ordering), builds from rfq_id directly
+ * without requiring a pre-existing quotation row — the processor will INSERT the new record.
+ * Sources: quotations (optional), rfqItems (company_requirement),
+ *          supplierItemStatus (status=ordered), customers (customer_info), rfqAnalysis (rfq_reference)
  */
 async function loadQuotationGenerateInput(
   params: LoaderParams
 ): Promise<Partial<ProcessorInput>> {
   const { rfq_id, quotation_id, workspace } = params;
 
-  // Fetch quotation record (prefer quotation_id, fallback to rfq_id)
+  if (!rfq_id && !quotation_id) {
+    throw new Error('[data-loader] rfq_id or quotation_id required for quotation/generate');
+  }
+
+  // Try to find existing quotation (prefer quotation_id, fallback to rfq_id).
+  // When no quotation exists yet (first generate from items_ordering) we build from rfq_id directly.
   let quotationRows: any[];
   if (quotation_id) {
     quotationRows = await getData('quotations', { quotationId: quotation_id }, workspace);
-  } else if (rfq_id) {
-    quotationRows = await getData('quotations', { rfqId: rfq_id }, workspace);
   } else {
-    throw new Error('[data-loader] quotation_id or rfq_id required for quotation/generate');
+    quotationRows = await getData('quotations', { rfqId: rfq_id }, workspace);
   }
 
-  if (!quotationRows.length) {
-    throw new Error(`[data-loader] No quotation found for quotation_id=${quotation_id}, rfq_id=${rfq_id}`);
-  }
-  const quotation = quotationRows[0];
-  const resolvedRfqId = quotation.rfqId; // Get rfq_id from quotation record
+  const quotation = quotationRows.length > 0 ? quotationRows[0] : null;
+  const resolvedRfqId = quotation ? quotation.rfqId : rfq_id!;   // Fall back to supplied rfq_id
+  const resolvedQuotationId: number | undefined = quotation ? quotation.quotationId : undefined;
 
   // Fetch RFQ items for company_requirement
   const itemRows = await getData('rfqItems', { rfqId: resolvedRfqId }, workspace);
 
-  // Fetch ordered supplier items (rfq_id + status = 'ordered')
+  // Fetch ordered supplier items (status = 'ordered' — set when operator awards a supplier)
   const supplierRows = await getData(
     'supplierItemStatus',
     { rfqId: resolvedRfqId, status: 'ordered' },
     workspace
   );
 
-  // Index supplier items by item_id for fast lookup
+  // Index supplier items by item_id (first ordered supplier per item wins)
   const supplierByItem = new Map<number, any>();
   for (const s of supplierRows) {
-    if (s.itemId) supplierByItem.set(s.itemId, s); // First ordered supplier per item
+    if (s.itemId && !supplierByItem.has(s.itemId)) supplierByItem.set(s.itemId, s);
   }
 
   // Fetch customer info linked to this RFQ
@@ -272,7 +274,7 @@ async function loadQuotationGenerateInput(
 
   // Build quotation_items array matching quotation_Inpt.json shape
   const quotationItems = itemRows.map((item: any) => {
-    const supplier = supplierByItem.get(item.itemId); // Matching ordered supplier
+    const supplier = supplierByItem.get(item.itemId); // Matching ordered supplier (if any)
     return {
       item_id: item.itemId,                                  // Numeric item ID
       currency_code: item.currencyCode ?? 'USD',             // Currency code
@@ -292,9 +294,9 @@ async function loadQuotationGenerateInput(
 
   return {
     rfq_id: resolvedRfqId,
-    quotation_id: quotation.quotationId,
+    quotation_id: resolvedQuotationId,
     quotation_data: {
-      quotation_id: quotation.quotationId,                   // Quotation PK
+      quotation_id: resolvedQuotationId,                     // Undefined on first generate → processor INSERTs
       rfq_reference: rfqReference,                           // RFQ reference string
       customer_info: {
         company_name: customer?.companyName ?? '',            // Customer company name
@@ -306,7 +308,7 @@ async function loadQuotationGenerateInput(
         customer_address: customer?.customerAddress ?? '',    // Customer address
       },
       quotation_items: quotationItems,                       // Items with bidder proposals
-      commercial_terms: quotation.commercialTerms ?? '',     // Terms and conditions
+      commercial_terms: quotation?.commercialTerms ?? '',    // Terms and conditions
     },
   };
 }

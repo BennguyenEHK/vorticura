@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { handleHTTPRequest } from '@/lib/data-processor';
-import { generateAIThreadSummary, generateAIDraftReply } from '@/lib/actions/thread-ai-actions';
+import { generateAIThreadSummary, generateAIDraftReply, updateSupplierItemOrderStatus } from '@/lib/actions/thread-ai-actions';
 import type { ItemsOrderingDocumentData, ItemsOrderingSupplier, ItemsOrderingItem } from '@/types/preview';
 
 // ─── Status display config (badge colors per procurement state) ───────────────
@@ -111,10 +111,20 @@ export function ItemsOrderingDocument({ data }: ItemsOrderingDocumentProps) {
     window.addEventListener('touchend', up);
   }, []);
 
-  // ── Optimistic local status update (visual only; wire to server action when ready)
-  const updateStatus = useCallback((itemId: number, idx: number, status: SupplierStatus) => {
+  // ── Status update: optimistic local + DB persist
+  // 'awarded' is written to DB as 'ordered' — the signal loadQuotationGenerateInput queries for.
+  const updateStatus = useCallback(async (itemId: number, idx: number, status: SupplierStatus) => {
     setLocalStatus(prev => ({ ...prev, [`${itemId}-${idx}`]: status }));
-  }, []);
+    if (!data.rfq_id) return;
+    const item = data.items.find(i => i.item_id === itemId);
+    const supplier = item?.suppliers[idx];
+    await updateSupplierItemOrderStatus({
+      rfqId: data.rfq_id,
+      itemId,
+      supplierId: supplier?.supplier_id ?? null,
+      status: status === 'awarded' ? 'ordered' : status,
+    });
+  }, [data.rfq_id, data.items]);
 
   // ── Trigger quotation generation via the quotation pipeline ───────────────
   const handleGenerateQuote = useCallback(async () => {

@@ -269,6 +269,22 @@ export async function handleHTTPRequest(input: ProcessorInput): Promise<Processo
     // Step 8: Update statistics
     updateStats(actionType);
 
+    // Step 8.5: Advance stage to quotation_processing after a successful direct quotation/generate.
+    // Pipeline-chain advancement is handled separately by executePipelineChain via PIPELINE_COMPLETED_STAGE.
+    if (dataType === 'quotation' && actionType === 'generate' && result.success) {
+      const rfqIdForStage =
+        (result.data as Record<string, unknown> | undefined)?.rfq_id
+        ?? normalizedInput.rfq_id;
+      if (typeof rfqIdForStage === 'number' && rfqIdForStage > 0 && normalizedInput.workspace) {
+        await updateData(
+          'rfqAnalysis',
+          { rfqId: rfqIdForStage },
+          { currentStage: 'quotation_processing' as RFQStage },
+          normalizedInput.workspace,
+        ).catch(err => console.warn('[data-processor] quotation stage advance failed:', err));
+      }
+    }
+
     // Step 9: Centralized SSE emission — all processors return data, emit happens here
     const finalResult = {
       ...result,

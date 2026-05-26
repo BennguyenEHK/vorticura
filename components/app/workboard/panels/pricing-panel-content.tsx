@@ -33,6 +33,7 @@ import {
 interface PricingPanelContentProps {
   className?: string;
   quotationId?: number; // Optional: load specific quotation on mount
+  rfqId?: number;       // Active RFQ — auto-loads items when quotation exists
 }
 
 // ---------------------------------------------
@@ -60,6 +61,17 @@ function PricingPanelInner({ className = "" }: { className?: string }) {
             Loading pricing data...
           </p>
         </div>
+      </div>
+    );
+  }
+
+  // Empty state — no quotation generated yet
+  if (!isLoading && !error && items.length === 0) {
+    return (
+      <div className={`p-4 h-full flex items-center justify-center ${className}`}>
+        <p className="text-sm text-muted-foreground text-center leading-relaxed">
+          No quotation yet.<br />Generate a quote from the procurement panel first.
+        </p>
       </div>
     );
   }
@@ -150,9 +162,10 @@ function PricingPanelInner({ className = "" }: { className?: string }) {
 export function PricingPanelContent({
   className = "",
   quotationId,
+  rfqId,
 }: PricingPanelContentProps) {
   return (
-    <PricingPanelProvider quotationId={quotationId}>
+    <PricingPanelProvider quotationId={quotationId} rfqId={rfqId}>
       <PricingPanelInner className={className} />
     </PricingPanelProvider>
   );

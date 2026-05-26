@@ -24,6 +24,7 @@ import type {
 } from "@/types/pricing";
 import { DEFAULT_PRICING_VARIABLES } from "@/types/pricing";
 import { currencyService } from "@/lib/services/pricing";
+import { fetchQuotationForPricing } from "@/lib/actions/thread-ai-actions";
 
 // ---------------------------------------------
 // Context Creation
@@ -38,7 +39,7 @@ const PricingPanelContext = createContext<PricingPanelContextType | null>(null);
 interface PricingPanelProviderProps {
   children: ReactNode;
   quotationId?: number;  // Optional: load specific quotation on mount
-  rfqId?: string;        // Optional: associated RFQ ID
+  rfqId?: number;        // Active RFQ — auto-loads pricing data when quotation exists
 }
 
 // ---------------------------------------------
@@ -55,7 +56,7 @@ interface PricingPanelProviderProps {
 export function PricingPanelProvider({
   children,
   quotationId: propQuotationId,
-  rfqId,
+  rfqId: propRfqId,
 }: PricingPanelProviderProps) {
   // Local state (replaces Zustand store)
   const [quotationId, setQuotationId] = useState<number | null>(propQuotationId ?? null);
@@ -82,15 +83,41 @@ export function PricingPanelProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propQuotationId]);
 
+  // Auto-load pricing data when the active RFQ changes.
+  // Returns null gracefully when no quotation exists yet (still in items_ordering stage).
+  useEffect(() => {
+    if (!propRfqId) return;
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+    fetchQuotationForPricing(propRfqId)
+      .then(data => {
+        if (cancelled) return;
+        if (!data) {
+          // No quotation yet — keep panel empty until generate quote is pressed
+          setItems([]);
+          setVariables([]);
+          return;
+        }
+        setQuotationId(data.quotationId);
+        setItems(data.items as QuotationItem[]);
+        setVariables(data.variables as PricingVariable[]);
+      })
+      .catch(err => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load pricing data');
+      })
+      .finally(() => { if (!cancelled) setIsLoading(false); });
+    return () => { cancelled = true; };
+  }, [propRfqId]);
+
   // --- Actions ---
 
-  /** Load quotation data by ID (placeholder for server action integration) */
+  /** Load quotation data by ID (used for direct quotation_id access) */
   const loadQuotationData = useCallback(async (qId: number) => {
     setIsLoading(true);
     setError(null);
     try {
       setQuotationId(qId);
-      // TODO: Integrate with server action to fetch quotation data
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load quotation");
     } finally {

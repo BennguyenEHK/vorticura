@@ -20,6 +20,7 @@ import { ReactGridLayout } from "react-grid-layout/legacy";
 import { useContainerWidth, type Layout, type LayoutItem as RGLLayoutItem } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import { useWorkboard } from "./workboard-provider";
+import { useRFQContext } from "@/hooks/rfq-context";
 import { WorkboardPanel } from "./workboard-panel";
 import { WorkboardDropZone } from "./workboard-drop-zone";
 import { DEFAULT_GRID_CONFIG, type LayoutItem } from "@/types/workboard";
@@ -93,6 +94,10 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
   // Get workboard state and actions from context
   const { layout, panels, isLocked, updateLayout, setActivePanel, skipOverlapResolutionRef } =
     useWorkboard();
+
+  // Active RFQ — passed to pricing panel for auto-loading
+  const rfqCtx = useRFQContext();
+  const activeRfqId = rfqCtx?.rfqId;
 
   // =============================================
   // Drag Event Handlers (Overlap-Based Swap Implementation)
@@ -377,7 +382,7 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
         case "workflow":
           return <WorkflowPanelContent />;
         case "pricing":
-          return <PricingPanelContent />;
+          return <PricingPanelContent rfqId={activeRfqId} />;
         case "preview":
           return <PreviewPanelContent />;
         default:
@@ -388,7 +393,7 @@ export function WorkboardGrid({ className = "" }: WorkboardGridProps) {
           );
       }
     },
-    [panels]
+    [panels, activeRfqId]
   );
 
   // =============================================

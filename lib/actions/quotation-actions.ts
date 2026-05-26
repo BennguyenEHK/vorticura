@@ -99,7 +99,7 @@ async function handleGenerateOrUpdate(
   timestamp: string,
   workspace: WorkspaceContext
 ): Promise<unknown> {
-  const { quotation_data, pricing_variables, action_type } = input;
+  const { quotation_data, pricing_variables, action_type, rfq_id } = input;
 
   if (!quotation_data) {
     throw new Error('quotation_data is required for generate/update');
@@ -161,8 +161,9 @@ async function handleGenerateOrUpdate(
     console.error('[Quotation] DB save failed (non-blocking):', dbError);
   }
 
-  // Return result data
+  // Return result data (rfq_id included so emitProcessorResult can update lastPreviewType + stage)
   return {
+    rfq_id: rfq_id ?? null,
     quotation_id: quotation_data.quotation_id,
     rfq_reference: quotation_data.rfq_reference,
     action_type,

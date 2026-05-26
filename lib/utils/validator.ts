@@ -535,6 +535,13 @@ function validateSupplierSearchResearch(input: ProcessorInput): ProcessorInput {
 function validateQuotationGenerateUpdate(input: ProcessorInput): ProcessorInput {
   const actionType = input.action_type;
 
+  // Loader-enriched path: for generate, rfq_id alone is sufficient.
+  // data-loader (loadQuotationGenerateInput) populates quotation_data from DB after this returns.
+  // Mirrors the same leniency as validateEmailSend (which accepts rfq_id without email object).
+  if (actionType === 'generate' && input.rfq_id && !input.quotation_data) {
+    return input;
+  }
+
   // quotation_data is required
   if (!input.quotation_data) throw new Error('quotation_data is required');
   const qd = input.quotation_data as QuotationData;
