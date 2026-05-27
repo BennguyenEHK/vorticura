@@ -5,7 +5,7 @@
  * Allows child components to access the RFQ context without prop drilling
  */
 
-import React, { createContext, useContext, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, type ReactNode } from 'react';
 
 // =============================================
 // Context Types
@@ -14,6 +14,7 @@ import React, { createContext, useContext, type ReactNode } from 'react';
 interface RFQContextValue {
   rfqId?: number;
   rfqReference?: string;
+  setRfqId: (id: number) => void;
 }
 
 // =============================================
@@ -36,9 +37,10 @@ interface RFQProviderProps {
  * RFQProvider — Provides current RFQ ID context to children
  * Used in workspace pages to make rfqId accessible to nested components
  */
-export function RFQProvider({ children, rfqId, rfqReference }: RFQProviderProps) {
+export function RFQProvider({ children, rfqId: initialRfqId, rfqReference }: RFQProviderProps) {
+  const [rfqId, setRfqId] = useState<number | undefined>(initialRfqId);
   return (
-    <RFQContext.Provider value={{ rfqId, rfqReference }}>
+    <RFQContext.Provider value={{ rfqId, rfqReference, setRfqId }}>
       {children}
     </RFQContext.Provider>
   );

@@ -163,11 +163,23 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
     }
   }, [state.activeDocument, actions]);
 
-  // Download: generate print-friendly version
+  // Download: print only the document inside the preview panel
   const handleDownload = useCallback(() => {
-    if (!state.activeDocument) return;
-    // Open print dialog with current document
-    window.print();
+    if (!state.activeDocument || !contentRef.current) return;
+    const html = contentRef.current.innerHTML;
+    const printWin = window.open('', '_blank');
+    if (!printWin) return;
+    printWin.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quotation</title><style>
+      *,*::before,*::after{box-sizing:border-box}
+      body{font-family:'Times New Roman',serif;font-size:14px;line-height:1.5;color:#000;background:#fff;margin:20px}
+      table{border-collapse:collapse;width:100%;margin-bottom:20px}
+      th,td{border:1px solid #000;padding:8px;text-align:left}
+      img{max-width:100%;height:auto}
+      @media print{body{margin:10mm}}
+    </style></head><body>${html}</body></html>`);
+    printWin.document.close();
+    printWin.focus();
+    setTimeout(() => { printWin.print(); printWin.close(); }, 250);
   }, [state.activeDocument]);
 
   // Toggle history panel and load snapshots
@@ -472,7 +484,7 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
       {/* ============================================================ */}
       {/* DOCUMENT CONTENT — Routes to correct component               */}
       {/* ============================================================ */}
-      <div className="flex-1 relative overflow-hidden">
+      <div className="flex-1 relative">
         <div
           ref={contentRef}
           className={`absolute inset-0 ${isAccepting ? 'overflow-hidden' : 'overflow-auto'} bg-background p-4 select-text`}

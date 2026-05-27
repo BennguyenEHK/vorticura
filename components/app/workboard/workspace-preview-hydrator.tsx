@@ -52,6 +52,10 @@ export function WorkspacePreviewHydrator() {
         if (payload.workflowSteps?.length) {
           setSteps(payload.workflowSteps);
         }
+        // Populate numeric rfqId into RFQ context so pricing panel can load
+        if (payload.rfqId && rfqContext?.setRfqId) {
+          rfqContext.setRfqId(payload.rfqId);
+        }
       }
     };
 

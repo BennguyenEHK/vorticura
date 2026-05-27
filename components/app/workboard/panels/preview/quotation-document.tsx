@@ -60,7 +60,7 @@ function EditableField({
 
 export function QuotationDocument({ data, isEditing, onFieldChange }: QuotationDocumentProps) {
   return (
-    <div className="font-serif text-[14px] leading-relaxed text-black bg-white p-5 min-h-full">
+    <div className="font-serif text-[14px] leading-relaxed text-black bg-white p-5 min-h-full min-w-max">
 
       {/* ============================================================ */}
       {/* HEADER — Logo + Company Info + Spacer (flex row)              */}
