@@ -259,7 +259,7 @@ function transformItemsForPricing(
       bidder_description: String(bidderProp.bidder_description || companyReq.company_description || ''),
       qty: Number(companyReq.qty || item.qty || 0),
       currency_code: (item.currency_code || 'USD') as PricingQuotationItem['currency_code'],
-      bidder_unit_price: Number(bidderProp.bidder_unit_price || item.bidder_unit_price || 0),
+      bidder_unit_price: Number(bidderProp.bidder_unit_price || item.bidder_unit_price || 25),
     };
   });
 }

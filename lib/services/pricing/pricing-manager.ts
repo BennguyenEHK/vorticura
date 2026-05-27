@@ -86,7 +86,7 @@ export async function getQuotationItems(
       bidder_description: String(row.bidderDescription || 'No description'),
       qty: Number(row.qty || 1),
       currency_code: String(row.currencyCode || 'VND') as QuotationItem['currency_code'],
-      bidder_unit_price: Number(row.bidderUnitPrice || 0),
+      bidder_unit_price: Number(row.bidderUnitPrice || 25),
     }));
   } catch (error) {
     console.error('Error loading quotation items:', error);

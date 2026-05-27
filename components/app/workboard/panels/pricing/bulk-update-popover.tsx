@@ -6,7 +6,7 @@
 // Allows applying a value to multiple items at once
 // Triggered by right-click on input fields
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { X, CheckSquare, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -65,30 +65,36 @@ export function BulkUpdatePopover({
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    if (popoverRef.current) {
-      const rect = popoverRef.current.getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
+  // Runs after SSR guard releases (mounted toggles to true) AND on any position change.
+  // useLayoutEffect avoids the flash of an unclamped popover at the raw click coordinates.
+  useLayoutEffect(() => {
+    if (!mounted || !popoverRef.current) return;
+    const rect = popoverRef.current.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const margin = 12;
 
-      let x = position.x;
-      let y = position.y;
+    // Horizontal: clamp to viewport
+    let x = position.x;
+    if (x + rect.width > vw - margin) x = vw - rect.width - margin;
+    if (x < margin) x = margin;
 
-      // Adjust horizontal position
-      if (x + rect.width > viewportWidth - 20) {
-        x = viewportWidth - rect.width - 20;
-      }
-      if (x < 20) x = 20;
-
-      // Adjust vertical position
-      if (y + rect.height > viewportHeight - 20) {
-        y = viewportHeight - rect.height - 20;
-      }
-      if (y < 20) y = 20;
-
-      setAdjustedPosition({ x, y });
+    // Vertical: flip above the click when popover would overflow the bottom.
+    // Anchoring the popover's bottom edge to the click point keeps the Apply button on-screen.
+    let y = position.y;
+    const spaceBelow = vh - position.y - margin;
+    const spaceAbove = position.y - margin;
+    if (rect.height > spaceBelow && rect.height <= spaceAbove) {
+      y = position.y - rect.height;
+    } else if (rect.height > spaceBelow) {
+      // Doesn't fit either way — pin to bottom edge so Apply stays visible.
+      y = vh - rect.height - margin;
     }
-  }, [position]);
+    if (y < margin) y = margin;
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAdjustedPosition({ x, y });
+  }, [position, mounted]);
 
   // Close on click outside
   useEffect(() => {
