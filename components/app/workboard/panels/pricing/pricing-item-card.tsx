@@ -9,7 +9,7 @@
 // when the input parses to a complete number (parseFormattedNumber returns
 // non-null). On blur, we commit the latest typed value (resolves "1." → 1).
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, memo } from "react";
 import { Input } from "@/components/ui/input";
 import { usePricingPanel } from "./pricing-panel-provider";
 import {
@@ -86,7 +86,12 @@ function placeholderFor(field: VarField): string {
  * complete number. This keeps partial-typing tokens like "1." stable across
  * re-renders.
  */
-export function PricingItemCard({
+// memo prevents re-renders when unrelated variables change in sibling items.
+// Effective only when the parent passes stable prop references — ensured by:
+//   - item: loaded once, same reference throughout the session
+//   - variables: updateVariable keeps unchanged items as the same object reference
+//   - onContextMenu: stabilized via variablesMapRef in PricingItemList
+export const PricingItemCard = memo(function PricingItemCard({
   item,
   variables,
   onContextMenu,
@@ -246,4 +251,4 @@ export function PricingItemCard({
       </div>
     </div>
   );
-}
+});

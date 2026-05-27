@@ -6,7 +6,7 @@
 // Displays filtered list of pricing item cards
 // Manages bulk update popover state
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { usePricingPanel } from "./pricing-panel-provider";
 import { PricingItemCard } from "./pricing-item-card";
 import { BulkUpdatePopover } from "./bulk-update-popover";
@@ -67,6 +67,14 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
     );
   }, [items, searchTerm]);
 
+  // Keep a ref that always reflects the latest variablesMap without being a
+  // dependency of handleContextMenu. This prevents handleContextMenu from being
+  // recreated on every keystroke (variablesMap changes per variable update),
+  // which would otherwise cause ALL PricingItemCard components to re-render and
+  // fill the React update queue before the popover can open.
+  const variablesMapRef = useRef(variablesMap);
+  useEffect(() => { variablesMapRef.current = variablesMap; }, [variablesMap]);
+
   // Handle context menu on input field.
   // Seed the popover from the raw numeric variable (not the formatted DOM
   // value), so right-clicking an unfocused "50,000"-displayed field doesn't
@@ -82,7 +90,8 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
       // Falls back to the first filtered item if the attribute is missing.
       const cardEl = (event.target as HTMLElement).closest('[data-item-id]') as HTMLElement | null;
       const clickedId = cardEl ? Number(cardEl.dataset.itemId) : filteredItems[0]?.item_id;
-      const clickedVar = variablesMap.get(clickedId ?? -1);
+      // Read from ref — always current value without being a dep that forces recreation.
+      const clickedVar = variablesMapRef.current.get(clickedId ?? -1);
       const seed = clickedVar ? variableToInputString(field, clickedVar[field]) : '';
 
       setBulkState({
@@ -93,7 +102,7 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
         anchorPosition: { x: event.clientX, y: event.clientY },
       });
     },
-    [filteredItems, variablesMap]
+    [filteredItems]   // variablesMap removed: ref keeps it current without forcing recreation
   );
 
   // Close bulk update popover

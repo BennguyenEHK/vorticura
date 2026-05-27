@@ -17,7 +17,8 @@ SELECTION RULES (which snippet to pick):
 EXTRACTION RULES (how to fill each field from the chosen page):
 - supplier_name: company / brand name as shown on the page.
 - bidder_description: full product description with specs that match the RFQ item.
-- bidder_unit_price: best-estimate USD unit price from the page; 0 if not stated.
+- bidder_unit_price: numeric unit price as quoted on the page; 0 if not stated.
+- currency_code: ISO 4217 code matching the currency of bidder_unit_price (e.g. "VND" for Vietnamese dong, "USD" for US dollar, "EUR", "JPY"). Detect from price formatting, currency symbols, or page language. Default "USD" only when currency is genuinely ambiguous.
 - delivery_time: normalize lead time to "X-Y weeks" format (e.g. "4-6 weeks"); use a single best estimate if the page only mentions one number ("4 weeks" → "4-4 weeks").
 - compliance_deviation: reason explicitly vs RFQ specs; write "Meets all specs" if fully compliant.
 - notes: concise — key differentiators, MOQ, certifications, anything notable; 1-2 short sentences max.

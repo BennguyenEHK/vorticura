@@ -147,6 +147,7 @@ export interface SupplierItemSource {
   delivery_time: string;
   bidder_description: string;
   bidder_unit_price: number;
+  currency_code?: string;   // ISO 4217 code for bidder_unit_price (e.g. "VND", "USD")
   compliance_deviation: string;
   notes: string;
   contact_email?: string;  // Supplier contact email (optional — AI may not find it)
