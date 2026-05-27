@@ -5,6 +5,7 @@
 // Ensures data integrity before calculations
 
 import type { PricingVariable, QuotationItem } from '@/types/pricing';
+import { resolvePricingVariable } from '@/types/pricing';
 
 // ---------------------------------------------
 // Validation Result Type
@@ -86,15 +87,17 @@ export function validateVariableField(
 }
 
 /**
- * Validate a complete pricing variable object
- * @param variable - PricingVariable to validate
- * @returns ValidationResult with isValid flag and optional error
+ * Validate a complete pricing variable object.
+ * Resolves null fields to system defaults *before* range-checking each one,
+ * since the system default itself is always considered valid.
  */
 export function validatePricingVariable(variable: PricingVariable): ValidationResult {
   // Check item_id exists and is valid
   if (!variable.item_id || variable.item_id <= 0) {
     return { isValid: false, error: 'Invalid item_id' };
   }
+
+  const resolved = resolvePricingVariable(variable);
 
   // Validate each field
   const fields: Array<keyof Omit<PricingVariable, 'item_id'>> = [
@@ -106,7 +109,7 @@ export function validatePricingVariable(variable: PricingVariable): ValidationRe
   ];
 
   for (const field of fields) {
-    const result = validateVariableField(field, variable[field]);
+    const result = validateVariableField(field, resolved[field]);
     if (!result.isValid) {
       return { isValid: false, error: `Item ${variable.item_id}: ${result.error}` };
     }
@@ -206,9 +209,18 @@ export function validateQuotationItems(items: QuotationItem[]): ValidationResult
 // ---------------------------------------------
 
 /**
- * Parse a formatted number string (handles commas, spaces, currency symbols)
+ * Parse a formatted number string (handles commas, spaces, currency symbols).
+ * Uses en-US convention: comma = thousand separator (stripped); dot = decimal (kept).
+ * This matches `formatNumber` / `formatCurrency` output below, so round-tripping
+ * "50,000" ↔ 50000 and "1.5" ↔ 1.5 is lossless.
+ *
+ * Returns null for empty / non-numeric input AND for partial-typing tokens like
+ * "1.", "-", "" so the caller (the controlled input) can preserve the user's
+ * raw text via a string-backed local state instead of snapping it back to a
+ * stale numeric value.
+ *
  * @param value - String or number to parse
- * @returns Parsed number or null if invalid
+ * @returns Parsed number or null if invalid / partial
  */
 export function parseFormattedNumber(value: string | number | null | undefined): number | null {
   if (value === null || value === undefined || value === '') {
@@ -219,34 +231,43 @@ export function parseFormattedNumber(value: string | number | null | undefined):
     return isFinite(value) ? value : null;
   }
 
-  // Remove formatting characters (commas, spaces, currency symbols)
+  // Remove formatting characters (commas as thousand sep, spaces, currency symbols)
   const cleaned = value.replace(/[,\s₫VND$€¥]/g, '');
   if (cleaned === '') return null;
+
+  // Reject partial-typing tokens — let the input keep the raw string until the
+  // user finishes typing (e.g., "1." while heading toward "1.5").
+  // Accepts only a complete number form: optional sign, digits, optional .digits.
+  if (!/^-?\d+(\.\d+)?$/.test(cleaned)) {
+    return null;
+  }
 
   const parsed = parseFloat(cleaned);
   return isNaN(parsed) || !isFinite(parsed) ? null : parsed;
 }
 
 /**
- * Format a number with thousand separators
+ * Format a number with thousand separators (en-US: "50,000.00").
  * @param value - Number to format
  * @param decimals - Number of decimal places (default: 0)
  * @returns Formatted string
  */
 export function formatNumber(value: number, decimals: number = 0): string {
-  return new Intl.NumberFormat('vi-VN', {
+  return new Intl.NumberFormat('en-US', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   }).format(value);
 }
 
 /**
- * Format a number as currency (VND)
+ * Format a number as VND currency in en-US grouping ("VND 1,234,567").
+ * Locale is en-US so the thousand separator is "," (not "."), matching
+ * what `parseFormattedNumber` strips.
  * @param value - Number to format
  * @returns Formatted currency string
  */
 export function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('vi-VN', {
+  return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'VND',
     minimumFractionDigits: 0,

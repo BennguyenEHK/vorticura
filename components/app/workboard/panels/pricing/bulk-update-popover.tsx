@@ -140,16 +140,21 @@ export function BulkUpdatePopover({
     });
   }, []);
 
-  // Apply bulk update
+  // Apply bulk update. Empty value clears the field across all selected items
+  // (sets to null → ghost placeholder). Non-empty must parse to a complete number.
   const handleApply = useCallback(() => {
-    const parsed = parseFormattedNumber(value);
-    if (parsed === null || selectedIds.size === 0) {
+    if (selectedIds.size === 0) return;
+
+    if (value.trim() === "") {
+      bulkUpdateVariable(Array.from(selectedIds), field, null);
+      onClose();
       return;
     }
 
-    // Convert discount percentage to decimal
-    const finalValue = field === "discount_rate" ? parsed / 100 : parsed;
+    const parsed = parseFormattedNumber(value);
+    if (parsed === null) return; // partial token — keep popover open
 
+    const finalValue = field === "discount_rate" ? parsed / 100 : parsed;
     bulkUpdateVariable(Array.from(selectedIds), field, finalValue);
     onClose();
   }, [value, selectedIds, field, bulkUpdateVariable, onClose]);
@@ -254,7 +259,7 @@ export function BulkUpdatePopover({
       <div className="flex gap-2">
         <Button
           onClick={handleApply}
-          disabled={selectedIds.size === 0 || !value}
+          disabled={selectedIds.size === 0}
           className="flex-1 bg-brand text-brand-foreground hover:bg-brand-hover"
           size="sm"
         >

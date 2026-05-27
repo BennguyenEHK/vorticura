@@ -304,8 +304,7 @@ export const rfqItems = pgTable('rfq_items', {
   qty: numeric('qty', { precision: 10, scale: 0 }),
   uom: varchar('uom', { length: 20 }),
 
-  // Currency
-  currencyCode: varchar('currency_code', { length: 3 }),
+  // Currency moved to supplier_item_status (per-supplier proposal)
 
   // Timestamps
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
@@ -457,6 +456,7 @@ export const supplierItemStatus = pgTable('supplier_item_status', {
   // Bidder proposal fields (moved from rfq_items)
   bidderDescription: text('bidder_description'),                             // Supplier's product description
   bidderUnitPrice: numeric('bidder_unit_price', { precision: 15, scale: 4 }), // Renamed from unit_price
+  currencyCode: varchar('currency_code', { length: 3 }),                      // Currency for bidderUnitPrice
   deliveryTime: varchar('delivery_time', { length: 100 }),                    // Supplier's delivery estimate
   complianceDeviation: text('compliance_deviation'),                          // Meets specs / deviations
 

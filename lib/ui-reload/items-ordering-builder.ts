@@ -22,26 +22,31 @@ export async function buildItemsOrderingPreview(
 
     const items = (rfqItems as Array<Record<string, unknown>>).map((rfqItem) => {
       const itemId = Number(rfqItem.itemId);
-      const suppliers = (supplierItems as Array<Record<string, unknown>>)
-        .filter((si) => Number(si.itemId) === itemId)
-        .map((si) => ({
-          supplier_id: si.supplierId ? Number(si.supplierId) : null,
-          supplier_name: String(si.supplierName ?? ''),
-          unit_price: si.bidderUnitPrice ? Number(si.bidderUnitPrice) : null,
-          lead_time: si.deliveryTime ? String(si.deliveryTime) : null,
-          status: String(si.status ?? 'sent') as 'sent' | 'quoted' | 'awarded' | 'declined',
-          contact_email: si.contactEmail ? String(si.contactEmail) : null,
-          responded_at: si.respondedAt ? String(si.respondedAt) : null,
-          source_url: si.sourceUrl ? String(si.sourceUrl) : null,
-          ai_summary: null,
-          thread: [],
-        }));
+      const matchingSuppliers = (supplierItems as Array<Record<string, unknown>>)
+        .filter((si) => Number(si.itemId) === itemId);
+      const suppliers = matchingSuppliers.map((si) => ({
+        supplier_id: si.supplierId ? Number(si.supplierId) : null,
+        supplier_name: String(si.supplierName ?? ''),
+        unit_price: si.bidderUnitPrice ? Number(si.bidderUnitPrice) : null,
+        currency_code: si.currencyCode ? String(si.currencyCode) : null,
+        lead_time: si.deliveryTime ? String(si.deliveryTime) : null,
+        status: String(si.status ?? 'sent') as 'sent' | 'quoted' | 'awarded' | 'declined',
+        contact_email: si.contactEmail ? String(si.contactEmail) : null,
+        responded_at: si.respondedAt ? String(si.respondedAt) : null,
+        source_url: si.sourceUrl ? String(si.sourceUrl) : null,
+        ai_summary: null,
+        thread: [],
+      }));
+      // currency_code now lives on supplier_item_status. Display the awarded
+      // supplier's currency when one exists, otherwise the first supplier row.
+      const awarded = matchingSuppliers.find((si) => String(si.status) === 'ordered' || String(si.status) === 'awarded');
+      const currencyOwner = awarded ?? matchingSuppliers[0];
       return {
         item_id: itemId,
         item_name: String(rfqItem.companyDescription ?? ''),
         rfq_qty: Number(rfqItem.qty ?? 0),
         uom: String(rfqItem.uom ?? 'EA'),
-        currency_code: String(rfqItem.currencyCode ?? 'USD'),
+        currency_code: String(currencyOwner?.currencyCode ?? 'USD'),
         suppliers,
       };
     });

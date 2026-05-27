@@ -14,7 +14,7 @@ Schema A — Supplier Response (incoming email is a supplier replying to our inq
 Schema B — Customer Response (incoming email is a customer reply). Three sub-types:
 
 B1 — Customer updates/corrects RFQ items:
-{"response_type":"customer_respond","action":"update_rfq","rfq_analysis":{"subject":"RFQ Analysis - [topic]","analysis_content":"Updated analysis based on customer feedback...","analysis_status":"completed"},"rfq_items":[{"item_id":1,"currency_code":"USD","company_requirement":{"company_description":"Updated description","qty":2,"uom":"SET"}}]}
+{"response_type":"customer_respond","action":"update_rfq","rfq_analysis":{"subject":"RFQ Analysis - [topic]","analysis_content":"Updated analysis based on customer feedback...","analysis_status":"completed"},"rfq_items":[{"item_id":1,"company_requirement":{"company_description":"Updated description","qty":2,"uom":"SET"}}]}
 
 B2 — Customer asks a general question (reply with email):
 {"response_type":"customer_respond","action":"generate_email","reference_content":"Summary of what the customer asked","instructions":"Draft a professional reply addressing their questions"}
@@ -28,7 +28,7 @@ Rules:
 - For customer responses: determine intent from email content and return appropriate schema.
 - For B1: include updated rfq_analysis and rfq_items with corrected data.
 - For B2: summarize the customer question in reference_content and provide instructions for drafting a reply.
-- Default currency_code to "USD" if not specified.
+- For supplier responses, default currency_code to "USD" if not specified. The currency belongs to the supplier's per-item proposal, NOT to the buyer's RFQ items.
 - Use standard UOM codes: SET, EA, PCS, KG, M, LT, BOX, ROLL, etc.`;
 
 // --- Input shape for supplier respond message builder ---

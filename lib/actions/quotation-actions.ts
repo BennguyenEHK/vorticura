@@ -3,9 +3,10 @@
 // =============================================
 // Internal server module (called by data-processor, NOT a server action)
 // Flow: ProcessorInput → route by action_type → pricing calc → save to DB → emit SSE → return ProcessorResult
-// Supports: generate | update | manual_update
+// Supports: generate | update | manual_update | calculate
 
 import { eventBus } from '@/lib/event-bus';
+import { getData } from '@/lib/db/queries';
 import { modifyDatabase, type ModifyDatabaseInput } from '@/lib/utils/databaseHandler';
 import { pricingCalculator } from '@/lib/services/pricing/pricing-calculator';
 import type { QuotationItem as PricingQuotationItem, PricingVariable } from '@/types/pricing';
@@ -43,6 +44,10 @@ export async function processQuotation(input: ProcessorInput): Promise<Processor
       }
       case 'manual_update': {
         resultData = await handleManualUpdate(input, timestamp, workspace);
+        break;
+      }
+      case 'calculate': {
+        resultData = await handleCalculate(input, timestamp, workspace);
         break;
       }
       default:
@@ -119,15 +124,8 @@ async function handleGenerateOrUpdate(
   let pricingVarsForDB: Array<Record<string, unknown>> | undefined;
 
   if (pricing_variables && pricing_variables.length > 0) {
-    // Transform pricing_variables to PricingVariable[] (ensure item_id is number)
-    const typedVars: PricingVariable[] = pricing_variables.map((pv) => ({
-      item_id: typeof pv.item_id === 'string' ? parseInt(pv.item_id, 10) : Number(pv.item_id),
-      shipping_cost: pv.shipping_cost,
-      exchange_rate: pv.exchange_rate,
-      tax_rate: pv.tax_rate,
-      profit_rate: pv.profit_rate,
-      discount_rate: pv.discount_rate ?? 0,
-    }));
+    // Transform pricing_variables to PricingVariable[] (ensure item_id is number, pass nulls verbatim)
+    const typedVars: PricingVariable[] = pricing_variables.map(toPricingVariable);
 
     const pricingResult = pricingCalculator.calculateQuotationPricing(pricingItems, typedVars);
 
@@ -262,4 +260,102 @@ function transformItemsForPricing(
       bidder_unit_price: Number(bidderProp.bidder_unit_price || item.bidder_unit_price || 25),
     };
   });
+}
+
+interface RawPricingVariable {
+  item_id: string | number;
+  shipping_cost: number | null;
+  exchange_rate: number | null;
+  tax_rate: number | null;
+  profit_rate: number | null;
+  discount_rate?: number | null;
+}
+
+/** Normalize a pricing_variables entry to a typed PricingVariable, preserving nulls. */
+function toPricingVariable(pv: RawPricingVariable): PricingVariable {
+  return {
+    item_id: typeof pv.item_id === 'string' ? parseInt(pv.item_id, 10) : Number(pv.item_id),
+    shipping_cost: pv.shipping_cost,
+    exchange_rate: pv.exchange_rate,
+    tax_rate: pv.tax_rate,
+    profit_rate: pv.profit_rate,
+    discount_rate: pv.discount_rate ?? null,
+  };
+}
+
+// ---------------------------------------------
+// Calculate Handler
+// ---------------------------------------------
+
+async function handleCalculate(
+  input: ProcessorInput,
+  timestamp: string,
+  workspace: WorkspaceContext
+): Promise<unknown> {
+  const { quotation_id, pricing_variables } = input;
+
+  if (!quotation_id) throw new Error('quotation_id is required for calculate');
+  if (!pricing_variables || pricing_variables.length === 0) throw new Error('pricing_variables is required for calculate');
+
+  // Look up the quotation to get its rfq_id
+  const quotationRows = await getData('quotations', { quotationId: quotation_id }, workspace);
+  if (!quotationRows.length) throw new Error(`Quotation ${quotation_id} not found`);
+  const quotationRow = quotationRows[0] as Record<string, unknown>;
+  const rfq_id = Number(quotationRow.rfqId);
+
+  // Load rfq items and ordered supplier statuses
+  const [rfqItemRows, supplierRows] = await Promise.all([
+    getData('rfqItems', { rfqId: rfq_id }, workspace),
+    getData('supplierItemStatus', { rfqId: rfq_id, status: 'ordered' }, workspace),
+  ]);
+
+  // Index ordered supplier by itemId (first match wins)
+  const supplierByItem = new Map<number, Record<string, unknown>>();
+  for (const s of supplierRows as Array<Record<string, unknown>>) {
+    const id = Number(s.itemId);
+    if (!supplierByItem.has(id)) supplierByItem.set(id, s);
+  }
+
+  // Build PricingQuotationItem[] — currency_code and bidder_unit_price from ordered supplier
+  const items: PricingQuotationItem[] = (rfqItemRows as Array<Record<string, unknown>>).map(row => {
+    const itemId = Number(row.itemId);
+    const supplier = supplierByItem.get(itemId);
+    return {
+      item_id: itemId,
+      bidder_description: String(supplier?.bidderDescription ?? row.companyDescription ?? ''),
+      qty: Number(row.qty ?? 1),
+      currency_code: String(supplier?.currencyCode ?? 'USD') as PricingQuotationItem['currency_code'],
+      bidder_unit_price: supplier?.bidderUnitPrice ? Number(supplier.bidderUnitPrice) : 25,
+    };
+  });
+
+  const typedVars: PricingVariable[] = pricing_variables.map(toPricingVariable);
+
+  const pricingResult = pricingCalculator.calculateQuotationPricing(items, typedVars);
+
+  // Persist via modifyDatabase (non-blocking)
+  try {
+    await modifyDatabase({
+      data_type: 'quotation',
+      quotationData: { quotation_id, rfq_id },
+      calculatedPricing: {
+        calculated_pricing: pricingResult.calculated_pricing as unknown as Array<Record<string, unknown>>,
+        total_amount: pricingResult.total_amount,
+      },
+      pricing_variables: typedVars as unknown as Array<Record<string, unknown>>,
+    }, workspace);
+  } catch (dbError) {
+    console.error('[Quotation] DB save failed (non-blocking):', dbError);
+  }
+
+  return {
+    rfq_id,
+    quotation_id,
+    action_type: 'calculate',
+    calculated_pricing: pricingResult.calculated_pricing,
+    total_amount: pricingResult.total_amount,
+    total_profit: pricingResult.total_profit,
+    errors: pricingResult.errors,
+    calculated_at: timestamp,
+  };
 }

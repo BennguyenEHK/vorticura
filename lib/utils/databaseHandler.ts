@@ -126,8 +126,7 @@ export function buildRfqItemsPayload(data: Record<string, unknown>, update = fal
   if (companyReq.uom != null) payload.uom = String(companyReq.uom);
   else if (data.uom != null) payload.uom = String(data.uom);
 
-  // Root-level currency
-  if (data.currency_code != null) payload.currencyCode = String(data.currency_code);
+  // currency_code moved to supplier_item_status — no longer written here
 
   return payload;
 }
@@ -175,13 +174,13 @@ export function buildPricingPayload(data: Record<string, unknown>, update = fals
     payload.itemId = itemId;
   }
 
-  // Pricing variables
-  if (pv.shipping_cost != null) payload.shippingCost = String(pv.shipping_cost);
+  // Pricing variables — use 'in' so an explicit null clears the column back to NULL
+  if ('shipping_cost' in pv) payload.shippingCost = pv.shipping_cost != null ? String(pv.shipping_cost) : null;
   if (data.exchange_currency != null) payload.exchangeCurrency = String(data.exchange_currency);
-  if (pv.tax_rate != null) payload.taxRate = String(pv.tax_rate);
-  if (pv.profit_rate != null) payload.profitRate = String(pv.profit_rate);
-  if (pv.discount_rate != null) payload.discountRate = String(pv.discount_rate);
-  if (pv.exchange_rate != null) payload.exchangeRate = String(pv.exchange_rate);
+  if ('tax_rate' in pv) payload.taxRate = pv.tax_rate != null ? String(pv.tax_rate) : null;
+  if ('profit_rate' in pv) payload.profitRate = pv.profit_rate != null ? String(pv.profit_rate) : null;
+  if ('discount_rate' in pv) payload.discountRate = pv.discount_rate != null ? String(pv.discount_rate) : null;
+  if ('exchange_rate' in pv) payload.exchangeRate = pv.exchange_rate != null ? String(pv.exchange_rate) : null;
 
   // Calculated pricing (single-item array)
   const cpItems = (cp.calculated_pricing || []) as Array<Record<string, unknown>>;
@@ -265,6 +264,7 @@ export function buildSupplierItemStatusPayload(data: Record<string, unknown>, up
   if (data.status != null) payload.status = String(data.status);
   if (data.bidder_unit_price != null) payload.bidderUnitPrice = String(data.bidder_unit_price);
   else if (data.unit_price != null) payload.bidderUnitPrice = String(data.unit_price);
+  if (data.currency_code != null) payload.currencyCode = String(data.currency_code);
   if (data.delivery_time != null) payload.deliveryTime = String(data.delivery_time);
   if (data.bidder_description != null) payload.bidderDescription = String(data.bidder_description);
   if (data.compliance_deviation != null) payload.complianceDeviation = String(data.compliance_deviation);

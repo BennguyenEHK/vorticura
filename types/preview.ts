@@ -124,6 +124,7 @@ export interface SupplierSearchDocumentData {
     supplier_name: string;
     bidder_description: string;
     bidder_unit_price: number;
+    currency_code: string;     // Supplier proposal currency (from supplier_item_status)
     delivery_time: string;
     contact_email: string;
     contact_phone: string;
@@ -146,6 +147,7 @@ export interface ItemsOrderingSupplier {
   supplier_id: number | null;
   supplier_name: string;
   unit_price: number | null;        // bidder_unit_price from supplier_item_status
+  currency_code: string | null;     // currency_code from supplier_item_status (per-supplier proposal)
   lead_time: string | null;         // delivery_time from supplier_item_status
   status: 'sent' | 'quoted' | 'awarded' | 'declined';
   contact_email: string | null;

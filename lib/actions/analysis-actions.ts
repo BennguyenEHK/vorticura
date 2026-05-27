@@ -245,7 +245,6 @@ function mergeExtractionWithAI(
     },
     rfq_items: extracted.rfq_items.map(item => ({
       item_id: item.item_id,
-      currency_code: item.currency_code,
       company_requirement: {
         company_description: item.company_description,
         qty: item.qty,

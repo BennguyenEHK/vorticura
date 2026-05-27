@@ -48,7 +48,6 @@ export interface DeterministicData {
     company_description: string;
     qty: number;
     uom: string;
-    currency_code: string;
   }>;
   required_currency: string;
   deadline_period: string | null;
@@ -73,7 +72,6 @@ export interface MergedAnalysisData {
   };
   rfq_items: Array<{
     item_id: number;
-    currency_code: string;
     company_requirement: {
       company_description: string;
       qty: number;

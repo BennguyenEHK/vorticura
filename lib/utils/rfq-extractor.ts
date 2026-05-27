@@ -25,7 +25,6 @@ export interface ExtractedItem {
   company_description: string;
   qty: number;
   uom: string;
-  currency_code: string;
 }
 
 /** Incoming email fields required for extraction */
@@ -271,20 +270,20 @@ function extractFax(body: string): string {
  * Strategy 1: Pipe-delimited table (email body format)
  * Strategy 2: PDF-extracted structured text (item number, maximo, description on separate lines, QTY block)
  */
-export function extractRfqItems(text: string, defaultCurrency: string = 'USD'): ExtractedItem[] {
+export function extractRfqItems(text: string): ExtractedItem[] {
   // Strategy 1: Pipe-delimited tables (existing logic)
-  const pipeItems = extractPipeDelimitedItems(text, defaultCurrency);
+  const pipeItems = extractPipeDelimitedItems(text);
   if (pipeItems.length > 0) return pipeItems;
 
   // Strategy 2: PDF-extracted structured text
-  const pdfItems = extractPdfStructuredItems(text, defaultCurrency);
+  const pdfItems = extractPdfStructuredItems(text);
   if (pdfItems.length > 0) return pdfItems;
 
   return [];
 }
 
 /** Strategy 1: Pipe-delimited table rows */
-function extractPipeDelimitedItems(body: string, defaultCurrency: string): ExtractedItem[] {
+function extractPipeDelimitedItems(body: string): ExtractedItem[] {
   const items: ExtractedItem[] = [];
   const pipeRows = body.match(/^\d+\s*\|.+$/gm);
   if (!pipeRows?.length) return items;
@@ -305,13 +304,13 @@ function extractPipeDelimitedItems(body: string, defaultCurrency: string): Extra
     const uomMatch = lastCell.match(/\(([A-Z]+)\)/i);
     const uom = uomMatch ? uomMatch[1].toUpperCase() : 'EA';
 
-    items.push({ item_id: itemNum, company_description: description, qty, uom, currency_code: defaultCurrency });
+    items.push({ item_id: itemNum, company_description: description, qty, uom });
   }
   return items;
 }
 
 /** Strategy 2: PDF-extracted text where items and QTY are in separate blocks */
-function extractPdfStructuredItems(text: string, defaultCurrency: string): ExtractedItem[] {
+function extractPdfStructuredItems(text: string): ExtractedItem[] {
   const items: ExtractedItem[] = [];
 
   // Locate the "Scope of Requirement" section (or "Description of Goods/Services")
@@ -332,7 +331,7 @@ function extractPdfStructuredItems(text: string, defaultCurrency: string): Extra
 
     if (/^\d{1,2}$/.test(line)) {
       const num = parseInt(line, 10);
-      if (currentItem) items.push(buildItemFromBlock(currentItem, defaultCurrency));
+      if (currentItem) items.push(buildItemFromBlock(currentItem));
       currentItem = { num, maximo: '', descLines: [] };
       continue;
     }
@@ -347,7 +346,7 @@ function extractPdfStructuredItems(text: string, defaultCurrency: string): Extra
     if (/^QTY\b/i.test(line) || /^Page\s+\d/i.test(line)) break;
     currentItem.descLines.push(line);
   }
-  if (currentItem) items.push(buildItemFromBlock(currentItem, defaultCurrency));
+  if (currentItem) items.push(buildItemFromBlock(currentItem));
 
   // ── Parse QTY block ──
   const qtyBlockMatch = text.match(
@@ -366,8 +365,7 @@ function extractPdfStructuredItems(text: string, defaultCurrency: string): Extra
 
 /** Build ExtractedItem from a parsed block */
 function buildItemFromBlock(
-  block: { num: number; maximo: string; descLines: string[] },
-  currency: string
+  block: { num: number; maximo: string; descLines: string[] }
 ): ExtractedItem {
   const desc = block.descLines.join(' ').trim();
   const fullDesc = block.maximo ? `${block.maximo} | ${desc}` : desc;
@@ -376,7 +374,6 @@ function buildItemFromBlock(
     company_description: fullDesc,
     qty: 1,  // Default — will be overwritten by QTY block parsing
     uom: 'EA',
-    currency_code: currency,
   };
 }
 
@@ -493,7 +490,7 @@ export function extractAll(email: IncomingEmailFields): ExtractionResult {
     : extractDeadline(bodyText);
 
   // ── Extract items (attachment first, then body) ──
-  const rfqItems = extractRfqItems(attachmentThenBody, requiredCurrency);
+  const rfqItems = extractRfqItems(attachmentThenBody);
 
   // ── Extract customer contact (attachment-first for phone/fax/attn/cc) ──
   const customer = extractCustomerFromHeaders({

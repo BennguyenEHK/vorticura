@@ -22,10 +22,10 @@ import type {
   PricingVariable,
   CalculatedPricing,
 } from "@/types/pricing";
-import { DEFAULT_PRICING_VARIABLES } from "@/types/pricing";
 import { currencyService } from "@/lib/services/pricing";
 import { fetchQuotationForPricing } from "@/lib/actions/thread-ai-actions";
 import { usePreview } from "@/hooks/preview-context";
+import { handleHTTPRequest } from "@/lib/data-processor";
 
 // ---------------------------------------------
 // Context Creation
@@ -112,7 +112,18 @@ export function PricingPanelProvider({
         }
         setQuotationId(data.quotationId);
         setItems(data.items as QuotationItem[]);
-        setVariables(data.variables as PricingVariable[]);
+        // Ghost-mode: only adopt a variable value if a saved row exists for it
+        // (data.variables comes from quotation_pricing rows). Otherwise leave
+        // the field null so the UI shows the default as placeholder text.
+        const ghostVariables: PricingVariable[] = (data.variables as unknown as Array<Record<string, unknown>>).map(v => ({
+          item_id: Number(v.item_id),
+          shipping_cost: v.shipping_cost == null ? null : Number(v.shipping_cost),
+          tax_rate: v.tax_rate == null ? null : Number(v.tax_rate),
+          exchange_rate: v.exchange_rate == null ? null : Number(v.exchange_rate),
+          profit_rate: v.profit_rate == null ? null : Number(v.profit_rate),
+          discount_rate: v.discount_rate == null ? null : Number(v.discount_rate),
+        }));
+        setVariables(ghostVariables);
       })
       .catch(err => {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load pricing data');
@@ -138,7 +149,7 @@ export function PricingPanelProvider({
 
   /** Update a single pricing variable for an item */
   const updateVariable = useCallback(
-    (itemId: number, field: keyof Omit<PricingVariable, "item_id">, value: number) => {
+    (itemId: number, field: keyof Omit<PricingVariable, "item_id">, value: number | null) => {
       setVariables((prev) =>
         prev.map((v) => (v.item_id === itemId ? { ...v, [field]: value } : v))
       );
@@ -148,7 +159,7 @@ export function PricingPanelProvider({
 
   /** Bulk update a pricing variable across multiple items */
   const bulkUpdateVariable = useCallback(
-    (itemIds: number[], field: keyof Omit<PricingVariable, "item_id">, value: number) => {
+    (itemIds: number[], field: keyof Omit<PricingVariable, "item_id">, value: number | null) => {
       setVariables((prev) =>
         prev.map((v) =>
           itemIds.includes(v.item_id) ? { ...v, [field]: value } : v
@@ -164,26 +175,56 @@ export function PricingPanelProvider({
     currencyService.saveTargetCurrency(currency);
   }, []);
 
-  /** Apply pricing calculations (placeholder for server action) */
+  /** Apply pricing calculations via server action */
   const applyPricing = useCallback(async () => {
+    if (!quotationId || variables.length === 0) {
+      setError("No quotation loaded — generate a quote first.");
+      return;
+    }
     setIsCalculating(true);
     setError(null);
     try {
-      // TODO: Integrate with server action to calculate pricing
+      const payload = {
+        data_type: 'quotation' as const,
+        action_type: 'calculate' as const,
+        quotation_id: quotationId,
+        pricing_variables: variables.map(v => ({
+          item_id: v.item_id,
+          shipping_cost: v.shipping_cost,
+          tax_rate: v.tax_rate,
+          exchange_rate: v.exchange_rate,
+          profit_rate: v.profit_rate,
+          discount_rate: v.discount_rate,
+        })),
+      };
+      const result = await handleHTTPRequest(payload) as { success: boolean; data?: any; error?: string };
+      if (!result.success) {
+        setError(result.error || 'Pricing calculation failed');
+      } else {
+        const calculated: CalculatedPricing[] = result.data.calculated_pricing;
+        setCalculatedPricing(calculated);
+        const partialErrors = result.data.errors;
+        if (Array.isArray(partialErrors) && partialErrors.length > 0) {
+          setError(`Calculated with ${partialErrors.length} partial error${partialErrors.length > 1 ? 's' : ''}. First: ${partialErrors[0].error}`);
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Pricing calculation failed");
     } finally {
       setIsCalculating(false);
     }
-  }, []);
+  }, [quotationId, variables]);
 
-  /** Reset all variables to defaults */
+  /** Reset all variables to ghost-mode (null = default-as-placeholder). */
   const resetVariables = useCallback(() => {
     setVariables((prev) =>
       prev.map((v) => ({
-        ...v,
-        ...DEFAULT_PRICING_VARIABLES,
-        item_id: v.item_id, // Preserve item ID
+        item_id: v.item_id,
+        shipping_cost: null,
+        tax_rate: null,
+        exchange_rate: null,
+        profit_rate: null,
+        discount_rate: null,
       }))
     );
     setCalculatedPricing([]);

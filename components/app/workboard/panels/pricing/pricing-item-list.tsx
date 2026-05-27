@@ -12,6 +12,18 @@ import { PricingItemCard } from "./pricing-item-card";
 import { BulkUpdatePopover } from "./bulk-update-popover";
 import type { PricingVariable, BulkUpdateState } from "@/types/pricing";
 
+// Convert a raw numeric variable value to the string the popover input
+// should pre-fill. Mirrors the focused-state formatting in pricing-item-card:
+// discount_rate is stored as decimal (0.05) but displayed as percent ("5").
+function variableToInputString(
+  field: keyof Omit<PricingVariable, "item_id">,
+  value: number | null
+): string {
+  if (value === null) return "";
+  if (field === "discount_rate") return String(value * 100);
+  return String(value);
+}
+
 // ---------------------------------------------
 // Component
 // ---------------------------------------------
@@ -55,7 +67,10 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
     );
   }, [items, searchTerm]);
 
-  // Handle context menu on input field
+  // Handle context menu on input field.
+  // Seed the popover from the raw numeric variable (not the formatted DOM
+  // value), so right-clicking an unfocused "50,000"-displayed field doesn't
+  // re-parse as 50 via the strip-commas parser.
   const handleContextMenu = useCallback(
     (
       event: React.MouseEvent,
@@ -63,19 +78,22 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
     ) => {
       event.preventDefault();
 
-      // Get current value from clicked item
-      const target = event.target as HTMLInputElement;
-      const currentValue = target.value;
+      // Resolve the clicked item from data-item-id attribute on the card.
+      // Falls back to the first filtered item if the attribute is missing.
+      const cardEl = (event.target as HTMLElement).closest('[data-item-id]') as HTMLElement | null;
+      const clickedId = cardEl ? Number(cardEl.dataset.itemId) : filteredItems[0]?.item_id;
+      const clickedVar = variablesMap.get(clickedId ?? -1);
+      const seed = clickedVar ? variableToInputString(field, clickedVar[field]) : '';
 
       setBulkState({
         isOpen: true,
         field,
         selectedItemIds: filteredItems.map((item) => item.item_id),
-        value: currentValue,
+        value: seed,
         anchorPosition: { x: event.clientX, y: event.clientY },
       });
     },
-    [filteredItems]
+    [filteredItems, variablesMap]
   );
 
   // Close bulk update popover
@@ -83,16 +101,17 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
     setBulkState((prev) => ({ ...prev, isOpen: false }));
   }, []);
 
-  // Get default variable if not found
+  // Ghost-mode fallback when no row exists: all fields null so the UI shows
+  // the default values as placeholders (not as actual values).
   const getVariables = (itemId: number): PricingVariable => {
     return (
       variablesMap.get(itemId) || {
         item_id: itemId,
-        shipping_cost: 0,
-        tax_rate: 1.1,
-        exchange_rate: 1.0,
-        profit_rate: 1.25,
-        discount_rate: 0,
+        shipping_cost: null,
+        tax_rate: null,
+        exchange_rate: null,
+        profit_rate: null,
+        discount_rate: null,
       }
     );
   };

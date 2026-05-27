@@ -202,6 +202,10 @@ async function fetchPreviewByType(
       ]);
       const analysis = analysisRows[0];
       if (!analysis) return null;
+      // currency_code lives on supplier_item_status now; at the analysis stage
+      // (pre-supplier) we display rfq_analysis.required_currency as the buyer's
+      // requested transfer currency.
+      const requiredCurrency = String(analysis.requiredCurrency ?? 'USD');
       return {
         rfq_analysis: {
           subject: analysis.subject,
@@ -214,7 +218,7 @@ async function fetchPreviewByType(
             qty: item.qty,
             uom: item.uom,
           },
-          currency_code: item.currencyCode,
+          currency_code: requiredCurrency,
         })),
         rfq_id: rfqId,
       };
@@ -243,6 +247,7 @@ async function fetchPreviewByType(
           supplier_name: item.supplierName,
           bidder_description: item.bidderDescription,
           bidder_unit_price: item.bidderUnitPrice,
+          currency_code: item.currencyCode ?? 'USD',  // From supplier_item_status (per-supplier proposal)
           delivery_time: item.deliveryTime,
           contact_email: item.contactEmail,
           contact_phone: item.contactPhone,
@@ -287,6 +292,7 @@ async function fetchPreviewByType(
     const analysis = rows[0];
     if (!analysis) return null;
     const itemRows = await getData('rfqItems', { rfqId }, workspace);
+    const requiredCurrency = String(analysis.requiredCurrency ?? 'USD');
     return {
       rfq_analysis: {
         subject: analysis.subject,
@@ -299,7 +305,7 @@ async function fetchPreviewByType(
           qty: item.qty,
           uom: item.uom,
         },
-        currency_code: item.currencyCode,
+        currency_code: requiredCurrency,
       })),
       rfq_id: rfqId,
     };

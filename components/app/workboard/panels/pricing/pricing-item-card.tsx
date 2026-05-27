@@ -3,13 +3,21 @@
 // =============================================
 // PRICING ITEM CARD - Per-item variable inputs
 // =============================================
-// Displays item info and editable pricing variables
-// Supports right-click for bulk update context menu
+// Displays item info and editable pricing variables.
+// Each input is *string-backed* during editing so partial-typing tokens
+// (e.g. "1.", "5,") survive re-renders. We only commit to numeric state
+// when the input parses to a complete number (parseFormattedNumber returns
+// non-null). On blur, we commit the latest typed value (resolves "1." → 1).
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { usePricingPanel } from "./pricing-panel-provider";
-import { VARIABLE_FIELDS, type QuotationItem, type PricingVariable } from "@/types/pricing";
+import {
+  VARIABLE_FIELDS,
+  DEFAULT_PRICING_VARIABLES,
+  type QuotationItem,
+  type PricingVariable,
+} from "@/types/pricing";
 import { formatNumber, parseFormattedNumber } from "@/lib/services/pricing/validation";
 
 // ---------------------------------------------
@@ -27,12 +35,56 @@ interface PricingItemCardProps {
 }
 
 // ---------------------------------------------
+// Helpers
+// ---------------------------------------------
+
+type VarField = keyof Omit<PricingVariable, "item_id">;
+
+/** Convert a numeric variable value to the string shown when the input is
+ *  focused (raw, no thousand separators). Returns "" for null. */
+function rawString(field: VarField, value: number | null): string {
+  if (value === null) return "";
+  if (field === "discount_rate") return String(value * 100);
+  return String(value);
+}
+
+/** Convert a numeric variable value to the string shown when the input is
+ *  *not* focused (formatted display). Returns "" for null so the placeholder
+ *  (ghost default) shows through. */
+function formattedString(field: VarField, value: number | null): string {
+  if (value === null) return "";
+  const config = VARIABLE_FIELDS.find((f) => f.key === field);
+  switch (config?.format) {
+    case "currency":
+      return formatNumber(value, 0);
+    case "percent":
+      return (value * 100).toFixed(1);
+    case "rate":
+    default:
+      return String(value);
+  }
+}
+
+/** Ghost placeholder string for a field, derived from DEFAULT_PRICING_VARIABLES.
+ *  This is what the user sees when the field is null and unfocused. */
+function placeholderFor(field: VarField): string {
+  const def = DEFAULT_PRICING_VARIABLES[field];
+  if (field === "discount_rate") return String(def * 100); // 0 → "0"
+  return String(def);
+}
+
+// ---------------------------------------------
 // Component
 // ---------------------------------------------
 
 /**
- * PricingItemCard - Individual item with pricing variable inputs
- * Uses design tokens: border-border, text-foreground, bg-brand-muted, text-brand-dark
+ * PricingItemCard - Individual item with pricing variable inputs.
+ *
+ * Carries a per-field draft string in local state. The driver here is the
+ * draft, not the numeric variables: as the user types we update the draft
+ * immediately and only commit to the upstream provider when the draft is a
+ * complete number. This keeps partial-typing tokens like "1." stable across
+ * re-renders.
  */
 export function PricingItemCard({
   item,
@@ -40,11 +92,35 @@ export function PricingItemCard({
   onContextMenu,
   className = "",
 }: PricingItemCardProps) {
-  // Get update action from context
-  const { updateVariable, targetCurrency } = usePricingPanel();
+  const { updateVariable } = usePricingPanel();
 
-  // Local state for input formatting
-  const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [focusedField, setFocusedField] = useState<VarField | null>(null);
+  // Per-field input draft. Object indexed by field key.
+  const [drafts, setDrafts] = useState<Record<VarField, string>>({
+    shipping_cost: "",
+    tax_rate: "",
+    exchange_rate: "",
+    profit_rate: "",
+    discount_rate: "",
+  });
+
+  // Re-sync drafts from upstream variables whenever they change AND the field
+  // isn't currently being edited. Without this guard, an upstream re-render
+  // during typing would clobber the in-flight draft.
+  const focusedFieldRef = useRef<VarField | null>(null);
+  useEffect(() => {
+    focusedFieldRef.current = focusedField;
+  }, [focusedField]);
+  useEffect(() => {
+    setDrafts((prev) => {
+      const next = { ...prev };
+      (Object.keys(prev) as VarField[]).forEach((field) => {
+        if (focusedFieldRef.current === field) return; // don't clobber active draft
+        next[field] = formattedString(field, variables[field]);
+      });
+      return next;
+    });
+  }, [variables]);
 
   // Truncate description for display
   const truncateText = (text: string, maxLength: number) => {
@@ -52,51 +128,77 @@ export function PricingItemCard({
     return text.substring(0, maxLength) + "...";
   };
 
-  // Handle input change
+  // Per-field handlers --------------------------------------------------------
+
+  const handleFocus = useCallback(
+    (field: VarField) => {
+      setFocusedField(field);
+      // On focus, swap formatted display for raw (no thousand separators) so
+      // editing is intuitive. Empty for null.
+      setDrafts((prev) => ({ ...prev, [field]: rawString(field, variables[field]) }));
+    },
+    [variables]
+  );
+
   const handleChange = useCallback(
-    (field: keyof Omit<PricingVariable, "item_id">, rawValue: string) => {
-      const parsed = parseFormattedNumber(rawValue);
-      if (parsed !== null) {
-        // For discount rate, convert percentage to decimal (5% -> 0.05)
-        const value = field === "discount_rate" ? parsed / 100 : parsed;
-        updateVariable(item.item_id, field, value);
+    (field: VarField, rawValue: string) => {
+      // Always reflect the user's keystrokes in the draft, even if not yet a
+      // complete number. This is what makes "1." stable while typing toward "1.5".
+      setDrafts((prev) => ({ ...prev, [field]: rawValue }));
+
+      // Empty string → clear the upstream value (back to ghost / use default).
+      if (rawValue.trim() === "") {
+        updateVariable(item.item_id, field, null);
+        return;
       }
+
+      const parsed = parseFormattedNumber(rawValue);
+      if (parsed === null) return; // partial token (e.g. "1.") — wait for more input
+
+      const finalValue = field === "discount_rate" ? parsed / 100 : parsed;
+      updateVariable(item.item_id, field, finalValue);
     },
     [item.item_id, updateVariable]
   );
 
-  // Handle right-click for bulk update
+  const handleBlur = useCallback(
+    (field: VarField) => {
+      setFocusedField(null);
+
+      // Commit the trailing draft on blur: if the user left "1." in the field,
+      // resolve it to 1 (or to null when empty/garbage).
+      const draft = drafts[field];
+      if (draft.trim() === "") {
+        updateVariable(item.item_id, field, null);
+      } else {
+        const parsed = parseFormattedNumber(draft);
+        if (parsed !== null) {
+          const finalValue = field === "discount_rate" ? parsed / 100 : parsed;
+          updateVariable(item.item_id, field, finalValue);
+        }
+        // If parse still null after blur (e.g. literally "abc"), leave the
+        // upstream value alone; the next render will replace the draft with
+        // whatever variables[field] currently is.
+      }
+
+      // After blur, re-derive draft from the (now committed) upstream value
+      // so the display flips to formatted.
+      // The variables-driven useEffect will handle that on the next render.
+    },
+    [drafts, item.item_id, updateVariable]
+  );
+
   const handleContextMenu = useCallback(
-    (event: React.MouseEvent, field: keyof Omit<PricingVariable, "item_id">) => {
+    (event: React.MouseEvent, field: VarField) => {
       event.preventDefault();
       onContextMenu?.(event, field);
     },
     [onContextMenu]
   );
 
-  // Format value for display
-  const formatValue = (field: keyof Omit<PricingVariable, "item_id">, value: number) => {
-    // When focused, show raw number for editing
-    if (focusedField === field) {
-      return field === "discount_rate" ? (value * 100).toString() : value.toString();
-    }
-
-    // Format based on field type
-    const config = VARIABLE_FIELDS.find((f) => f.key === field);
-    switch (config?.format) {
-      case "currency":
-        return formatNumber(value, 0);
-      case "percent":
-        return (value * 100).toFixed(1);
-      case "rate":
-        return value.toString();
-      default:
-        return value.toString();
-    }
-  };
-
   return (
     <div
+      data-item-id={item.item_id}
       className={`border border-border rounded-lg p-3 bg-card hover:border-brand/30
                   transition-colors ${className}`}
     >
@@ -115,22 +217,19 @@ export function PricingItemCard({
       <div className="grid grid-cols-2 gap-2">
         {VARIABLE_FIELDS.map((field) => (
           <div key={field.key} className="space-y-1">
-            {/* Label */}
             <label className="text-xs text-muted-foreground block">
               {field.label}
             </label>
-            {/* Input with right-click support */}
             <Input
               type="text"
-              value={formatValue(field.key, variables[field.key])}
+              value={drafts[field.key]}
               onChange={(e) => handleChange(field.key, e.target.value)}
-              onFocus={() => setFocusedField(field.key)}
-              onBlur={() => setFocusedField(null)}
+              onFocus={() => handleFocus(field.key)}
+              onBlur={() => handleBlur(field.key)}
               onContextMenu={(e) => handleContextMenu(e, field.key)}
               className="h-7 text-xs px-2"
-              placeholder={`Enter ${field.label.toLowerCase()}`}
+              placeholder={placeholderFor(field.key)}
             />
-            {/* Hint text */}
             <p className="text-[10px] text-placeholder truncate">{field.hint}</p>
           </div>
         ))}

@@ -42,6 +42,7 @@ interface ItemSourceRow {
   delivery_time: string;
   bidder_description: string;
   bidder_unit_price: number;
+  currency_code: string;
   compliance_deviation: string;
   notes: string;
   contact_email: string;
@@ -109,7 +110,8 @@ function buildSearchContent(rfqReference: string, rows: ItemSourceRow[], dropped
   }
   // One <br>-separated line per item — readable in the panel preview, no double-<br>s
   const lines = rows.map((r) => {
-    const price = r.bidder_unit_price > 0 ? `USD ${r.bidder_unit_price.toFixed(2)}` : 'price n/a';
+    const ccy = r.currency_code || 'USD';
+    const price = r.bidder_unit_price > 0 ? `${ccy} ${r.bidder_unit_price.toFixed(2)}` : 'price n/a';
     return `• Item #${r.item_id}: ${r.supplier_name} — ${price} — ${r.delivery_time}`;
   });
   const drop = droppedCount > 0 ? `<br>Note: ${droppedCount} candidate URL(s) dropped (offline or homepage-only).` : '';
@@ -163,6 +165,7 @@ async function extractSupplierForItem(item: RfqItemInput): Promise<ItemSourceRow
     delivery_time: extracted.delivery_time,
     bidder_description: extracted.bidder_description,
     bidder_unit_price: extracted.bidder_unit_price,
+    currency_code: extracted.currency_code || 'USD',
     compliance_deviation: extracted.compliance_deviation,
     notes: extracted.notes,
     contact_email: extracted.contact_email,

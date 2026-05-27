@@ -45,24 +45,52 @@ export interface QuotationItem {
 // Pricing Variable Types
 // ---------------------------------------------
 
-/** Pricing variables per item - user configurable */
+/** Pricing variables per item - user configurable.
+ *  Each field is nullable: `null` = "not entered yet, use ghost placeholder";
+ *  a concrete number = "user has typed a value".
+ *  Server-side calculation substitutes defaults for any still-null field.
+ */
 export interface PricingVariable {
   item_id: number;                    // Links to QuotationItem.item_id
-  shipping_cost: number;              // Shipping cost per unit (e.g., 50000 VND)
-  tax_rate: number;                   // Tax multiplier (e.g., 1.1 = 10% tax)
-  exchange_rate: number;              // Exchange rate (e.g., 24000 for USD→VND)
-  profit_rate: number;                // Profit multiplier (e.g., 1.25 = 25% profit)
-  discount_rate: number;              // Discount as decimal (e.g., 0.05 = 5% off)
+  shipping_cost: number | null;       // Shipping cost per unit (e.g., 50000 VND)
+  tax_rate: number | null;            // Tax multiplier (e.g., 1.1 = 10% tax)
+  exchange_rate: number | null;       // Exchange rate (e.g., 24000 for USD→VND)
+  profit_rate: number | null;         // Profit multiplier (e.g., 1.25 = 25% profit)
+  discount_rate: number | null;       // Discount as decimal (e.g., 0.05 = 5% off)
 }
 
-/** Default pricing variable values */
-export const DEFAULT_PRICING_VARIABLES: Omit<PricingVariable, 'item_id'> = {
+/** Pricing variables after server-side default substitution (all numeric). */
+export interface ResolvedPricingVariable {
+  item_id: number;
+  shipping_cost: number;
+  tax_rate: number;
+  exchange_rate: number;
+  profit_rate: number;
+  discount_rate: number;
+}
+
+/** Default pricing variable values — placeholders shown as ghost text;
+ *  also used by the server to fill nulls right before calling the calculator.
+ */
+export const DEFAULT_PRICING_VARIABLES: Omit<ResolvedPricingVariable, 'item_id'> = {
   shipping_cost: 0,
   tax_rate: 1.1,        // 10% tax
   exchange_rate: 1.0,   // No conversion (same currency)
   profit_rate: 1.25,    // 25% profit margin
   discount_rate: 0,     // No discount
 };
+
+/** Resolve nullable variables to concrete numbers by substituting defaults. */
+export function resolvePricingVariable(v: PricingVariable): ResolvedPricingVariable {
+  return {
+    item_id: v.item_id,
+    shipping_cost: v.shipping_cost ?? DEFAULT_PRICING_VARIABLES.shipping_cost,
+    tax_rate: v.tax_rate ?? DEFAULT_PRICING_VARIABLES.tax_rate,
+    exchange_rate: v.exchange_rate ?? DEFAULT_PRICING_VARIABLES.exchange_rate,
+    profit_rate: v.profit_rate ?? DEFAULT_PRICING_VARIABLES.profit_rate,
+    discount_rate: v.discount_rate ?? DEFAULT_PRICING_VARIABLES.discount_rate,
+  };
+}
 
 /** Variable field metadata for UI rendering */
 export interface VariableFieldConfig {
@@ -204,8 +232,8 @@ export interface PricingPanelState {
 /** Pricing panel context actions */
 export interface PricingPanelActions {
   loadQuotationData: (quotationId: number) => Promise<void>;
-  updateVariable: (itemId: number, field: keyof Omit<PricingVariable, 'item_id'>, value: number) => void;
-  bulkUpdateVariable: (itemIds: number[], field: keyof Omit<PricingVariable, 'item_id'>, value: number) => void;
+  updateVariable: (itemId: number, field: keyof Omit<PricingVariable, 'item_id'>, value: number | null) => void;
+  bulkUpdateVariable: (itemIds: number[], field: keyof Omit<PricingVariable, 'item_id'>, value: number | null) => void;
   setTargetCurrency: (currency: Currency) => void;
   setSearchTerm: (term: string) => void;
   applyPricing: () => Promise<void>;

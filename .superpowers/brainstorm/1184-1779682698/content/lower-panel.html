@@ -1,0 +1,96 @@
+<h2>Question 4 — Lower Panel: Email Viewer Mode</h2>
+<p class="subtitle">When an operator clicks a supplier row, what does the lower panel show?</p>
+
+<div class="cards">
+
+  <!-- Option A: Read-only viewer -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-family:monospace;font-size:11px;padding:10px;background:#0f1117;border-radius:6px">
+        <div style="color:#6b7280;margin-bottom:6px;font-size:10px">LOWER PANEL — DEF Ltd · Valve XY23</div>
+        <div style="background:#1f2937;border-radius:4px;padding:8px;margin-bottom:6px">
+          <div style="color:#9ca3af;font-size:10px">From: john@deflimited.com · 2h ago</div>
+          <div style="color:#e5e7eb;margin-top:4px;font-size:11px">Subject: Re: RFQ – Valve XY23 (50 units)</div>
+          <div style="color:#9ca3af;margin-top:6px;font-size:10px;line-height:1.5">
+            Hi, thank you for your inquiry.<br>
+            Unit price: $44.00 FOB Shanghai<br>
+            Lead time: 3 weeks<br>
+            MOQ: 10 units<br>
+            Please find our quote attached.
+          </div>
+        </div>
+        <div style="color:#6b7280;font-size:10px">↳ Read-only. No actions.</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Read-Only Email Viewer</h3>
+      <p>Displays the raw sent or received email. Clean and simple. Operator reads the email and manually updates the row status. No reply capability from this panel.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Thread view with actions -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-family:monospace;font-size:11px;padding:10px;background:#0f1117;border-radius:6px">
+        <div style="color:#6b7280;margin-bottom:6px;font-size:10px">LOWER PANEL — DEF Ltd · Valve XY23 · 2 messages</div>
+        <div style="background:#1f2937;border-radius:4px;padding:8px;margin-bottom:4px">
+          <div style="color:#9ca3af;font-size:10px">→ You · 1d ago</div>
+          <div style="color:#9ca3af;font-size:10px;margin-top:2px">RFQ – Valve XY23 (50 units) · [sent]</div>
+        </div>
+        <div style="background:#1e3a5f;border-radius:4px;padding:8px;margin-bottom:6px">
+          <div style="color:#93c5fd;font-size:10px">← DEF Ltd · 2h ago</div>
+          <div style="color:#e5e7eb;font-size:10px;margin-top:2px">Unit price: $44.00 · Lead: 3wk · MOQ: 10</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <div style="background:#2563eb;color:white;padding:4px 8px;border-radius:4px;font-size:10px">Reply</div>
+          <div style="background:#065f46;color:#4ade80;padding:4px 8px;border-radius:4px;font-size:10px">Mark Quoted ✓</div>
+          <div style="background:#374151;color:#e5e7eb;padding:4px 8px;border-radius:4px;font-size:10px">Award</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Thread View + Inline Actions ✦ Recommended</h3>
+      <p>Full conversation thread (sent + received). Action buttons: Reply, Mark Quoted, Award to this supplier. Operator can act without leaving the panel.</p>
+    </div>
+  </div>
+
+  <!-- Option C: AI-extracted terms sidebar -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-family:monospace;font-size:11px;padding:10px;background:#0f1117;border-radius:6px;display:flex;gap:8px">
+        <div style="flex:1.2">
+          <div style="color:#6b7280;font-size:10px;margin-bottom:4px">EMAIL</div>
+          <div style="color:#9ca3af;font-size:10px;line-height:1.5">
+            Hi, thank you for<br>your inquiry...<br>
+            Unit price: $44.00<br>
+            Lead time: 3 weeks<br>
+            MOQ: 10 units...
+          </div>
+        </div>
+        <div style="flex:1;border-left:1px solid #1f2937;padding-left:8px">
+          <div style="color:#6b7280;font-size:10px;margin-bottom:4px">✨ AI EXTRACTED</div>
+          <div style="background:#1f2937;border-radius:3px;padding:4px;margin-bottom:3px">
+            <div style="color:#9ca3af;font-size:9px">Unit Price</div>
+            <div style="color:#4ade80;font-size:11px">$44.00</div>
+          </div>
+          <div style="background:#1f2937;border-radius:3px;padding:4px;margin-bottom:3px">
+            <div style="color:#9ca3af;font-size:9px">Lead Time</div>
+            <div style="color:#e5e7eb;font-size:11px">3 weeks</div>
+          </div>
+          <div style="background:#1f2937;border-radius:3px;padding:4px">
+            <div style="color:#9ca3af;font-size:9px">MOQ</div>
+            <div style="color:#e5e7eb;font-size:11px">10 units</div>
+          </div>
+          <div style="background:#065f46;color:#4ade80;padding:4px 8px;border-radius:4px;font-size:10px;margin-top:6px;text-align:center">Accept Terms ✓</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Email + AI-Extracted Terms</h3>
+      <p>Raw email on left, AI-parsed structured fields on right (price, lead time, MOQ, incoterms). One-click "Accept Terms" pushes values into the table row. Most powerful but requires AI parsing per email.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:16px">Click your preferred lower panel mode in the browser or reply here.</p>

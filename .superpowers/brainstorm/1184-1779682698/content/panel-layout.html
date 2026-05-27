@@ -1,0 +1,106 @@
+<h2>Question 5 — Full Panel Layout & Proportions</h2>
+<p class="subtitle">How should the overall items_ordering workspace be structured? These are the three main candidates.</p>
+
+<div class="cards">
+
+  <!-- Option A: Fixed 50/50 split -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-family:monospace;font-size:10px;padding:10px;background:#0f1117;border-radius:6px">
+        <!-- Readiness strip -->
+        <div style="background:#1f2937;border-radius:3px;padding:5px 8px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+          <span style="color:#9ca3af">📦 8/10 quoted &nbsp;⚠️ 1 declined &nbsp;⏳ 1 awaiting</span>
+          <span style="background:#2563eb;color:white;padding:2px 8px;border-radius:3px">Generate Quote →</span>
+        </div>
+        <!-- Upper: table (50%) -->
+        <div style="background:#1f2937;border-radius:3px;padding:6px;margin-bottom:4px;height:70px;overflow:hidden">
+          <div style="color:#6b7280;font-size:9px;margin-bottom:3px">ITEMS TABLE — 50%</div>
+          <div style="color:#60a5fa">▼ Valve XY23 &nbsp;│ 3 quotes │ $42.00 │ awaiting</div>
+          <div style="color:#9ca3af;padding-left:10px">&nbsp;ABC Corp &nbsp;│ $42.00 │ quoted</div>
+          <div style="color:#9ca3af;padding-left:10px">&nbsp;DEF Ltd &nbsp;&nbsp;│ — &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ sent</div>
+        </div>
+        <!-- Divider -->
+        <div style="border-top:2px dashed #374151;margin:4px 0;text-align:center;color:#4b5563;font-size:9px">── drag to resize ──</div>
+        <!-- Lower: email (50%) -->
+        <div style="background:#1f2937;border-radius:3px;padding:6px;height:70px;overflow:hidden">
+          <div style="color:#6b7280;font-size:9px;margin-bottom:3px">EMAIL THREAD — 50%</div>
+          <div style="color:#93c5fd;font-size:9px">✨ ABC Corp quoted $42.00 · 2wk lead · awaiting award</div>
+          <div style="color:#9ca3af;margin-top:3px;font-size:9px">→ You: RFQ – Valve XY23...</div>
+          <div style="color:#e5e7eb;font-size:9px">← ABC Corp: Unit price $42...</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Fixed 50/50 with Drag Divider</h3>
+      <p>Table and email viewer share equal height. Draggable divider lets operator adjust on the fly. Simple mental model, always both panels visible.</p>
+    </div>
+  </div>
+
+  <!-- Option B: 60/40 table-heavy -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-family:monospace;font-size:10px;padding:10px;background:#0f1117;border-radius:6px">
+        <!-- Readiness strip -->
+        <div style="background:#1f2937;border-radius:3px;padding:5px 8px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+          <span style="color:#9ca3af">📦 8/10 quoted &nbsp;⚠️ 1 declined &nbsp;⏳ 1 awaiting</span>
+          <span style="background:#2563eb;color:white;padding:2px 8px;border-radius:3px">Generate Quote →</span>
+        </div>
+        <!-- Upper: table (60%) -->
+        <div style="background:#1f2937;border-radius:3px;padding:6px;margin-bottom:4px;height:90px;overflow:hidden">
+          <div style="color:#6b7280;font-size:9px;margin-bottom:3px">ITEMS TABLE — 60%</div>
+          <div style="color:#60a5fa">▼ Valve XY23 &nbsp;│ 3 quotes │ $42.00 │ awaiting</div>
+          <div style="color:#9ca3af;padding-left:10px">&nbsp;ABC Corp &nbsp;│ $42.00 │ 2wk │ quoted</div>
+          <div style="color:#9ca3af;padding-left:10px">&nbsp;DEF Ltd &nbsp;&nbsp;│ — &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ — &nbsp;&nbsp;│ sent</div>
+          <div style="color:#9ca3af;padding-left:10px">&nbsp;GHI Inc &nbsp;&nbsp;│ $47.50 │ 4wk │ quoted</div>
+          <div style="color:#60a5fa">▶ Pump PQ99 &nbsp;&nbsp;│ 2 quotes │ — &nbsp;&nbsp;&nbsp;&nbsp;│ awaiting</div>
+        </div>
+        <!-- Divider -->
+        <div style="border-top:2px dashed #374151;margin:4px 0"></div>
+        <!-- Lower: email (40%) -->
+        <div style="background:#1f2937;border-radius:3px;padding:6px;height:50px;overflow:hidden">
+          <div style="color:#6b7280;font-size:9px;margin-bottom:2px">EMAIL THREAD — 40%</div>
+          <div style="color:#93c5fd;font-size:9px">✨ ABC Corp quoted $42.00 · 2wk lead</div>
+          <div style="color:#9ca3af;font-size:9px">← ABC: Unit price $42.00 FOB...</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — 60% Table / 40% Email ✦ Recommended</h3>
+      <p>Table gets priority — operator spends most time scanning item status. Email thread is still always visible but compact. Summary line handles most cases; scroll to see full thread.</p>
+    </div>
+  </div>
+
+  <!-- Option C: Table full-width, email as slide-up drawer -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-family:monospace;font-size:10px;padding:10px;background:#0f1117;border-radius:6px">
+        <!-- Readiness strip -->
+        <div style="background:#1f2937;border-radius:3px;padding:5px 8px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+          <span style="color:#9ca3af">📦 8/10 quoted &nbsp;⚠️ 1 declined &nbsp;⏳ 1 awaiting</span>
+          <span style="background:#2563eb;color:white;padding:2px 8px;border-radius:3px">Generate Quote →</span>
+        </div>
+        <!-- Full table -->
+        <div style="background:#1f2937;border-radius:3px;padding:6px;height:110px;overflow:hidden">
+          <div style="color:#6b7280;font-size:9px;margin-bottom:3px">ITEMS TABLE — FULL HEIGHT</div>
+          <div style="color:#60a5fa">▼ Valve XY23 &nbsp;│ 3 quotes │ $42.00 │ awaiting</div>
+          <div style="color:#9ca3af;padding-left:10px">&nbsp;ABC Corp &nbsp;│ $42.00 │ 2wk │ quoted</div>
+          <div style="color:#9ca3af;padding-left:10px">&nbsp;DEF Ltd &nbsp;&nbsp;│ — &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ — &nbsp;&nbsp;│ sent</div>
+          <div style="color:#9ca3af;padding-left:10px">&nbsp;GHI Inc &nbsp;&nbsp;│ $47.50 │ 4wk │ quoted</div>
+          <div style="color:#60a5fa">▶ Pump PQ99 &nbsp;&nbsp;│ 2 quotes │ — &nbsp;&nbsp;&nbsp;&nbsp;│ awaiting</div>
+          <div style="color:#60a5fa">▶ Bolt M8×30 &nbsp;│ 1 quote &nbsp;│ $0.80 │ awarded</div>
+        </div>
+        <!-- Slide-up indicator -->
+        <div style="background:#2563eb;border-radius:3px;padding:4px 8px;margin-top:4px;text-align:center;color:white;font-size:9px">
+          ▲ ABC Corp · Valve XY23 — tap to expand thread
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Full-Height Table + Slide-Up Drawer</h3>
+      <p>Table takes the full panel. Clicking a row slides up an email drawer from the bottom (like a mobile sheet). Maximum table visibility — email is on-demand only.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:16px">Click your preferred layout in the browser or reply here.</p>

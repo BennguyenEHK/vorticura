@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>items_ordering — Full Design</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0d14; color: #e5e7eb; font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-size: 13px; padding: 24px; }
+  h1 { font-size: 18px; font-weight: 600; color: #f9fafb; margin-bottom: 4px; }
+  .subtitle { color: #6b7280; font-size: 12px; margin-bottom: 24px; }
+  .phase-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #4b5563; margin-bottom: 8px; }
+  .phase-title { font-size: 14px; font-weight: 600; color: #93c5fd; margin-bottom: 12px; }
+  .card { background: #111827; border: 1px solid #1f2937; border-radius: 10px; overflow: hidden; margin-bottom: 28px; }
+  .card-header { background: #161d2e; border-bottom: 1px solid #1f2937; padding: 10px 16px; display: flex; align-items: center; gap: 8px; font-size: 11px; color: #6b7280; }
+  .card-header .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot-red { background: #ef4444; }
+  .dot-yellow { background: #f59e0b; }
+  .dot-green { background: #22c55e; }
+  .card-body { padding: 16px; }
+
+  /* PHASE 1 */
+  .email-preview { background: #0f1117; border: 1px solid #1f2937; border-radius: 6px; padding: 14px; font-size: 12px; line-height: 1.7; }
+  .email-preview .meta { color: #6b7280; font-size: 11px; margin-bottom: 10px; border-bottom: 1px solid #1f2937; padding-bottom: 8px; }
+  .email-preview .body { color: #d1d5db; }
+  .email-preview .placeholder { color: #4b5563; font-style: italic; }
+  .phase1-footer { display: flex; justify-content: space-between; align-items: center; padding: 10px 0 0; margin-top: 12px; border-top: 1px solid #1f2937; }
+  .btn { padding: 7px 16px; border-radius: 6px; font-size: 12px; font-weight: 500; border: none; cursor: pointer; }
+  .btn-ghost { background: transparent; border: 1px solid #374151; color: #9ca3af; }
+  .btn-primary { background: #2563eb; color: white; }
+  .btn-send { background: #059669; color: white; }
+  .batch-info { font-size: 11px; color: #6b7280; }
+
+  /* PHASE 2 */
+  /* Readiness strip */
+  .readiness-strip { background: #161d2e; border: 1px solid #1f2937; border-radius: 7px; padding: 10px 14px; display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
+  .strip-stats { display: flex; gap: 14px; flex: 1; font-size: 11px; }
+  .stat { display: flex; align-items: center; gap: 4px; }
+  .progress-bar { flex: 1; max-width: 140px; background: #1f2937; border-radius: 99px; height: 5px; overflow: hidden; margin: 0 12px; }
+  .progress-fill { background: #22c55e; height: 100%; border-radius: 99px; width: 80%; }
+
+  /* Split panel */
+  .split-panel { display: flex; flex-direction: column; gap: 0; border: 1px solid #1f2937; border-radius: 8px; overflow: hidden; }
+  .upper-panel { height: 260px; overflow-y: auto; border-bottom: 2px solid #374151; }
+  .lower-panel { height: 175px; overflow-y: auto; }
+  .panel-label { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; color: #374151; padding: 6px 12px 4px; border-bottom: 1px solid #1a2030; background: #0d1117; text-transform: uppercase; }
+  .drag-divider { background: #1a2535; border-top: 1px solid #374151; border-bottom: 1px solid #374151; padding: 2px 12px; color: #374151; font-size: 9px; text-align: center; cursor: row-resize; user-select: none; }
+  .drag-divider:hover { background: #1f2d47; color: #4b5563; }
+
+  /* Table */
+  .item-group { border-bottom: 1px solid #1a2030; }
+  .item-row { display: flex; align-items: center; gap: 0; padding: 7px 12px; cursor: pointer; transition: background 0.1s; font-size: 11px; }
+  .item-row:hover { background: #161d2e; }
+  .item-row.selected { background: #1e3a5f; border-left: 2px solid #3b82f6; }
+  .expand-arrow { width: 14px; color: #4b5563; font-size: 10px; flex-shrink: 0; }
+  .item-name { flex: 2; font-weight: 500; color: #e5e7eb; }
+  .item-meta { flex: 1; color: #6b7280; font-size: 10px; }
+  .item-price { flex: 1; font-family: monospace; color: #4ade80; font-size: 11px; }
+  .item-status { flex: 1; }
+
+  .supplier-row { display: flex; align-items: center; gap: 0; padding: 5px 12px 5px 30px; font-size: 11px; cursor: pointer; transition: background 0.1s; background: #0d1117; border-bottom: 1px solid #111827; }
+  .supplier-row:hover { background: #131c2e; }
+  .supplier-row.selected { background: #1e3a5f; border-left: 2px solid #3b82f6; }
+  .supplier-name { flex: 1.5; color: #9ca3af; }
+  .supplier-price { flex: 1; font-family: monospace; color: #e5e7eb; font-size: 11px; }
+  .supplier-lead { flex: 1; color: #6b7280; font-size: 10px; }
+  .supplier-status { flex: 1; }
+
+  /* Status badges */
+  .badge { display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 99px; font-size: 10px; font-weight: 500; }
+  .badge-sent { background: #1e2d40; color: #60a5fa; }
+  .badge-quoted { background: #14532d; color: #4ade80; }
+  .badge-declined { background: #450a0a; color: #f87171; }
+  .badge-awarded { background: #4c1d95; color: #c4b5fd; }
+  .badge-awaiting { background: #2d1f00; color: #fbbf24; }
+
+  /* Email thread panel */
+  .thread-container { padding: 10px 14px; background: #0d1117; height: 100%; }
+  .ai-summary { background: #0f2744; border: 1px solid #1e3a5f; border-radius: 5px; padding: 7px 10px; font-size: 11px; color: #93c5fd; margin-bottom: 10px; display: flex; align-items: flex-start; gap: 6px; }
+  .ai-icon { flex-shrink: 0; font-size: 12px; }
+  .thread-messages { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+  .msg { padding: 6px 10px; border-radius: 5px; font-size: 11px; line-height: 1.5; }
+  .msg-out { background: #1e3a5f; color: #93c5fd; align-self: flex-end; max-width: 85%; }
+  .msg-in { background: #1f2937; color: #d1d5db; align-self: flex-start; max-width: 85%; }
+  .msg-meta { font-size: 9px; color: #4b5563; margin-bottom: 2px; }
+  .thread-actions { display: flex; gap: 6px; padding-top: 6px; border-top: 1px solid #1f2937; }
+  .thread-actions .btn { font-size: 11px; padding: 5px 12px; }
+  .btn-award { background: #4c1d95; color: #c4b5fd; }
+  .btn-decline { background: transparent; border: 1px solid #374151; color: #6b7280; }
+
+  /* Table header */
+  .table-header { display: flex; padding: 5px 12px; background: #0d1117; border-bottom: 1px solid #1a2030; font-size: 10px; color: #4b5563; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; z-index: 1; }
+  .col-expand { width: 14px; flex-shrink: 0; }
+  .col-name { flex: 2; }
+  .col-meta { flex: 1; }
+  .col-price { flex: 1; }
+  .col-status { flex: 1; }
+</style>
+</head>
+<body>
+
+<h1>items_ordering — Complete Design Proposal</h1>
+<p class="subtitle">All decisions applied · Review both phases below</p>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- PHASE 1 -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="phase-label">Phase 1 — Transition Gate (supplier_discovery → items_ordering)</div>
+<div class="phase-title">Email Confirmation: Review before sending to suppliers</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="dot dot-red"></span>
+    <span class="dot dot-yellow"></span>
+    <span class="dot dot-green"></span>
+    <span style="margin-left:8px">Preview Panel · Supplier Outreach Emails</span>
+    <span style="margin-left:auto;background:#1f2937;padding:2px 8px;border-radius:99px;font-size:10px">Step 2 of 2 · Confirm Supplier Shortlist → Send Emails</span>
+  </div>
+  <div class="card-body">
+    <div style="font-size:11px;color:#6b7280;margin-bottom:10px">
+      ✉️ &nbsp;<strong style="color:#e5e7eb">14 emails</strong> will be sent to <strong style="color:#e5e7eb">6 suppliers</strong> across <strong style="color:#e5e7eb">10 items</strong>. Review the template below.
+    </div>
+    <div class="email-preview">
+      <div class="meta">
+        <strong>To:</strong> john@deflimited.com &nbsp;·&nbsp;
+        <strong>Subject:</strong> Request for Quotation — Valve XY23 (50 units) &nbsp;·&nbsp;
+        <span style="background:#1f2937;padding:1px 6px;border-radius:3px;font-size:10px">1 of 14</span>
+        &nbsp;<span style="color:#374151">◀ ▶</span>
+      </div>
+      <div class="body">
+        Dear <span class="placeholder">[Supplier Contact]</span>,<br><br>
+        We are requesting a quotation for the following item on behalf of our client:<br><br>
+        &nbsp;&nbsp;<strong>Item:</strong> Valve XY23<br>
+        &nbsp;&nbsp;<strong>Quantity:</strong> 50 units<br>
+        &nbsp;&nbsp;<strong>Required by:</strong> 2026-06-15<br><br>
+        Please provide your best unit price, lead time, MOQ, and applicable Incoterms.<br><br>
+        Kind regards,<br>
+        <span class="placeholder">[Your Name]</span> · QuoteFlow AI
+      </div>
+    </div>
+    <div class="phase1-footer">
+      <span class="batch-info">← Previous &nbsp; 1 / 14 emails &nbsp; Next →</span>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost">Edit This Draft</button>
+        <button class="btn btn-send">Send All 14 Emails →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- PHASE 2 -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="phase-label" style="margin-top:8px">Phase 2 — items_ordering State</div>
+<div class="phase-title">Split Panel: Item Status Table (60%) + Email Thread (40%)</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="dot dot-red"></span>
+    <span class="dot dot-yellow"></span>
+    <span class="dot dot-green"></span>
+    <span style="margin-left:8px">Preview Panel · Items Ordering</span>
+  </div>
+  <div class="card-body" style="padding: 12px;">
+
+    <!-- Readiness strip -->
+    <div class="readiness-strip">
+      <div class="strip-stats">
+        <span class="stat">📦 <strong style="color:#4ade80">8</strong><span style="color:#6b7280">/10 quoted</span></span>
+        <span class="stat">🏆 <strong style="color:#c4b5fd">3</strong><span style="color:#6b7280"> awarded</span></span>
+        <span class="stat">⚠️ <strong style="color:#f87171">1</strong><span style="color:#6b7280"> declined</span></span>
+        <span class="stat">⏳ <strong style="color:#fbbf24">1</strong><span style="color:#6b7280"> awaiting</span></span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+      <button class="btn btn-primary" style="white-space:nowrap;font-size:11px">Generate Quote →</button>
+    </div>
+
+    <!-- Split panel -->
+    <div class="split-panel">
+
+      <!-- UPPER: Table 60% -->
+      <div class="upper-panel">
+        <div class="panel-label">Items &amp; Supplier Responses</div>
+        <div class="table-header">
+          <div class="col-expand"></div>
+          <div class="col-name">Item</div>
+          <div class="col-meta">Quotes</div>
+          <div class="col-price">Best Price</div>
+          <div class="col-status">Status</div>
+        </div>
+
+        <!-- Item 1 – expanded -->
+        <div class="item-group">
+          <div class="item-row">
+            <div class="expand-arrow">▼</div>
+            <div class="item-name">Valve XY23 <span style="color:#4b5563;font-size:10px">#001</span></div>
+            <div class="item-meta">3 quotes</div>
+            <div class="item-price">$42.00</div>
+            <div class="item-status"><span class="badge badge-awaiting">awaiting</span></div>
+          </div>
+          <!-- Supplier rows -->
+          <div class="supplier-row selected">
+            <div class="supplier-name">ABC Corp</div>
+            <div class="supplier-price">$42.00</div>
+            <div class="supplier-lead">2 weeks</div>
+            <div class="supplier-status"><span class="badge badge-quoted">quoted</span></div>
+          </div>
+          <div class="supplier-row">
+            <div class="supplier-name">DEF Ltd</div>
+            <div class="supplier-price" style="color:#4b5563">—</div>
+            <div class="supplier-lead" style="color:#4b5563">—</div>
+            <div class="supplier-status"><span class="badge badge-sent">sent</span></div>
+          </div>
+          <div class="supplier-row">
+            <div class="supplier-name">GHI Inc</div>
+            <div class="supplier-price">$47.50</div>
+            <div class="supplier-lead">4 weeks</div>
+            <div class="supplier-status"><span class="badge badge-quoted">quoted</span></div>
+          </div>
+        </div>
+
+        <!-- Item 2 – collapsed -->
+        <div class="item-group">
+          <div class="item-row">
+            <div class="expand-arrow">▶</div>
+            <div class="item-name">Pump PQ99 <span style="color:#4b5563;font-size:10px">#002</span></div>
+            <div class="item-meta">2 quotes</div>
+            <div class="item-price" style="color:#4b5563">—</div>
+            <div class="item-status"><span class="badge badge-awaiting">awaiting</span></div>
+          </div>
+        </div>
+
+        <!-- Item 3 – awarded -->
+        <div class="item-group">
+          <div class="item-row">
+            <div class="expand-arrow">▶</div>
+            <div class="item-name">Bolt M8×30 <span style="color:#4b5563;font-size:10px">#003</span></div>
+            <div class="item-meta">1 quote</div>
+            <div class="item-price">$0.80</div>
+            <div class="item-status"><span class="badge badge-awarded">awarded</span></div>
+          </div>
+        </div>
+
+        <!-- Item 4 – declined -->
+        <div class="item-group">
+          <div class="item-row">
+            <div class="expand-arrow">▶</div>
+            <div class="item-name">Flange FG-11 <span style="color:#4b5563;font-size:10px">#004</span></div>
+            <div class="item-meta">1 quote</div>
+            <div class="item-price" style="color:#f87171">—</div>
+            <div class="item-status"><span class="badge badge-declined">declined</span></div>
+          </div>
+        </div>
+
+      </div><!-- /upper-panel -->
+
+      <!-- Drag divider -->
+      <div class="drag-divider">⠿ drag to resize</div>
+
+      <!-- LOWER: Email thread 40% -->
+      <div class="lower-panel">
+        <div class="panel-label">Email Thread · ABC Corp · Valve XY23 #001</div>
+        <div class="thread-container">
+
+          <!-- AI Summary -->
+          <div class="ai-summary">
+            <span class="ai-icon">✨</span>
+            <span>ABC Corp quoted <strong>$42.00/unit</strong> · 2-week lead · FOB Shanghai · MOQ 20 units. No Incoterms alternatives offered. <strong>Awaiting award decision.</strong></span>
+          </div>
+
+          <!-- Thread messages -->
+          <div class="thread-messages">
+            <div class="msg msg-out">
+              <div class="msg-meta">→ You &nbsp;·&nbsp; 1 day ago</div>
+              Request for Quotation — Valve XY23 (50 units) required by 2026-06-15…
+            </div>
+            <div class="msg msg-in">
+              <div class="msg-meta">← ABC Corp &nbsp;·&nbsp; 6 hours ago</div>
+              Thank you for your inquiry. Unit price: $42.00 FOB Shanghai. Lead time: 2 weeks. MOQ: 20 units. Please confirm if terms are acceptable.
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="thread-actions">
+            <button class="btn btn-primary" style="font-size:11px;padding:5px 12px">✏️ AI Draft Reply</button>
+            <button class="btn btn-award" style="font-size:11px;padding:5px 12px">🏆 Award This Supplier</button>
+            <button class="btn btn-decline" style="font-size:11px;padding:5px 12px">✗ Mark Declined</button>
+          </div>
+
+        </div>
+      </div><!-- /lower-panel -->
+
+    </div><!-- /split-panel -->
+
+  </div>
+</div>
+
+<div style="background:#111827;border:1px solid #1f2937;border-radius:8px;padding:16px;font-size:11px;color:#6b7280;line-height:1.8">
+  <strong style="color:#9ca3af">Design Summary</strong><br>
+  ✅ Item-grouped collapsible table (B) &nbsp;·&nbsp;
+  ✅ Tier 2 status model: sent → quoted → awarded → declined &nbsp;·&nbsp;
+  ✅ Explicit CTA + readiness strip (B) &nbsp;·&nbsp;
+  ✅ Thread view + AI summary + AI draft reply (B) &nbsp;·&nbsp;
+  ✅ 60% / 40% split with drag divider (B)
+</div>
+
+</body>
+</html>

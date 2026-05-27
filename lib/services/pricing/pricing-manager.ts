@@ -12,7 +12,6 @@ import type {
   CalculatedPricing,
   LoadPricingResponse,
 } from '@/types/pricing';
-import { DEFAULT_PRICING_VARIABLES } from '@/types/pricing';
 import { getData, insertData, updateData } from '@/lib/db/queries';
 import { WorkspaceContext } from '@/lib/middleware/workspace-context';
 
@@ -81,11 +80,13 @@ export async function getQuotationItems(
       return MOCK_ITEMS;
     }
 
+    // currency_code moved to supplier_item_status — this orphaned helper
+    // returns 'USD' as fallback only; production reads use thread-ai-actions.fetchQuotationForPricing.
     return rows.map((row: Record<string, unknown>) => ({
       item_id: Number(row.itemId),
       bidder_description: String(row.bidderDescription || 'No description'),
       qty: Number(row.qty || 1),
-      currency_code: String(row.currencyCode || 'VND') as QuotationItem['currency_code'],
+      currency_code: 'USD' as QuotationItem['currency_code'],
       bidder_unit_price: Number(row.bidderUnitPrice || 25),
     }));
   } catch (error) {
@@ -108,13 +109,15 @@ export async function loadPricingVariables(
       workspace
     );
 
+    // Ghost-mode: preserve SQL NULL as JS null so the UI shows the default as
+    // placeholder instead of as a populated value.
     return rows.map((row: Record<string, unknown>) => ({
       item_id: Number(row.itemId),
-      shipping_cost: Number(row.shippingCost ?? DEFAULT_PRICING_VARIABLES.shipping_cost),
-      tax_rate: Number(row.taxRate ?? DEFAULT_PRICING_VARIABLES.tax_rate),
-      exchange_rate: Number(row.exchangeRate ?? DEFAULT_PRICING_VARIABLES.exchange_rate),
-      profit_rate: Number(row.profitRate ?? DEFAULT_PRICING_VARIABLES.profit_rate),
-      discount_rate: Number(row.discountRate ?? DEFAULT_PRICING_VARIABLES.discount_rate),
+      shipping_cost: row.shippingCost == null ? null : Number(row.shippingCost),
+      tax_rate: row.taxRate == null ? null : Number(row.taxRate),
+      exchange_rate: row.exchangeRate == null ? null : Number(row.exchangeRate),
+      profit_rate: row.profitRate == null ? null : Number(row.profitRate),
+      discount_rate: row.discountRate == null ? null : Number(row.discountRate),
     }));
   } catch (error) {
     console.error('Error loading pricing variables:', error);
@@ -123,7 +126,9 @@ export async function loadPricingVariables(
 }
 
 /**
- * Save pricing variables to database (upsert per item)
+ * Save pricing variables to database (upsert per item).
+ * Persists null fields as SQL NULL so the next read returns null and the
+ * UI keeps showing the ghost placeholder until the user enters a value.
  */
 export async function savePricingVariables(
   quotationId: number,
@@ -219,8 +224,8 @@ export async function loadPricingData(
 }
 
 /**
- * Initialize default variables for items without existing variables
- * (Pure function — no DB access needed)
+ * Initialize ghost (all-null) variables for items without existing variables.
+ * (Pure function — no DB access needed.)
  */
 export async function initializeVariables(
   items: QuotationItem[],
@@ -237,7 +242,11 @@ export async function initializeVariables(
     }
     return {
       item_id: item.item_id,
-      ...DEFAULT_PRICING_VARIABLES,
+      shipping_cost: null,
+      tax_rate: null,
+      exchange_rate: null,
+      profit_rate: null,
+      discount_rate: null,
     };
   });
 }

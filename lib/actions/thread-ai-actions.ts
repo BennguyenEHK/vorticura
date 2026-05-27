@@ -78,11 +78,12 @@ interface PricingItem {
 
 interface PricingVar {
   item_id: number;
-  shipping_cost: number;
-  tax_rate: number;
-  exchange_rate: number;
-  profit_rate: number;
-  discount_rate: number;
+  // Nullable: null means "no saved value yet → UI shows the default as ghost placeholder".
+  shipping_cost: number | null;
+  tax_rate: number | null;
+  exchange_rate: number | null;
+  profit_rate: number | null;
+  discount_rate: number | null;
 }
 
 interface QuotationPricingData {
@@ -128,6 +129,8 @@ export async function fetchQuotationForPricing(
       if (p.itemId) pricingByItem.set(Number(p.itemId), p);
     }
 
+    // currency_code now lives on supplier_item_status (per-supplier proposal),
+    // not rfq_items. Fall back to USD only when no ordered supplier exists yet.
     const items: PricingItem[] = (rfqItemRows as Array<Record<string, unknown>>).map(row => {
       const itemId = Number(row.itemId);
       const supplier = supplierByItem.get(itemId);
@@ -135,20 +138,23 @@ export async function fetchQuotationForPricing(
         item_id: itemId,
         bidder_description: String(supplier?.bidderDescription ?? row.companyDescription ?? ''),
         qty: Number(row.qty ?? 1),
-        currency_code: String(row.currencyCode ?? 'USD'),
+        currency_code: String(supplier?.currencyCode ?? 'USD'),
         bidder_unit_price: supplier?.bidderUnitPrice ? Number(supplier.bidderUnitPrice) : 0,
       };
     });
 
+    // Ghost-mode: only return a numeric value when a quotation_pricing row exists
+    // AND that column was actually populated. Otherwise return null so the UI
+    // shows the default as ghost placeholder, forcing the user to enter their own.
     const variables: PricingVar[] = items.map(item => {
       const p = pricingByItem.get(item.item_id);
       return {
         item_id: item.item_id,
-        shipping_cost:  p ? Number(p.shippingCost  ?? 0)   : 0,
-        tax_rate:       p ? Number(p.taxRate        ?? 1.1) : 1.1,
-        exchange_rate:  p ? Number(p.exchangeRate   ?? 1.0) : 1.0,
-        profit_rate:    p ? Number(p.profitRate     ?? 1.25): 1.25,
-        discount_rate:  p ? Number(p.discountRate   ?? 0)   : 0,
+        shipping_cost: p?.shippingCost  != null ? Number(p.shippingCost)  : null,
+        tax_rate:      p?.taxRate       != null ? Number(p.taxRate)       : null,
+        exchange_rate: p?.exchangeRate  != null ? Number(p.exchangeRate)  : null,
+        profit_rate:   p?.profitRate    != null ? Number(p.profitRate)    : null,
+        discount_rate: p?.discountRate  != null ? Number(p.discountRate)  : null,
       };
     });
 

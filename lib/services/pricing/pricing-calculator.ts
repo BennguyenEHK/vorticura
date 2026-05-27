@@ -11,11 +11,12 @@
 import type {
   QuotationItem,
   PricingVariable,
+  ResolvedPricingVariable,
   CalculatedPricing,
   CalculatePricingResponse,
   PricingError,
 } from '@/types/pricing';
-import { DEFAULT_PRICING_VARIABLES } from '@/types/pricing';
+import { DEFAULT_PRICING_VARIABLES, resolvePricingVariable } from '@/types/pricing';
 import { validateQuotationItem, validatePricingVariable } from './validation';
 
 // ---------------------------------------------
@@ -42,27 +43,32 @@ export class PricingCalculator {
    * @param variables - Pricing variables (shipping, tax, etc.)
    * @returns Calculated pricing result
    */
+  /**
+   * Accepts nullable (ghost-mode) or fully-resolved variables. Any null field
+   * is substituted with the system default just-in-time, so the calculator
+   * itself only ever operates on numbers.
+   */
   calculateItemPricing(
     item: QuotationItem,
-    variables: PricingVariable
+    variables: PricingVariable | ResolvedPricingVariable
   ): CalculatedPricing {
-    // Extract base values
+    const resolved = resolvePricingVariable(variables as PricingVariable);
     const unitPrice = item.bidder_unit_price;
     const qty = item.qty;
 
     // STEP 1: Calculate actual unit price (cost price after all additions)
     // Formula: ((unit_price + shipping_cost) × tax_rate) × exchange_rate
-    const withShipping = unitPrice + variables.shipping_cost;
-    const withTax = withShipping * variables.tax_rate;
-    const actualUnitPrice = withTax * variables.exchange_rate;
+    const withShipping = unitPrice + resolved.shipping_cost;
+    const withTax = withShipping * resolved.tax_rate;
+    const actualUnitPrice = withTax * resolved.exchange_rate;
 
     // STEP 2: Calculate profit unit price
     // Formula: actual_unit_price × profit_rate
-    const profitUnitPrice = actualUnitPrice * variables.profit_rate;
+    const profitUnitPrice = actualUnitPrice * resolved.profit_rate;
 
     // STEP 3: Apply discount to get final sales price
     // Formula: profit_unit_price - (profit_unit_price × discount_rate)
-    const discountAmount = profitUnitPrice * variables.discount_rate;
+    const discountAmount = profitUnitPrice * resolved.discount_rate;
     const salesUnitPrice = Math.round(profitUnitPrice - discountAmount);
 
     // STEP 4: Calculate extended price and potential profit
@@ -111,17 +117,21 @@ export class PricingCalculator {
           continue;
         }
 
-        // Get variables for this item (use defaults if not found)
+        // Get variables for this item (use ghost defaults if not found).
+        // Defaults are substituted just-in-time by resolvePricingVariable.
         let itemVariables = variablesMap.get(item.item_id);
         if (!itemVariables) {
-          // Create default variables for this item
           itemVariables = {
             item_id: item.item_id,
-            ...DEFAULT_PRICING_VARIABLES,
+            shipping_cost: null,
+            tax_rate: null,
+            exchange_rate: null,
+            profit_rate: null,
+            discount_rate: null,
           };
         }
 
-        // Validate variables
+        // Validate variables (validator already resolves nulls to defaults).
         const varValidation = validatePricingVariable(itemVariables);
         if (!varValidation.isValid) {
           errors.push({
@@ -174,7 +184,7 @@ export class PricingCalculator {
    * @param itemId - Item ID
    * @returns Default PricingVariable
    */
-  getDefaultVariables(itemId: number): PricingVariable {
+  getDefaultVariables(itemId: number): ResolvedPricingVariable {
     return {
       item_id: itemId,
       ...DEFAULT_PRICING_VARIABLES,
@@ -185,12 +195,12 @@ export class PricingCalculator {
    * Merge partial variables with defaults
    * @param itemId - Item ID
    * @param partial - Partial variable updates
-   * @returns Complete PricingVariable
+   * @returns Resolved (all-numeric) PricingVariable
    */
   mergeWithDefaults(
     itemId: number,
     partial: Partial<Omit<PricingVariable, 'item_id'>>
-  ): PricingVariable {
+  ): ResolvedPricingVariable {
     return {
       item_id: itemId,
       shipping_cost: partial.shipping_cost ?? DEFAULT_PRICING_VARIABLES.shipping_cost,

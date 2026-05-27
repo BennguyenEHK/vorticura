@@ -17,6 +17,7 @@ export const SUPPLIER_SCHEMA = {
     'source_url',
     'bidder_description',
     'bidder_unit_price',
+    'currency_code',
     'delivery_time',
     'compliance_deviation',
     'notes',
@@ -30,8 +31,10 @@ export const SUPPLIER_SCHEMA = {
     source_url: { type: 'string' },
     // Product description matching RFQ specs
     bidder_description: { type: 'string' },
-    // Best-estimate USD unit price; 0 if unknown
+    // Best-estimate unit price in the supplier's quoted currency; 0 if unknown
     bidder_unit_price: { type: 'number' },
+    // ISO 4217 currency for bidder_unit_price (e.g. "USD","VND","EUR","JPY"). Default "USD" if unspecified.
+    currency_code: { type: 'string' },
     // Lead time normalized to "X-Y weeks" (e.g. "4-6 weeks")
     delivery_time: { type: 'string' },
     // Reasoned deviation vs RFQ specs, or "Meets all specs"
@@ -51,6 +54,7 @@ export interface SupplierExtraction {
   source_url: string;
   bidder_description: string;
   bidder_unit_price: number;
+  currency_code: string;
   delivery_time: string;
   compliance_deviation: string;
   notes: string;

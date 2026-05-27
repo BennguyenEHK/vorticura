@@ -1,0 +1,77 @@
+<h2>Question 1 — Upper Panel Table Structure</h2>
+<p class="subtitle">Opus flagged this as the most critical layout decision. How should item-supplier rows be organized?</p>
+
+<div class="cards">
+
+  <!-- Option A: Flat Join -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-family:monospace;font-size:11px;line-height:1.6;padding:10px;background:#0f1117;border-radius:6px;overflow:auto">
+        <div style="color:#6b7280;border-bottom:1px solid #1f2937;padding-bottom:4px;margin-bottom:4px">
+          item_id &nbsp;│ supplier_name &nbsp;&nbsp;│ description &nbsp;│ status &nbsp;&nbsp;
+        </div>
+        <div style="color:#e5e7eb">001 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ ABC Corp &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ Valve XY23 &nbsp;&nbsp;│ <span style="color:#facc15">pending</span></div>
+        <div style="color:#e5e7eb">001 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ DEF Ltd &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ Valve XY23 &nbsp;&nbsp;│ <span style="color:#facc15">pending</span></div>
+        <div style="color:#e5e7eb">001 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ GHI Inc &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ Valve XY23 &nbsp;&nbsp;│ <span style="color:#facc15">pending</span></div>
+        <div style="color:#e5e7eb">002 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ ABC Corp &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ Pump PQ99 &nbsp;&nbsp;&nbsp;│ <span style="color:#facc15">pending</span></div>
+        <div style="color:#e5e7eb">002 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ XYZ Supply &nbsp;&nbsp;&nbsp;&nbsp;│ Pump PQ99 &nbsp;&nbsp;&nbsp;│ <span style="color:#facc15">pending</span></div>
+        <div style="color:#e5e7eb">003 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ FastParts Ltd &nbsp;│ Bolt M8 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ <span style="color:#facc15">pending</span></div>
+        <div style="color:#6b7280;font-size:10px;margin-top:6px">… 144 more rows</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Flat Join Table</h3>
+      <p>One row per item×supplier pair. Original proposal. Simple but gets long fast — 50 items × 3 suppliers = 150 rows, hard to get a per-item overview.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Item-grouped collapsible -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-family:monospace;font-size:11px;line-height:1.6;padding:10px;background:#0f1117;border-radius:6px;overflow:auto">
+        <div style="color:#6b7280;border-bottom:1px solid #1f2937;padding-bottom:4px;margin-bottom:4px">
+          item &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ quotes │ best price │ status
+        </div>
+        <div style="color:#60a5fa;cursor:pointer">▼ Valve XY23 (001) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ 3 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ $42.00 &nbsp;&nbsp;&nbsp;&nbsp;│ <span style="color:#facc15">awaiting</span></div>
+        <div style="color:#9ca3af;padding-left:16px">&nbsp;&nbsp;ABC Corp &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ $42.00 &nbsp;&nbsp;&nbsp;&nbsp;│ <span style="color:#4ade80">quoted</span></div>
+        <div style="color:#9ca3af;padding-left:16px">&nbsp;&nbsp;DEF Ltd &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ — &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ <span style="color:#facc15">sent</span></div>
+        <div style="color:#9ca3af;padding-left:16px">&nbsp;&nbsp;GHI Inc &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ $47.50 &nbsp;&nbsp;&nbsp;&nbsp;│ <span style="color:#4ade80">quoted</span></div>
+        <div style="color:#60a5fa">▶ Pump PQ99 (002) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ 2 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ — &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ <span style="color:#facc15">awaiting</span></div>
+        <div style="color:#60a5fa">▶ Bolt M8×30 (003) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ 1 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ $0.80 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ <span style="color:#4ade80">quoted</span></div>
+        <div style="color:#6b7280;font-size:10px;margin-top:6px">50 items · 3 rows visible when collapsed</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Item-Grouped (Recommended by Opus)</h3>
+      <p>Parent row = item with summary (quote count, best price). Expand to see per-supplier detail. Scales to 500 items. Operator sees item-level status at a glance.</p>
+    </div>
+  </div>
+
+  <!-- Option C: Dual-panel, items only -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="display:flex;gap:8px;font-family:monospace;font-size:11px;line-height:1.6;padding:10px;background:#0f1117;border-radius:6px">
+        <div style="flex:1;border-right:1px solid #1f2937;padding-right:8px">
+          <div style="color:#6b7280;margin-bottom:4px">ITEMS</div>
+          <div style="color:#60a5fa;background:#1e3a5f;padding:2px 4px;border-radius:3px">▶ Valve XY23</div>
+          <div style="color:#e5e7eb;padding:2px 4px">&nbsp;&nbsp;Pump PQ99</div>
+          <div style="color:#e5e7eb;padding:2px 4px">&nbsp;&nbsp;Bolt M8×30</div>
+          <div style="color:#e5e7eb;padding:2px 4px">&nbsp;&nbsp;Flange FG11</div>
+        </div>
+        <div style="flex:2">
+          <div style="color:#6b7280;margin-bottom:4px">SUPPLIERS FOR: Valve XY23</div>
+          <div style="color:#e5e7eb">ABC Corp &nbsp;│ $42.00 │ <span style="color:#4ade80">quoted</span></div>
+          <div style="color:#e5e7eb">DEF Ltd &nbsp;&nbsp;│ — &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ <span style="color:#facc15">sent</span></div>
+          <div style="color:#e5e7eb">GHI Inc &nbsp;&nbsp;│ $47.50 │ <span style="color:#4ade80">quoted</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Item List + Inline Supplier Grid</h3>
+      <p>Left: items list. Right: supplier responses for selected item. Email viewer dropped to a 3rd panel or slide-out drawer. Most compact but adds a third layer.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:16px">Click your preferred structure, then reply in the terminal. You can also describe a hybrid.</p>

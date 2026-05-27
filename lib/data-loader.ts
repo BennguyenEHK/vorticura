@@ -105,10 +105,15 @@ async function loadRfqAnalysisReanalyzeInput(
   // rfq_reference lives on rfq_analysis table (single source of truth)
   const rfqReference = String(analysis.rfqReference ?? '');
 
+  // currency_code now lives on supplier_item_status. For rfq_analysis input
+  // (pre-supplier stage), use rfq_analysis.required_currency as buyer's
+  // requested transfer currency.
+  const requiredCurrency = String(analysis.requiredCurrency ?? 'USD');
+
   // Build rfq_items array matching rfq-analysis.json Input_2 shape
   const rfqItems = itemRows.map((item: any) => ({
     item_id: String(item.itemId),                       // String ID as per JSON sample
-    currency_code: item.currencyCode ?? 'USD',          // Currency code
+    currency_code: requiredCurrency,                    // Sourced from rfq_analysis.required_currency
     company_requirement: {
       company_description: item.companyDescription ?? '', // Item description
       qty: item.qty ? Number(item.qty) : 1,              // Quantity (numeric -> number)
@@ -197,6 +202,7 @@ async function loadSupplierSearchResearchInput(
     delivery_time: item.deliveryTime ?? '',                // Supplier's delivery estimate
     bidder_description: item.bidderDescription ?? '',      // Supplier's product description
     bidder_unit_price: item.bidderUnitPrice ? Number(item.bidderUnitPrice) : 0, // Unit price (numeric -> number)
+    currency_code: item.currencyCode ?? 'USD',             // Per-supplier proposal currency
     compliance_deviation: item.complianceDeviation ?? '',  // Spec compliance notes
     notes: item.notes ?? '',                               // Supplier notes
     contact_email: item.contactEmail ?? '',                // Supplier contact email
@@ -285,7 +291,7 @@ async function loadQuotationGenerateInput(
     const supplier = supplierByItem.get(item.itemId); // Matching ordered supplier (if any)
     return {
       item_id: item.itemId,                                  // Numeric item ID
-      currency_code: item.currencyCode ?? 'USD',             // Currency code
+      currency_code: supplier?.currencyCode ?? 'USD',        // Sourced from supplier_item_status (per-supplier proposal)
       company_requirement: {
         company_description: item.companyDescription ?? '',  // Item description from RFQ
         qty: item.qty ? Number(item.qty) : 1,                // Quantity
@@ -559,13 +565,19 @@ async function loadRespondCustomerInput(
   }
   const email = emailRows[0];
 
-  // Fetch RFQ items for this RFQ
-  const itemRows = await getData('rfqItems', { rfqId: rfq_id }, workspace);
+  // Fetch RFQ items + parent rfq_analysis (for required_currency)
+  const [itemRows, analysisRows] = await Promise.all([
+    getData('rfqItems', { rfqId: rfq_id }, workspace),
+    getData('rfqAnalysis', { rfqId: rfq_id }, workspace),
+  ]);
+  // currency_code now lives on supplier_item_status. At the customer-respond
+  // stage we fall back to rfq_analysis.required_currency.
+  const requiredCurrency = String(analysisRows[0]?.requiredCurrency ?? 'USD');
 
   // Build rfq_items matching respond_service.json customer case
   const rfqItems = itemRows.map((item: any) => ({
     item_id: String(item.itemId),                         // String ID as per JSON sample
-    currency_code: item.currencyCode ?? 'USD',            // Currency code
+    currency_code: requiredCurrency,                      // Sourced from rfq_analysis.required_currency
     company_requirement: {
       company_description: item.companyDescription ?? '', // Item description
       qty: item.qty ? Number(item.qty) : 1,               // Quantity

@@ -94,11 +94,11 @@ interface QuotationItem {
 /** Pricing variable for quotation/calculate (quotation_calulate.json) */
 interface PricingVariable {
   item_id: string | number;
-  shipping_cost: number;
-  exchange_rate: number;
-  tax_rate: number;
-  profit_rate: number;
-  discount_rate?: number;
+  shipping_cost: number | null;
+  exchange_rate: number | null;
+  tax_rate: number | null;
+  profit_rate: number | null;
+  discount_rate?: number | null;
 }
 
 /** Email data for email/send action */
@@ -689,12 +689,12 @@ function validateQuotationCalculate(input: ProcessorInput): ProcessorInput {
   input.pricing_variables.forEach((pv, i) => {
     const ref = `pricing_variables[${i}]`;
     if (pv.item_id === undefined || pv.item_id === null) throw new Error(`${ref}.item_id is required`);
-    if (typeof pv.shipping_cost !== 'number') throw new Error(`${ref}.shipping_cost must be a number`);
-    if (typeof pv.tax_rate !== 'number') throw new Error(`${ref}.tax_rate must be a number`);
-    if (typeof pv.exchange_rate !== 'number') throw new Error(`${ref}.exchange_rate must be a number`);
-    if (typeof pv.profit_rate !== 'number') throw new Error(`${ref}.profit_rate must be a number`);
-    if (pv.discount_rate !== undefined && typeof pv.discount_rate !== 'number') {
-      throw new Error(`${ref}.discount_rate must be a number when provided`);
+    if (typeof pv.shipping_cost !== 'number' && pv.shipping_cost !== null) throw new Error(`${ref}.shipping_cost must be a number or null`);
+    if (typeof pv.tax_rate !== 'number' && pv.tax_rate !== null) throw new Error(`${ref}.tax_rate must be a number or null`);
+    if (typeof pv.exchange_rate !== 'number' && pv.exchange_rate !== null) throw new Error(`${ref}.exchange_rate must be a number or null`);
+    if (typeof pv.profit_rate !== 'number' && pv.profit_rate !== null) throw new Error(`${ref}.profit_rate must be a number or null`);
+    if (pv.discount_rate !== undefined && pv.discount_rate !== null && typeof pv.discount_rate !== 'number') {
+      throw new Error(`${ref}.discount_rate must be a number, null, or undefined`);
     }
   });
 

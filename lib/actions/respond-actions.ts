@@ -412,6 +412,7 @@ async function updateSupplierItemStatuses(
       const statusPayload = buildSupplierItemStatusPayload({
         status: item.status,
         unit_price: item.bidder_proposal.bidder_unit_price,
+        currency_code: item.currency_code,
         delivery_time: item.bidder_proposal.delivery_time,
         notes: item.bidder_proposal.compliance_deviation,
         responded_at: timestamp,
@@ -437,6 +438,7 @@ async function updateSupplierItemStatuses(
           supplier_name: supplierName,
           status: item.status,
           unit_price: item.bidder_proposal.bidder_unit_price,
+          currency_code: item.currency_code,
           delivery_time: item.bidder_proposal.delivery_time,
           notes: item.bidder_proposal.compliance_deviation,
           responded_at: timestamp,
