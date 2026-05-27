@@ -139,7 +139,9 @@ export async function fetchQuotationForPricing(
         bidder_description: String(supplier?.bidderDescription ?? row.companyDescription ?? ''),
         qty: Number(row.qty ?? 1),
         currency_code: String(supplier?.currencyCode ?? 'USD'),
-        bidder_unit_price: supplier?.bidderUnitPrice ? Number(supplier.bidderUnitPrice) : 0,
+        bidder_unit_price: (supplier?.bidderUnitPrice != null && Number(supplier.bidderUnitPrice) > 0)
+          ? Number(supplier.bidderUnitPrice)
+          : 0,
       };
     });
 

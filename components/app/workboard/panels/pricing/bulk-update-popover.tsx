@@ -6,7 +6,7 @@
 // Allows applying a value to multiple items at once
 // Triggered by right-click on input fields
 
-import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { X, CheckSquare, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -58,43 +58,38 @@ export function BulkUpdatePopover({
   // Calculate popover position (prevent overflow)
   const [adjustedPosition, setAdjustedPosition] = useState(position);
 
-  // SSR guard for createPortal
-  const [mounted, setMounted] = useState(false);
+
+  // Position clamping: deferred via rAF to avoid blocking the main thread.
+  // BulkUpdatePopover only mounts after user interaction (right-click) — SSR guard not needed.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMounted(true);
-  }, []);
+    if (!popoverRef.current) return;
+    const frame = requestAnimationFrame(() => {
+      if (!popoverRef.current) return;
+      const rect = popoverRef.current.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const margin = 12;
 
-  // Runs after SSR guard releases (mounted toggles to true) AND on any position change.
-  // useLayoutEffect avoids the flash of an unclamped popover at the raw click coordinates.
-  useLayoutEffect(() => {
-    if (!mounted || !popoverRef.current) return;
-    const rect = popoverRef.current.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const margin = 12;
+      // Horizontal: clamp to viewport
+      let x = position.x;
+      if (x + rect.width > vw - margin) x = vw - rect.width - margin;
+      if (x < margin) x = margin;
 
-    // Horizontal: clamp to viewport
-    let x = position.x;
-    if (x + rect.width > vw - margin) x = vw - rect.width - margin;
-    if (x < margin) x = margin;
+      // Vertical: flip above the click when popover would overflow the bottom.
+      let y = position.y;
+      const spaceBelow = vh - position.y - margin;
+      const spaceAbove = position.y - margin;
+      if (rect.height > spaceBelow && rect.height <= spaceAbove) {
+        y = position.y - rect.height;
+      } else if (rect.height > spaceBelow) {
+        y = vh - rect.height - margin;
+      }
+      if (y < margin) y = margin;
 
-    // Vertical: flip above the click when popover would overflow the bottom.
-    // Anchoring the popover's bottom edge to the click point keeps the Apply button on-screen.
-    let y = position.y;
-    const spaceBelow = vh - position.y - margin;
-    const spaceAbove = position.y - margin;
-    if (rect.height > spaceBelow && rect.height <= spaceAbove) {
-      y = position.y - rect.height;
-    } else if (rect.height > spaceBelow) {
-      // Doesn't fit either way — pin to bottom edge so Apply stays visible.
-      y = vh - rect.height - margin;
-    }
-    if (y < margin) y = margin;
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setAdjustedPosition({ x, y });
-  }, [position, mounted]);
+      setAdjustedPosition({ x, y });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [position]);
 
   // Close on click outside
   useEffect(() => {
@@ -166,8 +161,6 @@ export function BulkUpdatePopover({
   };
 
   const allSelected = selectedIds.size === items.length;
-
-  if (!mounted) return null;
 
   return createPortal(
     <div

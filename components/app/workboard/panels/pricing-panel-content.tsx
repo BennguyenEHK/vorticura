@@ -13,7 +13,7 @@
 // - Apply/Reset actions with API integration
 
 import { useEffect } from "react";
-import { Loader2, AlertCircle, Undo2, Redo2 } from "lucide-react";
+import { Loader2, AlertCircle, Undo2, Redo2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePreview } from "@/hooks/preview-context";
 import {
@@ -46,7 +46,7 @@ interface PricingPanelContentProps {
  */
 function PricingPanelInner({ className = "" }: { className?: string }) {
   // Get state from context
-  const { isLoading, error, items } = usePricingPanel();
+  const { isLoading, error, items, warning, clearWarning } = usePricingPanel();
   const { state: previewState, actions: previewActions } = usePreview();
   const canUndo = previewState.history.length > 0;
   const canRedo = previewState.future.length > 0;
@@ -127,6 +127,21 @@ function PricingPanelInner({ className = "" }: { className?: string }) {
 
       {/* Search bar */}
       <ItemSearch className="mb-2" />
+
+      {/* Partial-calculation warning banner (non-fatal) */}
+      {warning && (
+        <div className="mb-2 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-600 dark:text-amber-400">
+          <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+          <span className="flex-1">{warning}</span>
+          <button
+            onClick={clearWarning}
+            className="shrink-0 hover:opacity-70 transition-opacity"
+            aria-label="Dismiss warning"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Currency selector — pinned above scroll */}
       <div className="mb-2 border-t border-border pt-2">

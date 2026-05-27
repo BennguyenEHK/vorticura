@@ -136,7 +136,7 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
       const doc = state.activeDocument;
 
       // Build ProcessorInput for manual_update based on document type
-      await handleHTTPRequest({
+      const result = await handleHTTPRequest({
         data_type: doc.type as any, // items_ordering is not a DataType; guarded by ACCEPT_REJECT_MAP above
         action_type: 'manual_update',
         quotation_id:
@@ -154,6 +154,11 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
             : {}),
         },
       });
+
+      if (!result.success) {
+        actions.setError(result.error || 'Save failed');
+        return;
+      }
 
       // Exit edit mode on success
       actions.toggleEdit();

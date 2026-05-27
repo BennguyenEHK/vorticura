@@ -191,7 +191,7 @@ async function handleManualUpdate(
   timestamp: string,
   workspace: WorkspaceContext
 ): Promise<unknown> {
-  const { quotation_id, modify_content, comments } = input;
+  const { quotation_id, modify_content, comments, rfq_id } = input;
 
   if (!quotation_id) {
     throw new Error('quotation_id is required for manual_update');
@@ -228,6 +228,7 @@ async function handleManualUpdate(
   }
 
   return {
+    rfq_id: rfq_id ?? null,
     quotation_id,
     action_type: 'manual_update',
     modify_content,
@@ -325,7 +326,9 @@ async function handleCalculate(
       bidder_description: String(supplier?.bidderDescription ?? row.companyDescription ?? ''),
       qty: Number(row.qty ?? 1),
       currency_code: String(supplier?.currencyCode ?? 'USD') as PricingQuotationItem['currency_code'],
-      bidder_unit_price: supplier?.bidderUnitPrice ? Number(supplier.bidderUnitPrice) : 25,
+      bidder_unit_price: (supplier?.bidderUnitPrice != null && Number(supplier.bidderUnitPrice) > 0)
+        ? Number(supplier.bidderUnitPrice)
+        : 25,
     };
   });
 

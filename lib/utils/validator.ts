@@ -617,41 +617,35 @@ function validateQuotationItem(item: QuotationItem, index: number): void {
  * JSON shape: { quotation_data: { quotation_id, rfq_reference, seller_info?, customer_info?, quotation_items? } }
  */
 function validateQuotationManualUpdate(input: ProcessorInput): ProcessorInput {
-  // quotation_data is required
-  if (!input.quotation_data) throw new Error('quotation_data is required for manual_update');
-  const qd = input.quotation_data as ManualUpdateQuotationData;
+  // quotation_id is required at top level (matches handleManualUpdate + handleSave contract)
+  if (!input.quotation_id) throw new Error('quotation_id is required for manual_update');
+  requirePositiveInt(input.quotation_id, 'quotation_id');
 
-  // quotation_id is required inside quotation_data
-  if (!qd.quotation_id) throw new Error('quotation_data.quotation_id is required for manual_update');
-  requirePositiveInt(qd.quotation_id, 'quotation_data.quotation_id');
-
-  // rfq_reference is required
-  if (!qd.rfq_reference) throw new Error('quotation_data.rfq_reference is required for manual_update');
+  // modify_content is optional — handleManualUpdate handles null gracefully
+  const mc = input.modify_content as Record<string, unknown> | undefined;
 
   // seller_info is optional but must be object if present
-  if (qd.seller_info && typeof qd.seller_info !== 'object') {
-    throw new Error('quotation_data.seller_info must be an object');
+  if (mc?.seller_info && typeof mc.seller_info !== 'object') {
+    throw new Error('modify_content.seller_info must be an object');
   }
 
   // customer_info is optional but validated if present
-  if (qd.customer_info) {
-    if (typeof qd.customer_info !== 'object') throw new Error('quotation_data.customer_info must be an object');
-    const ccPerson = (qd.customer_info as Record<string, unknown>).carbon_copy_person;
+  if (mc?.customer_info) {
+    if (typeof mc.customer_info !== 'object') throw new Error('modify_content.customer_info must be an object');
+    const ccPerson = (mc.customer_info as Record<string, unknown>).carbon_copy_person;
     if (ccPerson && !Array.isArray(ccPerson)) {
-      throw new Error('quotation_data.customer_info.carbon_copy_person must be an array');
+      throw new Error('modify_content.customer_info.carbon_copy_person must be an array');
     }
   }
 
   // quotation_items validated if present
-  if (qd.quotation_items) {
-    if (!Array.isArray(qd.quotation_items)) throw new Error('quotation_data.quotation_items must be an array');
-    if (qd.quotation_items.length > 100) throw new Error('Maximum 100 quotation items allowed');
-
-    qd.quotation_items.forEach((item, i) => {
-      const ref = `quotation_items[${i}]`;
+  if (mc?.quotation_items) {
+    if (!Array.isArray(mc.quotation_items)) throw new Error('modify_content.quotation_items must be an array');
+    if ((mc.quotation_items as unknown[]).length > 100) throw new Error('Maximum 100 quotation items allowed');
+    (mc.quotation_items as Array<Record<string, unknown>>).forEach((item, i) => {
+      const ref = `modify_content.quotation_items[${i}]`;
       if (!item.item_id) throw new Error(`${ref}.item_id is required`);
-      requirePositiveInt(item.item_id, `${ref}.item_id`);
-      // Validate numeric pricing fields if present
+      requirePositiveInt(item.item_id as number, `${ref}.item_id`);
       if (item.sales_unit_price !== undefined && isNaN(Number(item.sales_unit_price))) {
         throw new Error(`${ref}.sales_unit_price must be a number`);
       }

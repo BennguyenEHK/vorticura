@@ -227,6 +227,7 @@ export interface PricingPanelState {
   isCalculating: boolean;             // Calculation in progress
   searchTerm: string;                 // Item search filter
   error: string | null;               // Error message if any
+  warning: string | null;             // Partial calculation warning (non-fatal)
 }
 
 /** Pricing panel context actions */
@@ -238,6 +239,7 @@ export interface PricingPanelActions {
   setSearchTerm: (term: string) => void;
   applyPricing: () => Promise<void>;
   resetVariables: () => void;
+  clearWarning: () => void;
 }
 
 /** Combined context type */

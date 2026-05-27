@@ -77,6 +77,7 @@ export function PricingPanelProvider({
   const [isCalculating, setIsCalculating] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
 
   // Load target currency from localStorage on mount
   useEffect(() => {
@@ -183,6 +184,7 @@ export function PricingPanelProvider({
     }
     setIsCalculating(true);
     setError(null);
+    setWarning(null);
     try {
       const payload = {
         data_type: 'quotation' as const,
@@ -205,7 +207,7 @@ export function PricingPanelProvider({
         setCalculatedPricing(calculated);
         const partialErrors = result.data.errors;
         if (Array.isArray(partialErrors) && partialErrors.length > 0) {
-          setError(`Calculated with ${partialErrors.length} partial error${partialErrors.length > 1 ? 's' : ''}. First: ${partialErrors[0].error}`);
+          setWarning(`Calculated with ${partialErrors.length} partial error${partialErrors.length > 1 ? 's' : ''}. First: ${partialErrors[0].error}`);
         }
       }
     } catch (err) {
@@ -230,6 +232,8 @@ export function PricingPanelProvider({
     setCalculatedPricing([]);
   }, []);
 
+  const clearWarning = useCallback(() => setWarning(null), []);
+
   // Build context value
   const contextValue: PricingPanelContextType = {
     // State
@@ -250,6 +254,9 @@ export function PricingPanelProvider({
     setSearchTerm,
     applyPricing,
     resetVariables,
+    clearWarning,
+    // Warning state (partial calc errors — non-fatal, shown as inline banner)
+    warning,
   };
 
   return (
