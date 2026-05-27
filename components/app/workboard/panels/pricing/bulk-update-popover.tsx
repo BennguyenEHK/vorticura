@@ -7,6 +7,7 @@
 // Triggered by right-click on input fields
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { X, CheckSquare, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +57,13 @@ export function BulkUpdatePopover({
 
   // Calculate popover position (prevent overflow)
   const [adjustedPosition, setAdjustedPosition] = useState(position);
+
+  // SSR guard for createPortal
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (popoverRef.current) {
@@ -148,7 +156,9 @@ export function BulkUpdatePopover({
 
   const allSelected = selectedIds.size === items.length;
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
       ref={popoverRef}
       style={{
@@ -248,6 +258,7 @@ export function BulkUpdatePopover({
           Cancel
         </Button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -11,6 +11,7 @@ import { useCallback, useState, useRef, useEffect } from 'react';
 import { FileText, Mail, Search, BarChart3, MessageSquarePlus, Check, RefreshCw, X, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { handleHTTPRequest } from '@/lib/data-processor';
+import { buildQuotationPrintHTML } from '@/lib/services/quotation/build-print-html';
 
 // Hooks
 import { usePreview } from '@/hooks/preview-context';
@@ -163,29 +164,28 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
     }
   }, [state.activeDocument, actions]);
 
-  // Download: print only the document inside the preview panel
+  // Download: open self-contained print HTML in a new window
   const handleDownload = useCallback(() => {
-    if (!state.activeDocument || !contentRef.current) return;
-    const html = contentRef.current.innerHTML;
-    const printWin = window.open('', '_blank');
-    if (!printWin) return;
+    if (!state.activeDocument) return;
 
-    // Carry all stylesheet link tags (absolute .href) so Tailwind classes render with colors
-    const linkTags = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'))
-      .map(l => `<link rel="stylesheet" href="${l.href}">`)
-      .join('\n');
+    // Only quotation has a print template right now — bail gracefully for other doc types.
+    if (state.activeDocument.type !== 'quotation') return;
 
-    printWin.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quotation</title>
-      ${linkTags}
-      <style>
-        *,*::before,*::after{box-sizing:border-box;print-color-adjust:exact;-webkit-print-color-adjust:exact}
-        body{margin:20px}
-        @media print{body{margin:10mm}}
-      </style>
-    </head><body>${html}</body></html>`);
-    printWin.document.close();
-    printWin.focus();
-    setTimeout(() => { printWin.print(); printWin.close(); }, 500);
+    const html = buildQuotationPrintHTML(state.activeDocument.data);
+    const blob = new Blob([html], { type: 'text/html' });
+    const blobUrl = URL.createObjectURL(blob);
+    const w = window.open(blobUrl, '_blank', 'width=1200,height=800,scrollbars=yes');
+    if (!w) {
+      URL.revokeObjectURL(blobUrl);
+      return;
+    }
+    w.onload = () => {
+      w.focus();
+      setTimeout(() => {
+        w.print();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      }, 200);
+    };
   }, [state.activeDocument]);
 
   // Toggle history panel and load snapshots
