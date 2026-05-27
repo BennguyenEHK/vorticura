@@ -109,6 +109,7 @@ export function PricingPanelProvider({
           // No quotation yet — keep panel empty until generate quote is pressed
           setItems([]);
           setVariables([]);
+          setCalculatedPricing([]);
           return;
         }
         setQuotationId(data.quotationId);
@@ -125,6 +126,17 @@ export function PricingPanelProvider({
           discount_rate: v.discount_rate == null ? null : Number(v.discount_rate),
         }));
         setVariables(ghostVariables);
+        // Rehydrate Potential Profit table from prior Apply — only rows where
+        // sales_unit_price was actually saved are returned. Empty array on
+        // first load keeps the "No calculations yet" empty state intact.
+        const rehydratedCalc: CalculatedPricing[] = (data.calculated_pricing ?? []).map(c => ({
+          item_id: Number(c.item_id),
+          sales_unit_price: Number(c.sales_unit_price),
+          ext_price: Number(c.ext_price),
+          potential_profit: Number(c.potential_profit),
+          calculation_timestamp: String(c.calculation_timestamp),
+        }));
+        setCalculatedPricing(rehydratedCalc);
       })
       .catch(err => {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load pricing data');

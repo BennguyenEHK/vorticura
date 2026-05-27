@@ -193,9 +193,24 @@ export const PricingItemCard = memo(function PricingItemCard({
     [drafts, item.item_id, updateVariable]
   );
 
+  // contextmenu's sole job: suppress the OS-native context menu.
+  // The popover trigger lives in handleMouseDown (button=2) below.
   const handleContextMenu = useCallback(
-    (event: React.MouseEvent, field: VarField) => {
+    (event: React.MouseEvent) => {
       event.preventDefault();
+    },
+    []
+  );
+
+  // Right-click trigger via mousedown(button=2). Reason: when an input has
+  // focus AND recent uncommitted typing, Chromium prepares its spellcheck/IME
+  // context menu and can intercept the contextmenu event before React's
+  // synthetic handler runs — observed symptom: first right-click after typing
+  // does nothing; right-click after blur+refocus works. mousedown fires
+  // earlier and is not intercepted.
+  const handleMouseDown = useCallback(
+    (event: React.MouseEvent, field: VarField) => {
+      if (event.button !== 2) return;
       onContextMenu?.(event, field);
     },
     [onContextMenu]
@@ -231,7 +246,8 @@ export const PricingItemCard = memo(function PricingItemCard({
               onChange={(e) => handleChange(field.key, e.target.value)}
               onFocus={() => handleFocus(field.key)}
               onBlur={() => handleBlur(field.key)}
-              onContextMenu={(e) => handleContextMenu(e, field.key)}
+              onMouseDown={(e) => handleMouseDown(e, field.key)}
+              onContextMenu={handleContextMenu}
               className="h-7 text-xs px-2"
               placeholder={placeholderFor(field.key)}
             />

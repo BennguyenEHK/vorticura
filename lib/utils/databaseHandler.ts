@@ -556,11 +556,21 @@ const TC_email: TableWriteConfig = {
     if (!input.email) return null;
     return { ...input.email, quotation_id: input.quotation_id, rfq_id: input.rfq_id };
   },
+  // Resolve the existing email row by the most specific key available.
+  // Pipeline-driven email/generate has neither email_id nor quotation_id —
+  // only rfq_id — so we MUST match on rfqId there, otherwise every
+  // regeneration INSERTs a duplicate row and stale rows[0] surfaces on reload.
   getExistsComposite: (_data, input) => {
-    if (!input.email_id || !input.quotation_id) return null;
-    return { quotationId: input.quotation_id };
+    if (input.email_id && input.quotation_id) return { quotationId: input.quotation_id };
+    if (input.email_id) return { emailId: input.email_id };
+    if (input.rfq_id) return { rfqId: input.rfq_id };
+    return null;
   },
-  getUpdateFilter: (_data, input) => ({ emailId: input.email_id }),
+  getUpdateFilter: (_data, input) => {
+    if (input.email_id) return { emailId: input.email_id };
+    if (input.rfq_id) return { rfqId: input.rfq_id };
+    return {};
+  },
 };
 
 // ─── INCOMING EMAIL ────────────────────────────

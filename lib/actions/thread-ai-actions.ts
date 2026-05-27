@@ -86,10 +86,22 @@ interface PricingVar {
   discount_rate: number | null;
 }
 
+interface CalculatedPricingRow {
+  item_id: number;
+  sales_unit_price: number;
+  ext_price: number;
+  potential_profit: number;
+  calculation_timestamp: string;
+}
+
 interface QuotationPricingData {
   quotationId: number;
   items: PricingItem[];
   variables: PricingVar[];
+  // Calculated results from a prior Apply — populated when quotation_pricing
+  // rows have sales_unit_price/ext_price/potential_profit columns set.
+  // Empty array on first load (user hasn't pressed Apply yet).
+  calculated_pricing: CalculatedPricingRow[];
 }
 
 /**
@@ -160,7 +172,26 @@ export async function fetchQuotationForPricing(
       };
     });
 
-    return { quotationId, items, variables };
+    // Rehydrate calculated_pricing from quotation_pricing rows that have a
+    // populated sales_unit_price column (set by handleCalculate). This is what
+    // makes the Potential Profit summary table reappear after F5 — the values
+    // are persisted in DB via modifyDatabase + buildPricingPayload (schema:
+    // sales_unit_price, ext_price, potential_profit on quotation_pricing).
+    const calculated_pricing: CalculatedPricingRow[] = items
+      .map(item => {
+        const p = pricingByItem.get(item.item_id);
+        if (!p || p.salesUnitPrice == null) return null;
+        return {
+          item_id: item.item_id,
+          sales_unit_price: Number(p.salesUnitPrice),
+          ext_price: p.extPrice != null ? Number(p.extPrice) : 0,
+          potential_profit: p.potentialProfit != null ? Number(p.potentialProfit) : 0,
+          calculation_timestamp: (p.updatedAt instanceof Date ? p.updatedAt.toISOString() : String(p.updatedAt ?? new Date().toISOString())),
+        };
+      })
+      .filter((x): x is CalculatedPricingRow => x !== null);
+
+    return { quotationId, items, variables, calculated_pricing };
   } catch (err) {
     console.error('[fetchQuotationForPricing]', err);
     return null;
