@@ -84,8 +84,12 @@ export function transformResultToDocument(result: ProcessorResult): DocumentData
 
   switch (result.data_type) {
     case 'quotation': {
-      // quotation-actions.ts returns: { quotation_id, rfq_reference, items, customer_info, commercial_terms, calculated_pricing }
-      const items = (data.items as Array<Record<string, unknown>>) || [];
+      // Two shapes arrive here:
+      // 1. AI output  — data.items, data.calculated_pricing, data.generated_at
+      // 2. Reload     — data.quotation_items (with sales_unit_price/ext_price inline),
+      //                 data.total_amount, data.quotation_date
+      const items = (data.items as Array<Record<string, unknown>>) ||
+                    (data.quotation_items as Array<Record<string, unknown>>) || [];
       const customerInfo = (data.customer_info as Record<string, unknown>) || {};
       const calcPricing = data.calculated_pricing as Record<string, unknown> | undefined;
       const calcItems = (calcPricing?.calculated_pricing as Array<Record<string, unknown>>) || [];
@@ -93,7 +97,8 @@ export function transformResultToDocument(result: ProcessorResult): DocumentData
       const quotationData: QuotationDocumentData = {
         quotation_id: (data.quotation_id as number) || null,
         quotation_name: (data.rfq_reference as string) || 'Commercial Proposal',
-        quotation_date: (data.generated_at as string) || new Date().toLocaleDateString('vi-VN'),
+        // reload shape uses quotation_date; AI output uses generated_at
+        quotation_date: (data.quotation_date as string) || (data.generated_at as string) || new Date().toLocaleDateString('vi-VN'),
         page_number: '1',
         rfq_reference: (data.rfq_reference as string) || 'N/A',
         seller_info: (() => {
@@ -117,14 +122,14 @@ export function transformResultToDocument(result: ProcessorResult): DocumentData
           tel: (customerInfo.tel as string) || (customerInfo.phone as string) || '',
           phone: (customerInfo.phone as string) || '',
           fax_number: (customerInfo.fax_number as string) || '',
-          customer_address: (customerInfo.customer_address as string) || '',
+          customer_address: (customerInfo.customer_address as string) || (customerInfo.address as string) || '',
         },
         quotation_items: items.map((item, index) => {
           const compReq = (item.company_requirement as Record<string, unknown>) || {};
           const bidProp = (item.bidder_proposal as Record<string, unknown>) || {};
           const itemId = (item.item_id as number) || index + 1;
 
-          // Find matching calculated pricing
+          // calcItem: AI output path; item.*: reload path (pricing embedded on item directly)
           const calcItem = calcItems.find(
             (c) => Number(c.item_id) === itemId
           );
@@ -141,11 +146,12 @@ export function transformResultToDocument(result: ProcessorResult): DocumentData
               delivery_time: (bidProp.delivery_time as string) || '',
               compliance_deviation: (bidProp.compliance_deviation as string) || '',
             },
-            sales_unit_price: Number(calcItem?.sales_unit_price) || 0,
-            ext_price: Number(calcItem?.ext_price) || 0,
+            sales_unit_price: Number(calcItem?.sales_unit_price) || Number(item.sales_unit_price) || 0,
+            ext_price: Number(calcItem?.ext_price) || Number(item.ext_price) || 0,
           };
         }),
-        total_amount: Number(calcPricing?.total_amount) || 0,
+        // reload shape: data.total_amount; AI output: calcPricing.total_amount
+        total_amount: Number(calcPricing?.total_amount) || Number(data.total_amount) || 0,
         commercial_terms: (data.commercial_terms as string) || '',
       };
 

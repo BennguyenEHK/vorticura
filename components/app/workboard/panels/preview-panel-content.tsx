@@ -169,17 +169,23 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
     const html = contentRef.current.innerHTML;
     const printWin = window.open('', '_blank');
     if (!printWin) return;
-    printWin.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quotation</title><style>
-      *,*::before,*::after{box-sizing:border-box}
-      body{font-family:'Times New Roman',serif;font-size:14px;line-height:1.5;color:#000;background:#fff;margin:20px}
-      table{border-collapse:collapse;width:100%;margin-bottom:20px}
-      th,td{border:1px solid #000;padding:8px;text-align:left}
-      img{max-width:100%;height:auto}
-      @media print{body{margin:10mm}}
-    </style></head><body>${html}</body></html>`);
+
+    // Carry all stylesheet link tags (absolute .href) so Tailwind classes render with colors
+    const linkTags = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'))
+      .map(l => `<link rel="stylesheet" href="${l.href}">`)
+      .join('\n');
+
+    printWin.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quotation</title>
+      ${linkTags}
+      <style>
+        *,*::before,*::after{box-sizing:border-box;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+        body{margin:20px}
+        @media print{body{margin:10mm}}
+      </style>
+    </head><body>${html}</body></html>`);
     printWin.document.close();
     printWin.focus();
-    setTimeout(() => { printWin.print(); printWin.close(); }, 250);
+    setTimeout(() => { printWin.print(); printWin.close(); }, 500);
   }, [state.activeDocument]);
 
   // Toggle history panel and load snapshots
