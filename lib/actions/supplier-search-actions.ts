@@ -17,7 +17,7 @@ import {
 } from '@/lib/ai-agent/prompt/search-suppliers';
 import { getData } from '@/lib/db/queries';
 import { modifyDatabase } from '@/lib/utils/databaseHandler';
-import { getLocalModel } from '@/lib/ai-agent/local-model';
+import { aiChatCompletion } from '@/lib/ai-agent/ai-router';
 import { searchWeb } from '@/lib/services/search';
 import { SUPPLIER_SCHEMA, type SupplierExtraction } from '@/lib/ai-agent/schemas/supplier';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
@@ -137,18 +137,20 @@ async function extractSupplierForItem(item: RfqItemInput): Promise<ItemSourceRow
     return null;
   }
 
-  // (2) vLLM extraction — guided_json locks output to SUPPLIER_SCHEMA
+  // (2) Extraction via ai-router — local mode enforces SUPPLIER_SCHEMA with
+  //     vLLM guided_json; remote mode sends prompt-only to HF (no schema
+  //     enforcement) and falls back to local-with-schema if HF errors.
   const llmStart = Date.now();
   let extracted: SupplierExtraction;
   try {
-    extracted = await getLocalModel().chatCompletion<SupplierExtraction>(
+    extracted = await aiChatCompletion<SupplierExtraction>(
       EXTRACT_SUPPLIER_FROM_SNIPPETS_PROMPT,
       buildExtractUserMessage({
         item,
         snippets: search.snippets,
       }),
       600,                // tight cap — one supplier object is small (~200-400 tokens)
-      SUPPLIER_SCHEMA,    // xgrammar-enforced shape
+      SUPPLIER_SCHEMA,    // honored by local vLLM; ignored by HF (see ai-router.ts)
     );
   } catch (err) {
     console.warn(`[supplier-search] item=${item.itemId} llm error:`, err instanceof Error ? err.message : err);

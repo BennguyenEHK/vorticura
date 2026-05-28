@@ -28,24 +28,33 @@ const AI_MODE = process.env.AI_MODE || 'remote';
  * @param systemPrompt - System instruction (defines output schema)
  * @param userMessage  - User content (email text, prompt, etc.)
  * @param maxTokens    - Max output tokens (default 1024, matches both providers)
+ * @param schema       - Optional JSON-Schema for vLLM xgrammar guided decoding.
+ *                       Used by the local path for strict output-shape enforcement;
+ *                       IGNORED by HuggingFace because the Inference API has no
+ *                       equivalent of vLLM's guided_json. Callers that pass a
+ *                       schema in remote mode should rely on the prompt to
+ *                       describe the JSON shape and accept that HF responses
+ *                       are best-effort — the local fallback will re-enforce
+ *                       the schema if HF fails.
  * @returns Parsed JSON of type T from whichever provider succeeded
  */
 export async function aiChatCompletion<T>(
   systemPrompt: string,
   userMessage: string,
   maxTokens = 1024,
+  schema?: object,
 ): Promise<T> {
-  // Local mode: skip HF entirely, talk to vLLM
+  // Local mode: skip HF entirely, talk to vLLM (with schema if provided)
   if (AI_MODE === 'local') {
-    return await getLocalModel().chatCompletion<T>(systemPrompt, userMessage, maxTokens);
+    return await getLocalModel().chatCompletion<T>(systemPrompt, userMessage, maxTokens, schema);
   }
 
-  // Remote mode: try HF first, fall back to local on any error
+  // Remote mode: try HF (schema-less); fall back to local (with schema) on any error
   try {
     return await hfChatCompletion<T>(systemPrompt, userMessage, maxTokens);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[ai-router] HF call failed (${msg}) — falling back to local model`);
-    return await getLocalModel().chatCompletion<T>(systemPrompt, userMessage, maxTokens);
+    return await getLocalModel().chatCompletion<T>(systemPrompt, userMessage, maxTokens, schema);
   }
 }
