@@ -102,38 +102,12 @@ export const PricingItemCard = memo(function PricingItemCard({
   });
 
   const commitDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Auto-blur timer: fires 1500 ms after the user stops typing. Chromium absorbs
-  // touchpad two-finger-tap gestures on DOM-focused inputs (no contextmenu event
-  // fires at all), so the bulk-update popover can't open while the input is still
-  // focused. Auto-blurring on idle releases focus so subsequent touchpad gestures
-  // are delivered to JavaScript normally. Mouse right-click is unaffected — its
-  // event pipeline is not intercepted by input focus.
-  const idleBlurRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Ref to each field's <input> element so the idle blur can call blur() on the
-  // exact element that was being edited, even after re-renders.
-  const inputRefs = useRef<Partial<Record<VarField, HTMLInputElement>>>({});
   // Which field is actively being edited — mutated directly (no state) so
   // focus/blur don't trigger re-renders. Read by the variables sync below.
   const focusedFieldRef = useRef<VarField | null>(null);
 
-  // Cancel pending timers on unmount.
-  useEffect(() => () => {
-    if (commitDebounceRef.current) clearTimeout(commitDebounceRef.current);
-    if (idleBlurRef.current) clearTimeout(idleBlurRef.current);
-  }, []);
-
-  // Schedule a fresh 1500 ms idle blur on the given field. Cancels any prior pending one.
-  const scheduleIdleBlur = useCallback((field: VarField) => {
-    if (idleBlurRef.current) clearTimeout(idleBlurRef.current);
-    idleBlurRef.current = setTimeout(() => {
-      idleBlurRef.current = null;
-      const el = inputRefs.current[field];
-      if (el && document.activeElement === el) {
-        console.log(`[pricing:card] item=${item.item_id} idle-blur field=${field} (released focus so touchpad gestures aren't absorbed)`);
-        el.blur();
-      }
-    }, 1500);
-  }, [item.item_id]);
+  // Cancel pending debounce on unmount.
+  useEffect(() => () => { if (commitDebounceRef.current) clearTimeout(commitDebounceRef.current); }, []);
 
   // Re-sync drafts from upstream variables, skipping any field the user is
   // currently editing so the in-flight draft is never clobbered.
@@ -169,16 +143,14 @@ export const PricingItemCard = memo(function PricingItemCard({
       console.log(`[pricing:card] item=${item.item_id} focus field=${field} upstream=${variables[field]} raw="${raw}"`);
       focusedFieldRef.current = field;
       setDrafts((prev) => ({ ...prev, [field]: raw }));
-      scheduleIdleBlur(field);
     },
-    [variables, item.item_id, scheduleIdleBlur]
+    [variables, item.item_id]
   );
 
   const handleChange = useCallback(
     (field: VarField, rawValue: string) => {
       focusedFieldRef.current = field; // re-arm focus guard after debounce may have cleared it
       setDrafts((prev) => ({ ...prev, [field]: rawValue }));
-      scheduleIdleBlur(field); // every keystroke resets the 1500 ms idle blur timer
 
       // Cancel any pending debounce from the previous keystroke.
       if (commitDebounceRef.current) {
@@ -224,11 +196,6 @@ export const PricingItemCard = memo(function PricingItemCard({
       if (commitDebounceRef.current) {
         clearTimeout(commitDebounceRef.current);
         commitDebounceRef.current = null;
-      }
-      // Idle blur timer is irrelevant once the field has actually blurred.
-      if (idleBlurRef.current) {
-        clearTimeout(idleBlurRef.current);
-        idleBlurRef.current = null;
       }
       focusedFieldRef.current = null;
       const draft = drafts[field];
@@ -276,10 +243,6 @@ export const PricingItemCard = memo(function PricingItemCard({
               {field.label}
             </label>
             <Input
-              ref={(el) => {
-                if (el) inputRefs.current[field.key] = el;
-                else delete inputRefs.current[field.key];
-              }}
               type="text"
               value={drafts[field.key]}
               onChange={(e) => handleChange(field.key, e.target.value)}
