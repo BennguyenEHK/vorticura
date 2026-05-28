@@ -77,6 +77,11 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
   // Container ref for the native contextmenu listener.
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Tracks the last pricing <input> that lost focus inside this container.
+  // Used by contextmenu Tier 3 so the fallback survives auto-blur (which clears
+  // document.activeElement up to 1500 ms before the contextmenu gesture fires).
+  const lastBlurredInputRef = useRef<HTMLInputElement | null>(null);
+
   // Native capture-phase contextmenu listener for bulk-update popover.
   //
   // Handles: mouse right-click and two-finger touchpad tap — both fire contextmenu.
@@ -149,6 +154,16 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
       }, 100);
     };
 
+    // Capture every blur that leaves a pricing input so Tier 3 can fall back to
+    // it even after auto-blur has cleared document.activeElement.
+    const nativeBlur = (e: FocusEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" && (target as HTMLInputElement).dataset.field) {
+        lastBlurredInputRef.current = target as HTMLInputElement;
+        console.log(`[pricing:list] blur captured field=${(target as HTMLInputElement).dataset.field} → stored in lastBlurredInputRef`);
+      }
+    };
+
     // Pre-blur helpers — exit edit mode before contextmenu fires so Chromium
     // has no editing state to clean up, preventing the stale pointer-completion
     // click that would otherwise close the popover immediately.
@@ -197,19 +212,18 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
         }
       }
 
-      // Tier 3: active-element fallback — when the user is editing a field and
-      // two-finger taps near it, honour the focused input within the same card.
+      // Tier 3: last-blurred fallback — covers the auto-blur case where
+      // document.activeElement is already body when contextmenu fires.
+      // lastBlurredInputRef is populated by nativeBlur the moment any pricing
+      // input loses focus, so it survives the 1500 ms auto-blur window.
+      // Guard: only honour it when the gesture lands on the same card, so a
+      // stale ref from a different item can't hijack an unrelated tap.
       if (!inputEl) {
         const card = target.closest("[data-item-id]") as HTMLElement | null;
-        const active = document.activeElement as HTMLElement | null;
-        if (
-          card &&
-          active?.tagName === "INPUT" &&
-          (active as HTMLInputElement).dataset.field &&
-          card.contains(active)
-        ) {
-          inputEl = active as HTMLInputElement;
-          console.log(`[pricing:list] contextmenu: tier-3 activeElement fallback field=${inputEl.dataset.field}`);
+        const remembered = lastBlurredInputRef.current;
+        if (card && remembered?.dataset.field && card.contains(remembered)) {
+          inputEl = remembered;
+          console.log(`[pricing:list] contextmenu: tier-3 lastBlurred fallback field=${inputEl.dataset.field}`);
         }
       }
 
@@ -230,11 +244,13 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
       openPopover(field, inputEl, { x: e.clientX, y: e.clientY });
     };
 
+    container.addEventListener("blur", nativeBlur, { capture: true });
     container.addEventListener("mousedown", nativeMouseDown, { capture: true });
     container.addEventListener("pointerdown", nativePointerDown, { capture: true });
     container.addEventListener("contextmenu", nativeContextMenu, { capture: true });
     return () => {
-      console.log("[pricing:list] native mousedown + pointerdown + contextmenu capture listeners removed");
+      console.log("[pricing:list] native blur + mousedown + pointerdown + contextmenu capture listeners removed");
+      container.removeEventListener("blur", nativeBlur, { capture: true });
       container.removeEventListener("mousedown", nativeMouseDown, { capture: true });
       container.removeEventListener("pointerdown", nativePointerDown, { capture: true });
       container.removeEventListener("contextmenu", nativeContextMenu, { capture: true });
