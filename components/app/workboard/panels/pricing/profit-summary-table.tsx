@@ -33,11 +33,6 @@ export function ProfitSummaryTable({ className = "" }: ProfitSummaryTableProps) 
   // Get state from context
   const { items, calculatedPricing } = usePricingPanel();
 
-  // Build lookup map for calculated pricing
-  const pricingMap = new Map(
-    calculatedPricing.map((p) => [p.item_id, p])
-  );
-
   // Build lookup map for items (for description)
   const itemsMap = new Map(items.map((i) => [i.item_id, i]));
 
