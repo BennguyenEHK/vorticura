@@ -126,21 +126,17 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
       const seed = clickedVar ? variableToInputString(field, clickedVar[field]) : "";
       const itemIds = filteredItemsRef.current.map((item) => item.item_id);
 
-      // Blur AFTER capturing data. Commits in-flight draft and clears Chromium's
-      // active-edit state, but may trigger async browser cleanup events that would
-      // hit the popover's click-outside listener and close it prematurely.
+      // Fallback blur: nativeMouseDown already blurs on mousedown(2) so this is
+      // usually a no-op. Kept for safety (e.g. keyboard-triggered contextmenu).
       inputEl.blur();
 
       console.log(`[pricing:list] popover queued field=${field} itemId=${clickedId} seed="${seed}" filteredItems=${itemIds.length} pos=(${pos.x},${pos.y})`);
 
-      // 350 ms delay: Windows Precision Touchpad two-finger tap fires contextmenu
-      // while fingers are still down, then generates a stale click(button=0) when
-      // fingers lift (~50–300 ms later, since the driver requires lift within ~300 ms
-      // to classify the gesture as a tap). Opening the popover at 350 ms guarantees
-      // the stale click has already fired before the popover mounts and its
-      // click-outside listener activates, so the stale click is never seen.
-      // Physical mouse right-click never generates click(button=0), so it is
-      // unaffected by this delay.
+      // 100 ms is enough because nativeMouseDown pre-blurs the input before
+      // contextmenu fires, clearing Chromium's editing state early. The stale
+      // pointer-completion click that the touchpad driver generates is therefore
+      // not produced (no editing state to clean up), so the 350 ms workaround
+      // is no longer needed.
       setTimeout(() => {
         console.log(`[pricing:list] popover open (deferred) field=${field} itemId=${clickedId} seed="${seed}"`);
         setBulkState({
@@ -150,7 +146,22 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
           value: seed,
           anchorPosition: pos,
         });
-      }, 350);
+      }, 100);
+    };
+
+    // Pre-blur: on right-click button-down, immediately blur any focused pricing
+    // input. mousedown(button=2) fires a few ms BEFORE contextmenu, so by the
+    // time contextmenu arrives the input is already out of Chromium's edit mode.
+    // This prevents Chromium from generating the stale pointer-completion click
+    // that a two-finger touchpad tap produces when contextmenu fires on a
+    // still-focused input — eliminating the event-storm root cause entirely.
+    const nativeMouseDown = (e: MouseEvent) => {
+      if (e.button !== 2) return;
+      const active = document.activeElement as HTMLElement | null;
+      if (active && active.tagName === "INPUT" && (active as HTMLInputElement).dataset.field) {
+        console.log(`[pricing:list] mousedown(2) pre-blur field=${(active as HTMLInputElement).dataset.field}`);
+        active.blur();
+      }
     };
 
     const nativeContextMenu = (e: MouseEvent) => {
@@ -170,9 +181,11 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
       openPopover(field, inputEl as HTMLInputElement, { x: e.clientX, y: e.clientY });
     };
 
+    container.addEventListener("mousedown", nativeMouseDown, { capture: true });
     container.addEventListener("contextmenu", nativeContextMenu, { capture: true });
     return () => {
-      console.log("[pricing:list] native contextmenu capture listener removed");
+      console.log("[pricing:list] native mousedown + contextmenu capture listeners removed");
+      container.removeEventListener("mousedown", nativeMouseDown, { capture: true });
       container.removeEventListener("contextmenu", nativeContextMenu, { capture: true });
     };
   }, []); // empty — all dynamic data accessed via refs
