@@ -106,6 +106,11 @@ export const PricingItemCard = memo(function PricingItemCard({
   // Re-sync drafts from upstream variables whenever they change AND the field
   // isn't currently being edited. Without this guard, an upstream re-render
   // during typing would clobber the in-flight draft.
+  const commitDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cancel pending debounce on unmount to avoid state updates on dead components.
+  useEffect(() => () => { if (commitDebounceRef.current) clearTimeout(commitDebounceRef.current); }, []);
+
   const focusedFieldRef = useRef<VarField | null>(null);
   useEffect(() => {
     focusedFieldRef.current = focusedField;
@@ -150,6 +155,9 @@ export const PricingItemCard = memo(function PricingItemCard({
     (field: VarField, rawValue: string) => {
       setDrafts((prev) => ({ ...prev, [field]: rawValue }));
 
+      // Cancel any pending debounce from the previous keystroke.
+      if (commitDebounceRef.current) clearTimeout(commitDebounceRef.current);
+
       if (rawValue.trim() === "") {
         console.log(`[pricing:card] item=${item.item_id} change field=${field} empty → null`);
         updateVariable(item.item_id, field, null);
@@ -157,17 +165,37 @@ export const PricingItemCard = memo(function PricingItemCard({
       }
 
       const parsed = parseFormattedNumber(rawValue);
-      if (parsed === null) return; // partial token — wait for more input
-
-      const finalValue = field === "discount_rate" ? parsed / 100 : parsed;
-      console.log(`[pricing:card] item=${item.item_id} change field=${field} raw="${rawValue}" parsed=${parsed} committed=${finalValue}`);
-      updateVariable(item.item_id, field, finalValue);
+      if (parsed !== null) {
+        // Complete number — commit immediately.
+        const finalValue = field === "discount_rate" ? parsed / 100 : parsed;
+        console.log(`[pricing:card] item=${item.item_id} change field=${field} raw="${rawValue}" parsed=${parsed} committed=${finalValue}`);
+        updateVariable(item.item_id, field, finalValue);
+      } else {
+        // Partial token (e.g. "1.", "5,") — auto-commit after 400 ms of no typing.
+        // This ensures the value is already committed before a right-click fires
+        // the contextmenu capture listener, so blur() in that handler is a no-op.
+        commitDebounceRef.current = setTimeout(() => {
+          commitDebounceRef.current = null;
+          const resolved = parseFormattedNumber(rawValue);
+          const finalValue = resolved !== null
+            ? (field === "discount_rate" ? resolved / 100 : resolved)
+            : null;
+          console.log(`[pricing:card] item=${item.item_id} debounce-commit field=${field} draft="${rawValue}" committed=${finalValue}`);
+          updateVariable(item.item_id, field, finalValue);
+        }, 400);
+      }
     },
     [item.item_id, updateVariable]
   );
 
   const handleBlur = useCallback(
     (field: VarField) => {
+      // Blur commits immediately — cancel any pending debounce to avoid a
+      // duplicate updateVariable call 400 ms later.
+      if (commitDebounceRef.current) {
+        clearTimeout(commitDebounceRef.current);
+        commitDebounceRef.current = null;
+      }
       setFocusedField(null);
       const draft = drafts[field];
 
