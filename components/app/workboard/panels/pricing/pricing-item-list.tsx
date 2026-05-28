@@ -120,8 +120,9 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
       }
 
       e.preventDefault();
-      (inputEl as HTMLInputElement).blur();
 
+      // Capture everything synchronously BEFORE blur() — after blur the active
+      // element changes and Chromium may dispatch synthetic follow-up events.
       const cardEl = inputEl.closest("[data-item-id]") as HTMLElement | null;
       const clickedId = cardEl
         ? Number(cardEl.dataset.itemId)
@@ -136,16 +137,35 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
         console.warn(`[pricing:list] contextmenu itemId=${clickedId} not in variablesMap (size=${variablesMapRef.current.size}) — seed will be ""`);
       }
       const seed = clickedVar ? variableToInputString(field, clickedVar[field]) : "";
+      const pos = { x: e.clientX, y: e.clientY };
+      const itemIds = filteredItemsRef.current.map((item) => item.item_id);
 
-      console.log(`[pricing:list] popover open field=${field} itemId=${clickedId} seed="${seed}" filteredItems=${filteredItemsRef.current.length} pos=(${e.clientX},${e.clientY})`);
+      // Blur AFTER capturing all data. This commits the in-flight draft and clears
+      // Chromium's active-edit state, but may trigger browser-level follow-up
+      // events (Chromium IME cleanup, synthetic focus events) that would hit the
+      // popover's click-outside listener and close it before the user sees it.
+      (inputEl as HTMLInputElement).blur();
 
-      setBulkState({
-        isOpen: true,
-        field,
-        selectedItemIds: filteredItemsRef.current.map((item) => item.item_id),
-        value: seed,
-        anchorPosition: { x: e.clientX, y: e.clientY },
-      });
+      console.log(`[pricing:list] popover queued field=${field} itemId=${clickedId} seed="${seed}" filteredItems=${itemIds.length} pos=(${pos.x},${pos.y})`);
+
+      // Defer setBulkState past the browser event storm that follows blur() on a
+      // focused input with uncommitted typing. Without this, Chromium's contextmenu
+      // event generates a follow-up event that lands on the popover's click-outside
+      // listener and closes the popover before the user sees it (first right-click
+      // appears to do nothing; second right-click works because the input is already
+      // blurred and no storm occurs). setTimeout(0) lets the current event queue
+      // drain — blur events, Chromium IME cleanup, React batch render — before the
+      // popover opens into a clean browser state.
+      setTimeout(() => {
+        console.log(`[pricing:list] popover open (deferred) field=${field} itemId=${clickedId} seed="${seed}"`);
+        setBulkState({
+          isOpen: true,
+          field,
+          selectedItemIds: itemIds,
+          value: seed,
+          anchorPosition: pos,
+        });
+      }, 0);
     };
 
     container.addEventListener("contextmenu", nativeContextMenu, { capture: true });
