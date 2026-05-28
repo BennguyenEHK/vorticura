@@ -293,6 +293,18 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
     );
   }
 
+  // Diagnostic — runs on every render. Logs only when isOpen flips to true so it
+  // doesn't spam unrelated re-renders. Confirms what React sees at render time
+  // versus what setBulkState was called with.
+  if (bulkState.isOpen) {
+    console.log(
+      `[pricing:list] RENDER bulkState isOpen=${bulkState.isOpen} ` +
+      `anchorPosition=${JSON.stringify(bulkState.anchorPosition)} ` +
+      `field=${bulkState.field} ` +
+      `willMountPopover=${!!(bulkState.isOpen && bulkState.anchorPosition)}`
+    );
+  }
+
   return (
     <div ref={containerRef} className={`relative ${className}`}>
       {/* Item list */}
