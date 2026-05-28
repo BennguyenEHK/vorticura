@@ -79,13 +79,17 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
   // Seed the popover from the raw numeric variable (not the formatted DOM
   // value), so right-clicking an unfocused "50,000"-displayed field doesn't
   // re-parse as 50 via the strip-commas parser.
+  //
+  // No event.preventDefault() here: the card's handleMouseDown calls this
+  // with a MOUSEDOWN event (button=2), and preventDefault on mousedown has
+  // side effects on focus/selection. OS-menu suppression is handled by the
+  // card's local onContextMenu={handleContextMenu} on the actual contextmenu
+  // event.
   const handleContextMenu = useCallback(
     (
       event: React.MouseEvent,
       field: keyof Omit<PricingVariable, "item_id">
     ) => {
-      event.preventDefault();
-
       // Resolve the clicked item from data-item-id attribute on the card.
       // Falls back to the first filtered item if the attribute is missing.
       const cardEl = (event.target as HTMLElement).closest('[data-item-id]') as HTMLElement | null;

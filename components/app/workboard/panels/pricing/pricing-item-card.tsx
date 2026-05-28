@@ -202,15 +202,22 @@ export const PricingItemCard = memo(function PricingItemCard({
     []
   );
 
-  // Right-click trigger via mousedown(button=2). Reason: when an input has
-  // focus AND recent uncommitted typing, Chromium prepares its spellcheck/IME
-  // context menu and can intercept the contextmenu event before React's
-  // synthetic handler runs — observed symptom: first right-click after typing
-  // does nothing; right-click after blur+refocus works. mousedown fires
-  // earlier and is not intercepted.
+  // Right-click trigger via mousedown(button=2). Two things must happen here,
+  // in order, BEFORE we call up to the parent to open the popover:
+  //   1. Blur the input. When the input has focus + uncommitted typing,
+  //      Chromium aggressively prepares its spellcheck/IME context menu and
+  //      can show the OS menu even when the subsequent contextmenu's
+  //      preventDefault() runs. Blurring clears that edit state, so the OS
+  //      menu suppression is reliable. It also commits the in-flight draft
+  //      to upstream variables via onBlur.
+  //   2. Open the popover via onContextMenu prop.
+  // We deliberately do NOT call event.preventDefault() on mousedown — that
+  // has side effects on focus/selection and is unnecessary (the local
+  // onContextMenu={handleContextMenu} above suppresses the OS menu).
   const handleMouseDown = useCallback(
-    (event: React.MouseEvent, field: VarField) => {
+    (event: React.MouseEvent<HTMLInputElement>, field: VarField) => {
       if (event.button !== 2) return;
+      event.currentTarget.blur();
       onContextMenu?.(event, field);
     },
     [onContextMenu]
@@ -248,6 +255,8 @@ export const PricingItemCard = memo(function PricingItemCard({
               onBlur={() => handleBlur(field.key)}
               onMouseDown={(e) => handleMouseDown(e, field.key)}
               onContextMenu={handleContextMenu}
+              spellCheck={false}
+              autoComplete="off"
               className="h-7 text-xs px-2"
               placeholder={placeholderFor(field.key)}
             />

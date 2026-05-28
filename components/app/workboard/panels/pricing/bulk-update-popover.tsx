@@ -91,7 +91,13 @@ export function BulkUpdatePopover({
     return () => cancelAnimationFrame(frame);
   }, [position]);
 
-  // Close on click outside
+  // Close on click outside.
+  // We use 'click' (not 'mousedown') to mirror the reference implementation
+  // and avoid premature close: if Chromium's IME context menu briefly opens
+  // on top of the popover (because the input had uncommitted typing), the
+  // user's dismiss-mousedown would otherwise close the popover before they
+  // ever see it. 'click' fires only on a full press+release pair on the same
+  // target, which is the correct user-intent signal for "click outside".
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
@@ -105,10 +111,10 @@ export function BulkUpdatePopover({
       }
     };
 
-    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("click", handleClickOutside);
     document.addEventListener("keydown", handleEscape);
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("click", handleClickOutside);
       document.removeEventListener("keydown", handleEscape);
     };
   }, [onClose]);
