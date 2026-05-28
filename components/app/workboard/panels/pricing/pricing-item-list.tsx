@@ -165,7 +165,7 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
           value: seed,
           anchorPosition: pos,
         });
-      }, 0);
+      }, 100);
     };
 
     container.addEventListener("contextmenu", nativeContextMenu, { capture: true });
