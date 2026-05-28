@@ -9,7 +9,6 @@
 // immediately and cancels any pending debounce.
 
 import { useState, useCallback, useEffect, useRef, memo } from "react";
-import { ChevronsUpDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { usePricingPanel } from "./pricing-panel-provider";
 import {
@@ -243,33 +242,18 @@ export const PricingItemCard = memo(function PricingItemCard({
             <label className="text-xs text-muted-foreground block">
               {field.label}
             </label>
-            <div className="relative group/field">
-              <Input
-                type="text"
-                value={drafts[field.key]}
-                onChange={(e) => handleChange(field.key, e.target.value)}
-                onFocus={() => handleFocus(field.key)}
-                onBlur={() => handleBlur(field.key)}
-                data-field={field.key}
-                spellCheck={false}
-                autoComplete="off"
-                className="h-7 text-xs px-2 pr-5"
-                placeholder={placeholderFor(field.key)}
-              />
-              {/* Hover trigger — left-click alternative to right-click for bulk update */}
-              <button
-                type="button"
-                data-bulk-trigger={field.key}
-                onMouseDown={(e) => e.preventDefault()}
-                tabIndex={-1}
-                aria-label={`Bulk update ${field.label}`}
-                className="absolute right-0.5 top-1/2 -translate-y-1/2 p-0.5
-                           opacity-0 group-hover/field:opacity-40 hover:!opacity-100
-                           transition-opacity text-muted-foreground rounded"
-              >
-                <ChevronsUpDown className="w-3 h-3" />
-              </button>
-            </div>
+            <Input
+              type="text"
+              value={drafts[field.key]}
+              onChange={(e) => handleChange(field.key, e.target.value)}
+              onFocus={() => handleFocus(field.key)}
+              onBlur={() => handleBlur(field.key)}
+              data-field={field.key}
+              spellCheck={false}
+              autoComplete="off"
+              className="h-7 text-xs px-2"
+              placeholder={placeholderFor(field.key)}
+            />
             <p className="text-[10px] text-placeholder truncate">{field.hint}</p>
           </div>
         ))}

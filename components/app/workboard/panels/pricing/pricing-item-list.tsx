@@ -77,13 +77,11 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
   // Container ref for the native contextmenu listener.
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Native capture-phase listeners for bulk-update popover.
+  // Native capture-phase contextmenu listener for bulk-update popover.
   //
-  // TWO trigger paths share one openPopover helper:
-  //   1. contextmenu (right-click / two-finger tap / configured touchpad corner)
-  //   2. click on [data-bulk-trigger] button (hover icon, works with any input method)
+  // Handles: mouse right-click and two-finger touchpad tap — both fire contextmenu.
   //
-  // WHY native + capture for contextmenu:
+  // WHY native + capture:
   //   React delegates all events to the root container via bubbling. For text
   //   inputs with recent uncommitted typing, Chromium processes the contextmenu
   //   event SYNCHRONOUSLY during propagation — before the bubbling phase reaches
@@ -101,10 +99,10 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
   useEffect(() => {
     const container = containerRef.current;
     if (!container) {
-      console.error("[pricing:list] containerRef is null — native listeners NOT attached");
+      console.error("[pricing:list] containerRef is null — native contextmenu listener NOT attached");
       return;
     }
-    console.log("[pricing:list] native contextmenu + click capture listeners attached");
+    console.log("[pricing:list] native contextmenu capture listener attached");
 
     // Shared: resolve seed/pos/itemIds from any trigger point and open the popover.
     const openPopover = (
@@ -151,7 +149,6 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
       }, 100);
     };
 
-    // Path 1 — right-click on a pricing variable input.
     const nativeContextMenu = (e: MouseEvent) => {
       const inputEl = e.target as HTMLElement;
       if (inputEl.tagName !== "INPUT") {
@@ -169,31 +166,10 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
       openPopover(field, inputEl as HTMLInputElement, { x: e.clientX, y: e.clientY });
     };
 
-    // Path 2 — left-click on the [data-bulk-trigger] hover button.
-    const nativeClick = (e: MouseEvent) => {
-      const btn = (e.target as HTMLElement).closest("[data-bulk-trigger]") as HTMLElement | null;
-      if (!btn) return;
-      const field = btn.dataset.bulkTrigger as
-        | keyof Omit<PricingVariable, "item_id">
-        | undefined;
-      if (!field) return;
-      // Locate the sibling input inside the same card.
-      const cardEl = btn.closest("[data-item-id]") as HTMLElement | null;
-      const inputEl = cardEl?.querySelector<HTMLInputElement>(`[data-field="${field}"]`) ?? null;
-      if (!inputEl) {
-        console.warn(`[pricing:list] click-trigger field=${field} — sibling input not found`);
-        return;
-      }
-      console.log(`[pricing:list] click-trigger field=${field}`);
-      openPopover(field, inputEl, { x: e.clientX, y: e.clientY });
-    };
-
     container.addEventListener("contextmenu", nativeContextMenu, { capture: true });
-    container.addEventListener("click", nativeClick, { capture: true });
     return () => {
-      console.log("[pricing:list] native contextmenu + click capture listeners removed");
+      console.log("[pricing:list] native contextmenu capture listener removed");
       container.removeEventListener("contextmenu", nativeContextMenu, { capture: true });
-      container.removeEventListener("click", nativeClick, { capture: true });
     };
   }, []); // empty — all dynamic data accessed via refs
 
