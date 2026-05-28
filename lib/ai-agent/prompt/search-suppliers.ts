@@ -24,6 +24,8 @@ EXTRACTION RULES (how to fill each field from the chosen page):
 - notes: concise — key differentiators, MOQ, certifications, anything notable; 1-2 short sentences max.
 - contact_email: literal email from the page or contact section; "" if not present. Never invent.
 - contact_phone: literal phone (with country code if shown); "" if not present. Never invent.
+- available_qty: numeric stock count as stated on the page (e.g. "12 in stock" → 12). Use 0 ONLY when stock is genuinely not stated — do not guess. This drives a downstream filter, so accuracy matters: a wrong number is worse than 0.
+- alternative_source_url: if the page explicitly links to an alternative or related product (e.g. "See also: …", "Replacement model:", "Recommended substitute:") capture that href verbatim. Empty string if no alternative is offered. NEVER fabricate URLs.
 - Never invent a field. If the page does not state something, leave it empty / 0 per the rules above.`;
 
 // --- Input shape for the RAG extraction step ---

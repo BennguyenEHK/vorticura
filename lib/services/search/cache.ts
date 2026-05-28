@@ -12,7 +12,11 @@ import { createHash } from 'crypto';
 import { getSearchRedis } from './redis-client';
 import type { TavilySnippet } from './tavily-client';
 
-const CACHE_PREFIX = 'search:';
+// v2 bump: previous "search:" entries were keyed off full-text Tavily queries
+// that pasted the entire company_description into the search. Those entries
+// poisoned the cache. The v2 namespace orphans them so they TTL out naturally
+// while the new semantic-tier cache fills up clean.
+const CACHE_PREFIX = 'search:v2:';
 const DEFAULT_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days — matches the doc spec
 
 // Stable, short cache key — sha1 keeps the key length predictable regardless

@@ -23,6 +23,10 @@ export const SUPPLIER_SCHEMA = {
     'notes',
     'contact_email',
     'contact_phone',
+    // New transient signals — used by orchestrator filters but NOT persisted
+    // as their own DB columns (notes carries the human-readable summary).
+    'available_qty',
+    'alternative_source_url',
   ],
   properties: {
     // Supplier brand / company name (e.g. "Bao Vi Trading")
@@ -45,6 +49,14 @@ export const SUPPLIER_SCHEMA = {
     contact_email: { type: 'string' },
     // Literal phone from page; "" if not present
     contact_phone: { type: 'string' },
+    // Stock available at the supplier as stated on the page. 0 = unknown (do
+    // NOT punish unknowns — orchestrator stock filter treats 0 as bypass).
+    // Drives the Stock Protection Rule (available_qty >= rfq_qty + 2).
+    available_qty: { type: 'number' },
+    // Explicit href to an alternative / related product on the same vendor or
+    // a linked vendor. Empty string when no alternative is offered.
+    // Drives the alt-URL re-loop (depth=1, visited-set guarded).
+    alternative_source_url: { type: 'string' },
   },
 } as const;
 
@@ -60,4 +72,6 @@ export interface SupplierExtraction {
   notes: string;
   contact_email: string;
   contact_phone: string;
+  available_qty: number;
+  alternative_source_url: string;
 }
