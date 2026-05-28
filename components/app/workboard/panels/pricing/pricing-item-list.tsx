@@ -149,19 +149,29 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
       }, 100);
     };
 
-    // Pre-blur: on right-click button-down, immediately blur any focused pricing
-    // input. mousedown(button=2) fires a few ms BEFORE contextmenu, so by the
-    // time contextmenu arrives the input is already out of Chromium's edit mode.
-    // This prevents Chromium from generating the stale pointer-completion click
-    // that a two-finger touchpad tap produces when contextmenu fires on a
-    // still-focused input — eliminating the event-storm root cause entirely.
-    const nativeMouseDown = (e: MouseEvent) => {
-      if (e.button !== 2) return;
+    // Pre-blur helpers — exit edit mode before contextmenu fires so Chromium
+    // has no editing state to clean up, preventing the stale pointer-completion
+    // click that would otherwise close the popover immediately.
+    const preBlurActive = (source: string) => {
       const active = document.activeElement as HTMLElement | null;
       if (active && active.tagName === "INPUT" && (active as HTMLInputElement).dataset.field) {
-        console.log(`[pricing:list] mousedown(2) pre-blur field=${(active as HTMLInputElement).dataset.field}`);
+        console.log(`[pricing:list] ${source} pre-blur field=${(active as HTMLInputElement).dataset.field}`);
         active.blur();
       }
+    };
+
+    // Path A — physical mouse right-click: mousedown(button=2) fires before contextmenu.
+    const nativeMouseDown = (e: MouseEvent) => {
+      if (e.button !== 2) return;
+      preBlurActive("mousedown(2)");
+    };
+
+    // Path B — touchpad two-finger tap: fires pointerdown(isPrimary=false) when the
+    // second finger touches down, BEFORE contextmenu. Physical mouse never sets
+    // isPrimary=false, so this path is touchpad-only.
+    const nativePointerDown = (e: PointerEvent) => {
+      if (e.isPrimary) return;
+      preBlurActive("pointerdown(non-primary)");
     };
 
     const nativeContextMenu = (e: MouseEvent) => {
@@ -182,10 +192,12 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
     };
 
     container.addEventListener("mousedown", nativeMouseDown, { capture: true });
+    container.addEventListener("pointerdown", nativePointerDown, { capture: true });
     container.addEventListener("contextmenu", nativeContextMenu, { capture: true });
     return () => {
-      console.log("[pricing:list] native mousedown + contextmenu capture listeners removed");
+      console.log("[pricing:list] native mousedown + pointerdown + contextmenu capture listeners removed");
       container.removeEventListener("mousedown", nativeMouseDown, { capture: true });
+      container.removeEventListener("pointerdown", nativePointerDown, { capture: true });
       container.removeEventListener("contextmenu", nativeContextMenu, { capture: true });
     };
   }, []); // empty — all dynamic data accessed via refs
