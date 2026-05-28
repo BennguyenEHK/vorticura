@@ -102,12 +102,14 @@ export const PricingItemCard = memo(function PricingItemCard({
   });
 
   const commitDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Auto-blur timer: fires 1000 ms after the user stops typing. Chromium absorbs
+  // Auto-blur timer: fires 500 ms after the user stops typing. Chromium absorbs
   // touchpad two-finger-tap gestures on DOM-focused inputs (no contextmenu event
-  // fires at all), so the bulk-update popover can't open while the input is still
-  // focused. Auto-blurring on idle releases focus so subsequent touchpad gestures
-  // are delivered to JavaScript normally. Mouse right-click is unaffected — its
-  // event pipeline is not intercepted by input focus.
+  // fires at all) and Chromium's own text-selection logic blurs the input as a
+  // side effect of the absorbed gesture — so a user who taps while focused needs
+  // two taps (first absorbed/blurs, second succeeds). Auto-blurring on idle
+  // pre-empts this so the first tap always succeeds. 500 ms is short enough that
+  // the user's natural stop-typing → tap pause fully covers it. Mouse right-click
+  // is unaffected — its event pipeline is not intercepted by input focus.
   const idleBlurRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Ref to each field's <input> element so the idle blur can call blur() on the
   // exact element that was being edited, even after re-renders.
@@ -122,7 +124,7 @@ export const PricingItemCard = memo(function PricingItemCard({
     if (idleBlurRef.current) clearTimeout(idleBlurRef.current);
   }, []);
 
-  // Schedule a fresh 1000 ms idle blur on the given field. Cancels any prior pending one.
+  // Schedule a fresh 500 ms idle blur on the given field. Cancels any prior pending one.
   const scheduleIdleBlur = useCallback((field: VarField) => {
     if (idleBlurRef.current) clearTimeout(idleBlurRef.current);
     idleBlurRef.current = setTimeout(() => {
@@ -132,7 +134,7 @@ export const PricingItemCard = memo(function PricingItemCard({
         console.log(`[pricing:card] item=${item.item_id} idle-blur field=${field} (released focus so touchpad gestures aren't absorbed)`);
         el.blur();
       }
-    }, 1000);
+    }, 500);
   }, [item.item_id]);
 
   // Re-sync drafts from upstream variables, skipping any field the user is
