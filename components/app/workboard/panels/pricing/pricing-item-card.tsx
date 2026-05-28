@@ -27,10 +27,6 @@ import { formatNumber, parseFormattedNumber } from "@/lib/services/pricing/valid
 interface PricingItemCardProps {
   item: QuotationItem;
   variables: PricingVariable;
-  onContextMenu?: (
-    event: React.MouseEvent,
-    field: keyof Omit<PricingVariable, "item_id">
-  ) => void;
   className?: string;
 }
 
@@ -90,11 +86,9 @@ function placeholderFor(field: VarField): string {
 // Effective only when the parent passes stable prop references — ensured by:
 //   - item: loaded once, same reference throughout the session
 //   - variables: updateVariable keeps unchanged items as the same object reference
-//   - onContextMenu: stabilized via variablesMapRef in PricingItemList
 export const PricingItemCard = memo(function PricingItemCard({
   item,
   variables,
-  onContextMenu,
   className = "",
 }: PricingItemCardProps) {
   const { updateVariable } = usePricingPanel();
@@ -193,35 +187,6 @@ export const PricingItemCard = memo(function PricingItemCard({
     [drafts, item.item_id, updateVariable]
   );
 
-  // contextmenu's sole job: suppress the OS-native context menu.
-  // The popover trigger lives in handleMouseDown (button=2) below.
-  const handleContextMenu = useCallback(
-    (event: React.MouseEvent) => {
-      event.preventDefault();
-    },
-    []
-  );
-
-  // Right-click trigger via mousedown(button=2). Two things must happen here,
-  // in order, BEFORE we call up to the parent to open the popover:
-  //   1. Blur the input. When the input has focus + uncommitted typing,
-  //      Chromium aggressively prepares its spellcheck/IME context menu and
-  //      can show the OS menu even when the subsequent contextmenu's
-  //      preventDefault() runs. Blurring clears that edit state, so the OS
-  //      menu suppression is reliable. It also commits the in-flight draft
-  //      to upstream variables via onBlur.
-  //   2. Open the popover via onContextMenu prop.
-  // We deliberately do NOT call event.preventDefault() on mousedown — that
-  // has side effects on focus/selection and is unnecessary (the local
-  // onContextMenu={handleContextMenu} above suppresses the OS menu).
-  const handleMouseDown = useCallback(
-    (event: React.MouseEvent<HTMLInputElement>, field: VarField) => {
-      if (event.button !== 2) return;
-      event.currentTarget.blur();
-      onContextMenu?.(event, field);
-    },
-    [onContextMenu]
-  );
 
   return (
     <div
@@ -253,8 +218,7 @@ export const PricingItemCard = memo(function PricingItemCard({
               onChange={(e) => handleChange(field.key, e.target.value)}
               onFocus={() => handleFocus(field.key)}
               onBlur={() => handleBlur(field.key)}
-              onMouseDown={(e) => handleMouseDown(e, field.key)}
-              onContextMenu={handleContextMenu}
+              data-field={field.key}
               spellCheck={false}
               autoComplete="off"
               className="h-7 text-xs px-2"

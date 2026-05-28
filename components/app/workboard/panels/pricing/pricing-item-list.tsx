@@ -67,47 +67,79 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
     );
   }, [items, searchTerm]);
 
-  // Keep a ref that always reflects the latest variablesMap without being a
-  // dependency of handleContextMenu. This prevents handleContextMenu from being
-  // recreated on every keystroke (variablesMap changes per variable update),
-  // which would otherwise cause ALL PricingItemCard components to re-render and
-  // fill the React update queue before the popover can open.
+  // Refs that are always current without causing effect re-runs.
   const variablesMapRef = useRef(variablesMap);
   useEffect(() => { variablesMapRef.current = variablesMap; }, [variablesMap]);
 
-  // Handle context menu on input field.
-  // Seed the popover from the raw numeric variable (not the formatted DOM
-  // value), so right-clicking an unfocused "50,000"-displayed field doesn't
-  // re-parse as 50 via the strip-commas parser.
+  const filteredItemsRef = useRef(filteredItems);
+  useEffect(() => { filteredItemsRef.current = filteredItems; }, [filteredItems]);
+
+  // Container ref for the native contextmenu listener.
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Native capture-phase contextmenu listener.
   //
-  // No event.preventDefault() here: the card's handleMouseDown calls this
-  // with a MOUSEDOWN event (button=2), and preventDefault on mousedown has
-  // side effects on focus/selection. OS-menu suppression is handled by the
-  // card's local onContextMenu={handleContextMenu} on the actual contextmenu
-  // event.
-  const handleContextMenu = useCallback(
-    (
-      event: React.MouseEvent,
-      field: keyof Omit<PricingVariable, "item_id">
-    ) => {
-      // Resolve the clicked item from data-item-id attribute on the card.
-      // Falls back to the first filtered item if the attribute is missing.
-      const cardEl = (event.target as HTMLElement).closest('[data-item-id]') as HTMLElement | null;
-      const clickedId = cardEl ? Number(cardEl.dataset.itemId) : filteredItems[0]?.item_id;
-      // Read from ref — always current value without being a dep that forces recreation.
+  // WHY native + capture:
+  //   React delegates all events to the root container via bubbling. For text
+  //   inputs with recent uncommitted typing, Chromium processes the contextmenu
+  //   event SYNCHRONOUSLY during propagation — before the bubbling phase reaches
+  //   React's root-container handler. That means React's synthetic onContextMenu
+  //   (and its event.preventDefault()) fires too late; the OS/Chromium menu
+  //   already committed to showing.
+  //
+  //   A native addEventListener with { capture: true } on a parent fires during
+  //   the capture phase (document → container → input), which runs BEFORE
+  //   Chromium's synchronous menu check. Calling preventDefault() here reliably
+  //   suppresses the menu regardless of the input's edit state.
+  //
+  //   This matches what the reference implementation does:
+  //   input.addEventListener('contextmenu', handler) — target phase, also early enough.
+  //
+  // We use refs (variablesMapRef, filteredItemsRef) so the effect never needs
+  // to re-run; it always reads the latest data via ref.current.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const nativeContextMenu = (e: MouseEvent) => {
+      // Only handle right-clicks on pricing variable inputs (have data-field attr)
+      const inputEl = e.target as HTMLElement;
+      if (inputEl.tagName !== "INPUT") return;
+      const field = (inputEl as HTMLInputElement).dataset.field as
+        | keyof Omit<PricingVariable, "item_id">
+        | undefined;
+      if (!field) return;
+
+      // Suppress OS / Chromium context menu — this is what the reference does.
+      e.preventDefault();
+
+      // Blur the input to commit the in-flight draft and clear Chromium's
+      // active-edit state so re-opening the popover works consistently.
+      (inputEl as HTMLInputElement).blur();
+
+      // Resolve which card was clicked from its data-item-id attribute.
+      const cardEl = inputEl.closest("[data-item-id]") as HTMLElement | null;
+      const clickedId = cardEl
+        ? Number(cardEl.dataset.itemId)
+        : filteredItemsRef.current[0]?.item_id;
+
+      // Seed the popover from the raw numeric variable (not the DOM value),
+      // so formatted "50,000" doesn't mis-parse as 50.
       const clickedVar = variablesMapRef.current.get(clickedId ?? -1);
-      const seed = clickedVar ? variableToInputString(field, clickedVar[field]) : '';
+      const seed = clickedVar ? variableToInputString(field, clickedVar[field]) : "";
 
       setBulkState({
         isOpen: true,
         field,
-        selectedItemIds: filteredItems.map((item) => item.item_id),
+        selectedItemIds: filteredItemsRef.current.map((item) => item.item_id),
         value: seed,
-        anchorPosition: { x: event.clientX, y: event.clientY },
+        anchorPosition: { x: e.clientX, y: e.clientY },
       });
-    },
-    [filteredItems]   // variablesMap removed: ref keeps it current without forcing recreation
-  );
+    };
+
+    container.addEventListener("contextmenu", nativeContextMenu, { capture: true });
+    return () => container.removeEventListener("contextmenu", nativeContextMenu, { capture: true });
+  }, []); // empty — all dynamic data accessed via refs
 
   // Close bulk update popover
   const handleCloseBulkUpdate = useCallback(() => {
@@ -162,7 +194,7 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
   }
 
   return (
-    <div className={`relative ${className}`}>
+    <div ref={containerRef} className={`relative ${className}`}>
       {/* Item list */}
       <div className="space-y-2">
         {filteredItems.map((item) => (
@@ -170,7 +202,6 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
             key={item.item_id}
             item={item}
             variables={getVariables(item.item_id)}
-            onContextMenu={handleContextMenu}
           />
         ))}
       </div>
