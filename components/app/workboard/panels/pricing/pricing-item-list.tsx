@@ -77,9 +77,13 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
   // Container ref for the native contextmenu listener.
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Native capture-phase contextmenu listener.
+  // Native capture-phase listeners for bulk-update popover.
   //
-  // WHY native + capture:
+  // TWO trigger paths share one openPopover helper:
+  //   1. contextmenu (right-click / two-finger tap / configured touchpad corner)
+  //   2. click on [data-bulk-trigger] button (hover icon, works with any input method)
+  //
+  // WHY native + capture for contextmenu:
   //   React delegates all events to the root container via bubbling. For text
   //   inputs with recent uncommitted typing, Chromium processes the contextmenu
   //   event SYNCHRONOUSLY during propagation — before the bubbling phase reaches
@@ -92,70 +96,49 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
   //   Chromium's synchronous menu check. Calling preventDefault() here reliably
   //   suppresses the menu regardless of the input's edit state.
   //
-  //   This matches what the reference implementation does:
-  //   input.addEventListener('contextmenu', handler) — target phase, also early enough.
-  //
   // We use refs (variablesMapRef, filteredItemsRef) so the effect never needs
   // to re-run; it always reads the latest data via ref.current.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) {
-      console.error("[pricing:list] containerRef is null — native contextmenu listener NOT attached");
+      console.error("[pricing:list] containerRef is null — native listeners NOT attached");
       return;
     }
-    console.log("[pricing:list] native contextmenu capture listener attached");
+    console.log("[pricing:list] native contextmenu + click capture listeners attached");
 
-    const nativeContextMenu = (e: MouseEvent) => {
-      const inputEl = e.target as HTMLElement;
-      if (inputEl.tagName !== "INPUT") {
-        console.log(`[pricing:list] contextmenu target=${inputEl.tagName} — not an INPUT, skipped`);
-        return;
-      }
-      const field = (inputEl as HTMLInputElement).dataset.field as
-        | keyof Omit<PricingVariable, "item_id">
-        | undefined;
-      if (!field) {
-        console.warn("[pricing:list] contextmenu on INPUT with no data-field attr — skipped (input may not be a pricing variable)");
-        return;
-      }
-
-      e.preventDefault();
-
-      // Capture everything synchronously BEFORE blur() — after blur the active
-      // element changes and Chromium may dispatch synthetic follow-up events.
+    // Shared: resolve seed/pos/itemIds from any trigger point and open the popover.
+    const openPopover = (
+      field: keyof Omit<PricingVariable, "item_id">,
+      inputEl: HTMLInputElement,
+      pos: { x: number; y: number }
+    ) => {
       const cardEl = inputEl.closest("[data-item-id]") as HTMLElement | null;
       const clickedId = cardEl
         ? Number(cardEl.dataset.itemId)
         : filteredItemsRef.current[0]?.item_id;
 
       if (!cardEl) {
-        console.warn(`[pricing:list] contextmenu field=${field} — no [data-item-id] ancestor found, falling back to first item id=${clickedId}`);
+        console.warn(`[pricing:list] trigger field=${field} — no [data-item-id] ancestor, falling back to first item id=${clickedId}`);
       }
 
       const clickedVar = variablesMapRef.current.get(clickedId ?? -1);
       if (!clickedVar) {
-        console.warn(`[pricing:list] contextmenu itemId=${clickedId} not in variablesMap (size=${variablesMapRef.current.size}) — seed will be ""`);
+        console.warn(`[pricing:list] trigger itemId=${clickedId} not in variablesMap (size=${variablesMapRef.current.size}) — seed will be ""`);
       }
       const seed = clickedVar ? variableToInputString(field, clickedVar[field]) : "";
-      const pos = { x: e.clientX, y: e.clientY };
       const itemIds = filteredItemsRef.current.map((item) => item.item_id);
 
-      // Blur AFTER capturing all data. This commits the in-flight draft and clears
-      // Chromium's active-edit state, but may trigger browser-level follow-up
-      // events (Chromium IME cleanup, synthetic focus events) that would hit the
-      // popover's click-outside listener and close it before the user sees it.
-      (inputEl as HTMLInputElement).blur();
+      // Blur AFTER capturing data. Commits in-flight draft and clears Chromium's
+      // active-edit state, but may trigger async browser cleanup events that would
+      // hit the popover's click-outside listener and close it prematurely.
+      inputEl.blur();
 
       console.log(`[pricing:list] popover queued field=${field} itemId=${clickedId} seed="${seed}" filteredItems=${itemIds.length} pos=(${pos.x},${pos.y})`);
 
-      // Defer setBulkState past the browser event storm that follows blur() on a
-      // focused input with uncommitted typing. Without this, Chromium's contextmenu
-      // event generates a follow-up event that lands on the popover's click-outside
-      // listener and closes the popover before the user sees it (first right-click
-      // appears to do nothing; second right-click works because the input is already
-      // blurred and no storm occurs). setTimeout(0) lets the current event queue
-      // drain — blur events, Chromium IME cleanup, React batch render — before the
-      // popover opens into a clean browser state.
+      // 100 ms gives Chromium's async text-editing cleanup enough time to drain
+      // before the popover mounts and its click-outside listener activates.
+      // 0 ms only drains synchronous events; for a still-DOM-focused input the
+      // cleanup is asynchronous and survives a 0 ms delay.
       setTimeout(() => {
         console.log(`[pricing:list] popover open (deferred) field=${field} itemId=${clickedId} seed="${seed}"`);
         setBulkState({
@@ -168,10 +151,49 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
       }, 100);
     };
 
+    // Path 1 — right-click on a pricing variable input.
+    const nativeContextMenu = (e: MouseEvent) => {
+      const inputEl = e.target as HTMLElement;
+      if (inputEl.tagName !== "INPUT") {
+        console.log(`[pricing:list] contextmenu target=${inputEl.tagName} — not an INPUT, skipped`);
+        return;
+      }
+      const field = (inputEl as HTMLInputElement).dataset.field as
+        | keyof Omit<PricingVariable, "item_id">
+        | undefined;
+      if (!field) {
+        console.warn("[pricing:list] contextmenu on INPUT with no data-field attr — skipped");
+        return;
+      }
+      e.preventDefault();
+      openPopover(field, inputEl as HTMLInputElement, { x: e.clientX, y: e.clientY });
+    };
+
+    // Path 2 — left-click on the [data-bulk-trigger] hover button.
+    const nativeClick = (e: MouseEvent) => {
+      const btn = (e.target as HTMLElement).closest("[data-bulk-trigger]") as HTMLElement | null;
+      if (!btn) return;
+      const field = btn.dataset.bulkTrigger as
+        | keyof Omit<PricingVariable, "item_id">
+        | undefined;
+      if (!field) return;
+      // Locate the sibling input inside the same card.
+      const cardEl = btn.closest("[data-item-id]") as HTMLElement | null;
+      const inputEl = cardEl?.querySelector<HTMLInputElement>(`[data-field="${field}"]`) ?? null;
+      if (!inputEl) {
+        console.warn(`[pricing:list] click-trigger field=${field} — sibling input not found`);
+        return;
+      }
+      console.log(`[pricing:list] click-trigger field=${field}`);
+      openPopover(field, inputEl, { x: e.clientX, y: e.clientY });
+    };
+
     container.addEventListener("contextmenu", nativeContextMenu, { capture: true });
+    container.addEventListener("click", nativeClick, { capture: true });
     return () => {
-      console.log("[pricing:list] native contextmenu capture listener removed");
+      console.log("[pricing:list] native contextmenu + click capture listeners removed");
       container.removeEventListener("contextmenu", nativeContextMenu, { capture: true });
+      container.removeEventListener("click", nativeClick, { capture: true });
     };
   }, []); // empty — all dynamic data accessed via refs
 

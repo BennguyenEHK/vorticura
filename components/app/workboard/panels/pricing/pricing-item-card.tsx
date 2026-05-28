@@ -9,6 +9,7 @@
 // immediately and cancels any pending debounce.
 
 import { useState, useCallback, useEffect, useRef, memo } from "react";
+import { ChevronsUpDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { usePricingPanel } from "./pricing-panel-provider";
 import {
@@ -153,7 +154,10 @@ export const PricingItemCard = memo(function PricingItemCard({
       setDrafts((prev) => ({ ...prev, [field]: rawValue }));
 
       // Cancel any pending debounce from the previous keystroke.
-      if (commitDebounceRef.current) clearTimeout(commitDebounceRef.current);
+      if (commitDebounceRef.current) {
+        clearTimeout(commitDebounceRef.current);
+        commitDebounceRef.current = null;
+      }
 
       if (rawValue.trim() === "") {
         console.log(`[pricing:card] item=${item.item_id} change field=${field} empty → null`);
@@ -164,7 +168,6 @@ export const PricingItemCard = memo(function PricingItemCard({
       const parsed = parseFormattedNumber(rawValue);
       if (parsed !== null) {
         // Complete number — commit immediately.
-        focusedFieldRef.current = null; // exit focus mode so variables sync re-formats the display
         const finalValue = field === "discount_rate" ? parsed / 100 : parsed;
         console.log(`[pricing:card] item=${item.item_id} change field=${field} raw="${rawValue}" parsed=${parsed} committed=${finalValue}`);
         updateVariable(item.item_id, field, finalValue);
@@ -240,18 +243,33 @@ export const PricingItemCard = memo(function PricingItemCard({
             <label className="text-xs text-muted-foreground block">
               {field.label}
             </label>
-            <Input
-              type="text"
-              value={drafts[field.key]}
-              onChange={(e) => handleChange(field.key, e.target.value)}
-              onFocus={() => handleFocus(field.key)}
-              onBlur={() => handleBlur(field.key)}
-              data-field={field.key}
-              spellCheck={false}
-              autoComplete="off"
-              className="h-7 text-xs px-2"
-              placeholder={placeholderFor(field.key)}
-            />
+            <div className="relative group/field">
+              <Input
+                type="text"
+                value={drafts[field.key]}
+                onChange={(e) => handleChange(field.key, e.target.value)}
+                onFocus={() => handleFocus(field.key)}
+                onBlur={() => handleBlur(field.key)}
+                data-field={field.key}
+                spellCheck={false}
+                autoComplete="off"
+                className="h-7 text-xs px-2 pr-5"
+                placeholder={placeholderFor(field.key)}
+              />
+              {/* Hover trigger — left-click alternative to right-click for bulk update */}
+              <button
+                type="button"
+                data-bulk-trigger={field.key}
+                onMouseDown={(e) => e.preventDefault()}
+                tabIndex={-1}
+                aria-label={`Bulk update ${field.label}`}
+                className="absolute right-0.5 top-1/2 -translate-y-1/2 p-0.5
+                           opacity-0 group-hover/field:opacity-40 hover:!opacity-100
+                           transition-opacity text-muted-foreground rounded"
+              >
+                <ChevronsUpDown className="w-3 h-3" />
+              </button>
+            </div>
             <p className="text-[10px] text-placeholder truncate">{field.hint}</p>
           </div>
         ))}
