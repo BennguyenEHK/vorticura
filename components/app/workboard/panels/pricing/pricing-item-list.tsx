@@ -175,20 +175,59 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
     };
 
     const nativeContextMenu = (e: MouseEvent) => {
-      const inputEl = e.target as HTMLElement;
-      if (inputEl.tagName !== "INPUT") {
-        console.log(`[pricing:list] contextmenu target=${inputEl.tagName} — not an INPUT, skipped`);
+      const target = e.target as HTMLElement;
+
+      // Three-tier input resolution — touchpad two-finger tap fires contextmenu
+      // with the gesture midpoint as coordinates, which can land on a parent
+      // element (label, card border) rather than the <input> itself.
+      let inputEl: HTMLInputElement | null = null;
+
+      // Tier 1: direct hit — mouse right-click always lands here.
+      if (target.tagName === "INPUT" && (target as HTMLInputElement).dataset.field) {
+        inputEl = target as HTMLInputElement;
+      }
+
+      // Tier 2: elementFromPoint — gesture midpoint may miss the input but the
+      // topmost element at those coordinates is still the input.
+      if (!inputEl && (e.clientX !== 0 || e.clientY !== 0)) {
+        const atPoint = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+        if (atPoint?.tagName === "INPUT" && (atPoint as HTMLInputElement).dataset.field) {
+          inputEl = atPoint as HTMLInputElement;
+          console.log(`[pricing:list] contextmenu: tier-2 elementFromPoint found field=${inputEl.dataset.field}`);
+        }
+      }
+
+      // Tier 3: active-element fallback — when the user is editing a field and
+      // two-finger taps near it, honour the focused input within the same card.
+      if (!inputEl) {
+        const card = target.closest("[data-item-id]") as HTMLElement | null;
+        const active = document.activeElement as HTMLElement | null;
+        if (
+          card &&
+          active?.tagName === "INPUT" &&
+          (active as HTMLInputElement).dataset.field &&
+          card.contains(active)
+        ) {
+          inputEl = active as HTMLInputElement;
+          console.log(`[pricing:list] contextmenu: tier-3 activeElement fallback field=${inputEl.dataset.field}`);
+        }
+      }
+
+      if (!inputEl) {
+        console.log(`[pricing:list] contextmenu target=${target.tagName} at (${e.clientX},${e.clientY}) — no pricing input found, skipped`);
         return;
       }
-      const field = (inputEl as HTMLInputElement).dataset.field as
+
+      const field = inputEl.dataset.field as
         | keyof Omit<PricingVariable, "item_id">
         | undefined;
       if (!field) {
-        console.warn("[pricing:list] contextmenu on INPUT with no data-field attr — skipped");
+        console.warn("[pricing:list] contextmenu: input has no data-field attr — skipped");
         return;
       }
+
       e.preventDefault();
-      openPopover(field, inputEl as HTMLInputElement, { x: e.clientX, y: e.clientY });
+      openPopover(field, inputEl, { x: e.clientX, y: e.clientY });
     };
 
     container.addEventListener("mousedown", nativeMouseDown, { capture: true });
