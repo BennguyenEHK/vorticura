@@ -102,7 +102,7 @@ export const PricingItemCard = memo(function PricingItemCard({
   });
 
   const commitDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Auto-blur timer: fires 1500 ms after the user stops typing. Chromium absorbs
+  // Auto-blur timer: fires 1000 ms after the user stops typing. Chromium absorbs
   // touchpad two-finger-tap gestures on DOM-focused inputs (no contextmenu event
   // fires at all), so the bulk-update popover can't open while the input is still
   // focused. Auto-blurring on idle releases focus so subsequent touchpad gestures
@@ -122,7 +122,7 @@ export const PricingItemCard = memo(function PricingItemCard({
     if (idleBlurRef.current) clearTimeout(idleBlurRef.current);
   }, []);
 
-  // Schedule a fresh 1500 ms idle blur on the given field. Cancels any prior pending one.
+  // Schedule a fresh 1000 ms idle blur on the given field. Cancels any prior pending one.
   const scheduleIdleBlur = useCallback((field: VarField) => {
     if (idleBlurRef.current) clearTimeout(idleBlurRef.current);
     idleBlurRef.current = setTimeout(() => {
@@ -132,7 +132,7 @@ export const PricingItemCard = memo(function PricingItemCard({
         console.log(`[pricing:card] item=${item.item_id} idle-blur field=${field} (released focus so touchpad gestures aren't absorbed)`);
         el.blur();
       }
-    }, 1500);
+    }, 1000);
   }, [item.item_id]);
 
   // Re-sync drafts from upstream variables, skipping any field the user is
