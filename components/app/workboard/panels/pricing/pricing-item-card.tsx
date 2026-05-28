@@ -164,6 +164,8 @@ export const PricingItemCard = memo(function PricingItemCard({
       const parsed = parseFormattedNumber(rawValue);
       if (parsed !== null) {
         // Complete number — commit immediately.
+        commitDebounceRef.current = null;
+        focusedFieldRef.current = null; // exit focus mode so variables sync re-formats the display
         const finalValue = field === "discount_rate" ? parsed / 100 : parsed;
         console.log(`[pricing:card] item=${item.item_id} change field=${field} raw="${rawValue}" parsed=${parsed} committed=${finalValue}`);
         updateVariable(item.item_id, field, finalValue);
