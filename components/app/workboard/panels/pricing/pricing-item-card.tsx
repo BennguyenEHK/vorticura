@@ -3,11 +3,10 @@
 // =============================================
 // PRICING ITEM CARD - Per-item variable inputs
 // =============================================
-// Displays item info and editable pricing variables.
-// Each input is *string-backed* during editing so partial-typing tokens
-// (e.g. "1.", "5,") survive re-renders. We only commit to numeric state
-// when the input parses to a complete number (parseFormattedNumber returns
-// non-null). On blur, we commit the latest typed value (resolves "1." → 1).
+// Each input is string-backed during editing so partial tokens ("1.", "5,")
+// survive re-renders. Complete numbers commit on every keystroke. Partial
+// tokens auto-commit 400 ms after the user stops typing. Blur commits
+// immediately and cancels any pending debounce.
 
 import { useState, useCallback, useEffect, useRef, memo } from "react";
 import { Input } from "@/components/ui/input";
@@ -93,7 +92,6 @@ export const PricingItemCard = memo(function PricingItemCard({
 }: PricingItemCardProps) {
   const { updateVariable } = usePricingPanel();
 
-  const [focusedField, setFocusedField] = useState<VarField | null>(null);
   // Per-field input draft. Object indexed by field key.
   const [drafts, setDrafts] = useState<Record<VarField, string>>({
     shipping_cost: "",
@@ -103,18 +101,16 @@ export const PricingItemCard = memo(function PricingItemCard({
     discount_rate: "",
   });
 
-  // Re-sync drafts from upstream variables whenever they change AND the field
-  // isn't currently being edited. Without this guard, an upstream re-render
-  // during typing would clobber the in-flight draft.
   const commitDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Which field is actively being edited — mutated directly (no state) so
+  // focus/blur don't trigger re-renders. Read by the variables sync below.
+  const focusedFieldRef = useRef<VarField | null>(null);
 
-  // Cancel pending debounce on unmount to avoid state updates on dead components.
+  // Cancel pending debounce on unmount.
   useEffect(() => () => { if (commitDebounceRef.current) clearTimeout(commitDebounceRef.current); }, []);
 
-  const focusedFieldRef = useRef<VarField | null>(null);
-  useEffect(() => {
-    focusedFieldRef.current = focusedField;
-  }, [focusedField]);
+  // Re-sync drafts from upstream variables, skipping any field the user is
+  // currently editing so the in-flight draft is never clobbered.
   useEffect(() => {
     setDrafts((prev) => {
       const next = { ...prev };
@@ -145,7 +141,7 @@ export const PricingItemCard = memo(function PricingItemCard({
     (field: VarField) => {
       const raw = rawString(field, variables[field]);
       console.log(`[pricing:card] item=${item.item_id} focus field=${field} upstream=${variables[field]} raw="${raw}"`);
-      setFocusedField(field);
+      focusedFieldRef.current = field;
       setDrafts((prev) => ({ ...prev, [field]: raw }));
     },
     [variables, item.item_id]
@@ -176,6 +172,7 @@ export const PricingItemCard = memo(function PricingItemCard({
         // the contextmenu capture listener, so blur() in that handler is a no-op.
         commitDebounceRef.current = setTimeout(() => {
           commitDebounceRef.current = null;
+          focusedFieldRef.current = null; // exit focus mode so variables sync re-formats the display
           const resolved = parseFormattedNumber(rawValue);
           const finalValue = resolved !== null
             ? (field === "discount_rate" ? resolved / 100 : resolved)
@@ -196,7 +193,7 @@ export const PricingItemCard = memo(function PricingItemCard({
         clearTimeout(commitDebounceRef.current);
         commitDebounceRef.current = null;
       }
-      setFocusedField(null);
+      focusedFieldRef.current = null;
       const draft = drafts[field];
 
       if (draft.trim() === "") {
