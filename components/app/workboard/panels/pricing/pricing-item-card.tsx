@@ -149,6 +149,7 @@ export const PricingItemCard = memo(function PricingItemCard({
 
   const handleChange = useCallback(
     (field: VarField, rawValue: string) => {
+      focusedFieldRef.current = field; // re-arm focus guard after debounce may have cleared it
       setDrafts((prev) => ({ ...prev, [field]: rawValue }));
 
       // Cancel any pending debounce from the previous keystroke.
