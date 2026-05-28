@@ -99,34 +99,45 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
   // to re-run; it always reads the latest data via ref.current.
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container) {
+      console.error("[pricing:list] containerRef is null — native contextmenu listener NOT attached");
+      return;
+    }
+    console.log("[pricing:list] native contextmenu capture listener attached");
 
     const nativeContextMenu = (e: MouseEvent) => {
-      // Only handle right-clicks on pricing variable inputs (have data-field attr)
       const inputEl = e.target as HTMLElement;
-      if (inputEl.tagName !== "INPUT") return;
+      if (inputEl.tagName !== "INPUT") {
+        console.log(`[pricing:list] contextmenu target=${inputEl.tagName} — not an INPUT, skipped`);
+        return;
+      }
       const field = (inputEl as HTMLInputElement).dataset.field as
         | keyof Omit<PricingVariable, "item_id">
         | undefined;
-      if (!field) return;
+      if (!field) {
+        console.warn("[pricing:list] contextmenu on INPUT with no data-field attr — skipped (input may not be a pricing variable)");
+        return;
+      }
 
-      // Suppress OS / Chromium context menu — this is what the reference does.
       e.preventDefault();
-
-      // Blur the input to commit the in-flight draft and clear Chromium's
-      // active-edit state so re-opening the popover works consistently.
       (inputEl as HTMLInputElement).blur();
 
-      // Resolve which card was clicked from its data-item-id attribute.
       const cardEl = inputEl.closest("[data-item-id]") as HTMLElement | null;
       const clickedId = cardEl
         ? Number(cardEl.dataset.itemId)
         : filteredItemsRef.current[0]?.item_id;
 
-      // Seed the popover from the raw numeric variable (not the DOM value),
-      // so formatted "50,000" doesn't mis-parse as 50.
+      if (!cardEl) {
+        console.warn(`[pricing:list] contextmenu field=${field} — no [data-item-id] ancestor found, falling back to first item id=${clickedId}`);
+      }
+
       const clickedVar = variablesMapRef.current.get(clickedId ?? -1);
+      if (!clickedVar) {
+        console.warn(`[pricing:list] contextmenu itemId=${clickedId} not in variablesMap (size=${variablesMapRef.current.size}) — seed will be ""`);
+      }
       const seed = clickedVar ? variableToInputString(field, clickedVar[field]) : "";
+
+      console.log(`[pricing:list] popover open field=${field} itemId=${clickedId} seed="${seed}" filteredItems=${filteredItemsRef.current.length} pos=(${e.clientX},${e.clientY})`);
 
       setBulkState({
         isOpen: true,
@@ -138,7 +149,10 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
     };
 
     container.addEventListener("contextmenu", nativeContextMenu, { capture: true });
-    return () => container.removeEventListener("contextmenu", nativeContextMenu, { capture: true });
+    return () => {
+      console.log("[pricing:list] native contextmenu capture listener removed");
+      container.removeEventListener("contextmenu", nativeContextMenu, { capture: true });
+    };
   }, []); // empty — all dynamic data accessed via refs
 
   // Close bulk update popover

@@ -114,12 +114,19 @@ export const PricingItemCard = memo(function PricingItemCard({
     setDrafts((prev) => {
       const next = { ...prev };
       (Object.keys(prev) as VarField[]).forEach((field) => {
-        if (focusedFieldRef.current === field) return; // don't clobber active draft
-        next[field] = formattedString(field, variables[field]);
+        if (focusedFieldRef.current === field) {
+          console.log(`[pricing:card] item=${item.item_id} sync skip field=${field} (currently focused)`);
+          return;
+        }
+        const newDisplay = formattedString(field, variables[field]);
+        if (prev[field] !== newDisplay) {
+          console.log(`[pricing:card] item=${item.item_id} sync field=${field} "${prev[field]}"→"${newDisplay}" (upstream=${variables[field]})`);
+        }
+        next[field] = newDisplay;
       });
       return next;
     });
-  }, [variables]);
+  }, [variables, item.item_id]);
 
   // Truncate description for display
   const truncateText = (text: string, maxLength: number) => {
@@ -131,30 +138,29 @@ export const PricingItemCard = memo(function PricingItemCard({
 
   const handleFocus = useCallback(
     (field: VarField) => {
+      const raw = rawString(field, variables[field]);
+      console.log(`[pricing:card] item=${item.item_id} focus field=${field} upstream=${variables[field]} raw="${raw}"`);
       setFocusedField(field);
-      // On focus, swap formatted display for raw (no thousand separators) so
-      // editing is intuitive. Empty for null.
-      setDrafts((prev) => ({ ...prev, [field]: rawString(field, variables[field]) }));
+      setDrafts((prev) => ({ ...prev, [field]: raw }));
     },
-    [variables]
+    [variables, item.item_id]
   );
 
   const handleChange = useCallback(
     (field: VarField, rawValue: string) => {
-      // Always reflect the user's keystrokes in the draft, even if not yet a
-      // complete number. This is what makes "1." stable while typing toward "1.5".
       setDrafts((prev) => ({ ...prev, [field]: rawValue }));
 
-      // Empty string → clear the upstream value (back to ghost / use default).
       if (rawValue.trim() === "") {
+        console.log(`[pricing:card] item=${item.item_id} change field=${field} empty → null`);
         updateVariable(item.item_id, field, null);
         return;
       }
 
       const parsed = parseFormattedNumber(rawValue);
-      if (parsed === null) return; // partial token (e.g. "1.") — wait for more input
+      if (parsed === null) return; // partial token — wait for more input
 
       const finalValue = field === "discount_rate" ? parsed / 100 : parsed;
+      console.log(`[pricing:card] item=${item.item_id} change field=${field} raw="${rawValue}" parsed=${parsed} committed=${finalValue}`);
       updateVariable(item.item_id, field, finalValue);
     },
     [item.item_id, updateVariable]
@@ -163,28 +169,23 @@ export const PricingItemCard = memo(function PricingItemCard({
   const handleBlur = useCallback(
     (field: VarField) => {
       setFocusedField(null);
-
-      // Commit the trailing draft on blur: if the user left "1." in the field,
-      // resolve it to 1 (or to null when empty/garbage).
       const draft = drafts[field];
+
       if (draft.trim() === "") {
+        console.log(`[pricing:card] item=${item.item_id} blur field=${field} draft="" → null`);
         updateVariable(item.item_id, field, null);
       } else {
         const parsed = parseFormattedNumber(draft);
         if (parsed !== null) {
           const finalValue = field === "discount_rate" ? parsed / 100 : parsed;
+          console.log(`[pricing:card] item=${item.item_id} blur field=${field} draft="${draft}" committed=${finalValue}`);
           updateVariable(item.item_id, field, finalValue);
+        } else {
+          console.warn(`[pricing:card] item=${item.item_id} blur field=${field} draft="${draft}" parse failed — upstream unchanged (upstream=${variables[field]})`);
         }
-        // If parse still null after blur (e.g. literally "abc"), leave the
-        // upstream value alone; the next render will replace the draft with
-        // whatever variables[field] currently is.
       }
-
-      // After blur, re-derive draft from the (now committed) upstream value
-      // so the display flips to formatted.
-      // The variables-driven useEffect will handle that on the next render.
     },
-    [drafts, item.item_id, updateVariable]
+    [drafts, item.item_id, updateVariable, variables]
   );
 
 

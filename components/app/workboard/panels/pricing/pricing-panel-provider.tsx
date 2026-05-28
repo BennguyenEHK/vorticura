@@ -100,23 +100,22 @@ export function PricingPanelProvider({
   useEffect(() => {
     if (!propRfqId) return;
     let cancelled = false;
+    console.log(`[pricing:provider] loading rfqId=${propRfqId} previewKey=${previewQuotationKey}`);
     setIsLoading(true);
     setError(null);
     fetchQuotationForPricing(propRfqId)
       .then(data => {
         if (cancelled) return;
         if (!data) {
-          // No quotation yet — keep panel empty until generate quote is pressed
+          console.log(`[pricing:provider] rfqId=${propRfqId} no quotation yet — panel cleared`);
           setItems([]);
           setVariables([]);
           setCalculatedPricing([]);
           return;
         }
+        console.log(`[pricing:provider] rfqId=${propRfqId} loaded quotationId=${data.quotationId} items=${data.items.length} variables=${(data.variables as unknown[]).length} calculatedRows=${(data.calculated_pricing ?? []).length}`);
         setQuotationId(data.quotationId);
         setItems(data.items as QuotationItem[]);
-        // Ghost-mode: only adopt a variable value if a saved row exists for it
-        // (data.variables comes from quotation_pricing rows). Otherwise leave
-        // the field null so the UI shows the default as placeholder text.
         const ghostVariables: PricingVariable[] = (data.variables as unknown as Array<Record<string, unknown>>).map(v => ({
           item_id: Number(v.item_id),
           shipping_cost: v.shipping_cost == null ? null : Number(v.shipping_cost),
@@ -126,9 +125,6 @@ export function PricingPanelProvider({
           discount_rate: v.discount_rate == null ? null : Number(v.discount_rate),
         }));
         setVariables(ghostVariables);
-        // Rehydrate Potential Profit table from prior Apply — only rows where
-        // sales_unit_price was actually saved are returned. Empty array on
-        // first load keeps the "No calculations yet" empty state intact.
         const rehydratedCalc: CalculatedPricing[] = (data.calculated_pricing ?? []).map(c => ({
           item_id: Number(c.item_id),
           sales_unit_price: Number(c.sales_unit_price),
@@ -139,7 +135,10 @@ export function PricingPanelProvider({
         setCalculatedPricing(rehydratedCalc);
       })
       .catch(err => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load pricing data');
+        if (!cancelled) {
+          console.error(`[pricing:provider] rfqId=${propRfqId} load failed:`, err);
+          setError(err instanceof Error ? err.message : 'Failed to load pricing data');
+        }
       })
       .finally(() => { if (!cancelled) setIsLoading(false); });
     return () => { cancelled = true; };
@@ -163,9 +162,12 @@ export function PricingPanelProvider({
   /** Update a single pricing variable for an item */
   const updateVariable = useCallback(
     (itemId: number, field: keyof Omit<PricingVariable, "item_id">, value: number | null) => {
-      setVariables((prev) =>
-        prev.map((v) => (v.item_id === itemId ? { ...v, [field]: value } : v))
-      );
+      console.log(`[pricing:provider] updateVariable item=${itemId} field=${field} →${value}`);
+      setVariables((prev) => {
+        const match = prev.find(v => v.item_id === itemId);
+        if (!match) console.warn(`[pricing:provider] updateVariable item=${itemId} not found in variables (total=${prev.length})`);
+        return prev.map((v) => (v.item_id === itemId ? { ...v, [field]: value } : v));
+      });
     },
     []
   );
@@ -173,6 +175,7 @@ export function PricingPanelProvider({
   /** Bulk update a pricing variable across multiple items */
   const bulkUpdateVariable = useCallback(
     (itemIds: number[], field: keyof Omit<PricingVariable, "item_id">, value: number | null) => {
+      console.log(`[pricing:provider] bulkUpdateVariable field=${field} →${value} ids=[${itemIds.join(",")}]`);
       setVariables((prev) =>
         prev.map((v) =>
           itemIds.includes(v.item_id) ? { ...v, [field]: value } : v
@@ -191,9 +194,11 @@ export function PricingPanelProvider({
   /** Apply pricing calculations via server action */
   const applyPricing = useCallback(async () => {
     if (!quotationId || variables.length === 0) {
+      console.warn(`[pricing:provider] applyPricing blocked: quotationId=${quotationId} variables=${variables.length}`);
       setError("No quotation loaded — generate a quote first.");
       return;
     }
+    console.log(`[pricing:provider] applyPricing start quotationId=${quotationId} variables=${variables.length}`);
     setIsCalculating(true);
     setError(null);
     setWarning(null);
@@ -213,16 +218,20 @@ export function PricingPanelProvider({
       };
       const result = await handleHTTPRequest(payload) as { success: boolean; data?: any; error?: string };
       if (!result.success) {
+        console.error(`[pricing:provider] applyPricing server error: ${result.error}`);
         setError(result.error || 'Pricing calculation failed');
       } else {
         const calculated: CalculatedPricing[] = result.data.calculated_pricing;
-        setCalculatedPricing(calculated);
         const partialErrors = result.data.errors;
+        console.log(`[pricing:provider] applyPricing ok calculated=${calculated?.length} partialErrors=${partialErrors?.length ?? 0}`);
+        setCalculatedPricing(calculated);
         if (Array.isArray(partialErrors) && partialErrors.length > 0) {
+          console.warn(`[pricing:provider] applyPricing partial errors:`, partialErrors);
           setWarning(`Calculated with ${partialErrors.length} partial error${partialErrors.length > 1 ? 's' : ''}. First: ${partialErrors[0].error}`);
         }
       }
     } catch (err) {
+      console.error("[pricing:provider] applyPricing threw:", err);
       setError(err instanceof Error ? err.message : "Pricing calculation failed");
     } finally {
       setIsCalculating(false);

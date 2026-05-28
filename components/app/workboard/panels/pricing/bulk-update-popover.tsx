@@ -58,24 +58,35 @@ export function BulkUpdatePopover({
   // Calculate popover position (prevent overflow)
   const [adjustedPosition, setAdjustedPosition] = useState(position);
 
+  // Mount/unmount tracer — confirms the popover actually reached the DOM via portal.
+  useEffect(() => {
+    console.log(`[pricing:popover] mounted field=${field} items=${items.length} pos=(${position.x},${position.y}) seed="${initialValue}"`);
+    return () => {
+      console.log(`[pricing:popover] unmounted field=${field}`);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Position clamping: deferred via rAF to avoid blocking the main thread.
-  // BulkUpdatePopover only mounts after user interaction (right-click) — SSR guard not needed.
   useEffect(() => {
-    if (!popoverRef.current) return;
+    if (!popoverRef.current) {
+      console.warn("[pricing:popover] position rAF: popoverRef null at schedule time");
+      return;
+    }
     const frame = requestAnimationFrame(() => {
-      if (!popoverRef.current) return;
+      if (!popoverRef.current) {
+        console.warn("[pricing:popover] position rAF: popoverRef null inside rAF — skipping clamp");
+        return;
+      }
       const rect = popoverRef.current.getBoundingClientRect();
       const vw = window.innerWidth;
       const vh = window.innerHeight;
       const margin = 12;
 
-      // Horizontal: clamp to viewport
       let x = position.x;
       if (x + rect.width > vw - margin) x = vw - rect.width - margin;
       if (x < margin) x = margin;
 
-      // Vertical: flip above the click when popover would overflow the bottom.
       let y = position.y;
       const spaceBelow = vh - position.y - margin;
       const spaceAbove = position.y - margin;
@@ -86,6 +97,7 @@ export function BulkUpdatePopover({
       }
       if (y < margin) y = margin;
 
+      console.log(`[pricing:popover] position clamped (${position.x},${position.y})→(${x},${y}) popover=${Math.round(rect.width)}x${Math.round(rect.height)} viewport=${vw}x${vh}`);
       setAdjustedPosition({ x, y });
     });
     return () => cancelAnimationFrame(frame);
@@ -101,12 +113,14 @@ export function BulkUpdatePopover({
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        console.log(`[pricing:popover] click-outside → closing (target=${(e.target as HTMLElement).tagName})`);
         onClose();
       }
     };
 
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        console.log("[pricing:popover] Escape key → closing");
         onClose();
       }
     };
@@ -141,21 +155,27 @@ export function BulkUpdatePopover({
     });
   }, []);
 
-  // Apply bulk update. Empty value clears the field across all selected items
-  // (sets to null → ghost placeholder). Non-empty must parse to a complete number.
   const handleApply = useCallback(() => {
-    if (selectedIds.size === 0) return;
+    if (selectedIds.size === 0) {
+      console.warn("[pricing:popover] apply blocked: no items selected");
+      return;
+    }
 
     if (value.trim() === "") {
+      console.log(`[pricing:popover] apply field=${field} value="" → null (clear) ids=[${Array.from(selectedIds).join(",")}]`);
       bulkUpdateVariable(Array.from(selectedIds), field, null);
       onClose();
       return;
     }
 
     const parsed = parseFormattedNumber(value);
-    if (parsed === null) return; // partial token — keep popover open
+    if (parsed === null) {
+      console.warn(`[pricing:popover] apply blocked: value="${value}" is still a partial token (parseFormattedNumber returned null)`);
+      return;
+    }
 
     const finalValue = field === "discount_rate" ? parsed / 100 : parsed;
+    console.log(`[pricing:popover] apply field=${field} value="${value}" parsed=${parsed} final=${finalValue} ids=[${Array.from(selectedIds).join(",")}]`);
     bulkUpdateVariable(Array.from(selectedIds), field, finalValue);
     onClose();
   }, [value, selectedIds, field, bulkUpdateVariable, onClose]);
