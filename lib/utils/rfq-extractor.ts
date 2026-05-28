@@ -346,11 +346,14 @@ function extractTableStateMachine(text: string): ExtractedItem[] {
     .filter(t => t.length > 0);
 
   // State machine
+  // EXPECT_MAXIMO_OR_DESC only exists to swallow the Maximo # token so it
+  // doesn't leak into the description. The Maximo value itself is discarded —
+  // it's a customer-internal asset reference, not part of the company-facing
+  // description we send to suppliers.
   type State = 'EXPECT_ITEM_NUM' | 'EXPECT_MAXIMO_OR_DESC' | 'COLLECT_DESC';
   let state: State = 'EXPECT_ITEM_NUM';
   let lastEmittedItemId = 0;
   let currentItemNum = 0;
-  let currentMaximo = '';
   let descBuffer: string[] = [];
   const items: ExtractedItem[] = [];
 
@@ -363,7 +366,6 @@ function extractTableStateMachine(text: string): ExtractedItem[] {
         const num = parseInt(token, 10);
         if (num === lastEmittedItemId + 1) {
           currentItemNum = num;
-          currentMaximo = '';
           descBuffer = [];
           state = 'EXPECT_MAXIMO_OR_DESC';
         }
@@ -373,12 +375,15 @@ function extractTableStateMachine(text: string): ExtractedItem[] {
 
     if (state === 'EXPECT_MAXIMO_OR_DESC') {
       // state: EXPECT_MAXIMO_OR_DESC → COLLECT_DESC
+      // Maximo # (5–7 digit asset code) is intentionally dropped — advance
+      // state without storing the token so it never appears in output.
       if (/^\d{5,7}$/.test(token)) {
-        currentMaximo = token;
         state = 'COLLECT_DESC';
       } else {
+        // No Maximo column for this row (e.g. item 9 "Deliverables"); this
+        // token is the first description fragment.
         state = 'COLLECT_DESC';
-        descBuffer.push(token); // First desc token
+        descBuffer.push(token);
       }
       continue;
     }
@@ -393,13 +398,12 @@ function extractTableStateMachine(text: string): ExtractedItem[] {
           (nextToken && String(lastEmittedItemId + 2) === nextToken); // next item number
 
         if (isQty) {
-          // state: COLLECT_DESC → emit and reset
+          // state: COLLECT_DESC → emit and reset (Maximo omitted by design)
           const qty = parseInt(token, 10);
           const desc = descBuffer.join(' ').trim();
-          const fullDesc = currentMaximo ? `${currentMaximo} | ${desc}` : desc;
           items.push({
             item_id: currentItemNum,
-            company_description: fullDesc,
+            company_description: desc,
             qty,
             uom: tableUom,
           });
