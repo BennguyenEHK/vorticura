@@ -104,25 +104,12 @@ export function BulkUpdatePopover({
   }, [position]);
 
   // Close on click outside.
-  // We use 'click' (not 'mousedown') so a touchpad two-finger tap that also
-  // generates a synthetic mousedown doesn't close the popover before the user
-  // sees it. 'click' fires only on a full press+release pair (primary button),
-  // which is the correct user-intent signal for "dismiss".
-  //
-  // Grace period: a touchpad two-finger-tap (contextmenu gesture) can produce a
-  // delayed synthetic click after blur() is called on the previously-focused
-  // input (Chromium text-editing state cleanup). That synthetic click arrives
-  // after our 100 ms open-defer and would immediately close the popover on the
-  // first tap. Ignoring clicks that arrive within 300 ms of mount sidesteps this
-  // entirely — legitimate user dismiss-clicks happen well after 300 ms.
+  // We use 'click' (not 'mousedown') so the stale pointer-completion event from
+  // a touchpad two-finger tap doesn't close the popover. The 350 ms open-defer
+  // in pricing-item-list guarantees the stale click(button=0) fires before this
+  // listener is registered, so no grace period is needed here.
   useEffect(() => {
-    const mountTime = Date.now();
-
     const handleClickOutside = (e: MouseEvent) => {
-      if (Date.now() - mountTime < 300) {
-        console.log(`[pricing:popover] click-outside suppressed (grace period, +${Date.now() - mountTime}ms)`);
-        return;
-      }
       if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
         console.log(`[pricing:popover] click-outside → closing (target=${(e.target as HTMLElement).tagName})`);
         onClose();

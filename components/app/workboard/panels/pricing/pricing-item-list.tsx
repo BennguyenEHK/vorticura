@@ -133,10 +133,14 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
 
       console.log(`[pricing:list] popover queued field=${field} itemId=${clickedId} seed="${seed}" filteredItems=${itemIds.length} pos=(${pos.x},${pos.y})`);
 
-      // 100 ms gives Chromium's async text-editing cleanup enough time to drain
-      // before the popover mounts and its click-outside listener activates.
-      // 0 ms only drains synchronous events; for a still-DOM-focused input the
-      // cleanup is asynchronous and survives a 0 ms delay.
+      // 350 ms delay: Windows Precision Touchpad two-finger tap fires contextmenu
+      // while fingers are still down, then generates a stale click(button=0) when
+      // fingers lift (~50–300 ms later, since the driver requires lift within ~300 ms
+      // to classify the gesture as a tap). Opening the popover at 350 ms guarantees
+      // the stale click has already fired before the popover mounts and its
+      // click-outside listener activates, so the stale click is never seen.
+      // Physical mouse right-click never generates click(button=0), so it is
+      // unaffected by this delay.
       setTimeout(() => {
         console.log(`[pricing:list] popover open (deferred) field=${field} itemId=${clickedId} seed="${seed}"`);
         setBulkState({
@@ -146,7 +150,7 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
           value: seed,
           anchorPosition: pos,
         });
-      }, 100);
+      }, 350);
     };
 
     const nativeContextMenu = (e: MouseEvent) => {
