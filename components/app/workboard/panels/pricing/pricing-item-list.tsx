@@ -136,27 +136,44 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
       // contextmenu fires, clearing Chromium's editing state early. The stale
       // pointer-completion click that the touchpad driver generates is therefore
       // not produced (no editing state to clean up), so the 350 ms workaround
-      // is no longer needed.
-      setTimeout(() => {
-        console.log(`[pricing:list] popover open (deferred) field=${field} itemId=${clickedId} seed="${seed}"`);
-        setBulkState({
-          isOpen: true,
-          field,
-          selectedItemIds: itemIds,
-          value: seed,
-          anchorPosition: pos,
-        });
-      }, 100);
+      // is no longer needed. Use requestAnimationFrame + timeout to ensure we
+      // schedule the popover after the current frame and allow the browser to
+      // finish any focus/blur work synchronously triggered by the gesture.
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          console.log(`[pricing:list] popover open (deferred) field=${field} itemId=${clickedId} seed="${seed}"`);
+          setBulkState({
+            isOpen: true,
+            field,
+            selectedItemIds: itemIds,
+            value: seed,
+            anchorPosition: pos,
+          });
+        }, 100);
+      });
     };
 
     // Pre-blur helpers — exit edit mode before contextmenu fires so Chromium
     // has no editing state to clean up, preventing the stale pointer-completion
     // click that would otherwise close the popover immediately.
+    // We cache the active input element before blurring so the subsequent
+    // capture-phase `contextmenu` handler can still resolve the original
+    // input even if focus has already been removed (touchpad midpoint cases).
+    const lastActiveInputRef = useRef<HTMLInputElement | null>(null);
     const preBlurActive = (source: string) => {
       const active = document.activeElement as HTMLElement | null;
       if (active && active.tagName === "INPUT" && (active as HTMLInputElement).dataset.field) {
-        console.log(`[pricing:list] ${source} pre-blur field=${(active as HTMLInputElement).dataset.field}`);
-        active.blur();
+        const inputActive = active as HTMLInputElement;
+        console.log(`[pricing:list] ${source} pre-blur field=${inputActive.dataset.field}`);
+        // Cache the input element so the contextmenu handler can still use it
+        // even after the blur has occurred (avoids race where activeElement
+        // is already cleared by the time contextmenu runs).
+        lastActiveInputRef.current = inputActive;
+        inputActive.blur();
+        // Clear the cached ref shortly after to avoid holding stale DOM refs.
+        setTimeout(() => {
+          if (lastActiveInputRef.current === inputActive) lastActiveInputRef.current = null;
+        }, 500);
       }
     };
 
@@ -199,6 +216,9 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
 
       // Tier 3: active-element fallback — when the user is editing a field and
       // two-finger taps near it, honour the focused input within the same card.
+      // If the input was programmatically blurred by preBlurActive, prefer the
+      // cached `lastActiveInputRef` so we can still open the popover for the
+      // field the user was interacting with.
       if (!inputEl) {
         const card = target.closest("[data-item-id]") as HTMLElement | null;
         const active = document.activeElement as HTMLElement | null;
@@ -210,6 +230,18 @@ export function PricingItemList({ className = "" }: PricingItemListProps) {
         ) {
           inputEl = active as HTMLInputElement;
           console.log(`[pricing:list] contextmenu: tier-3 activeElement fallback field=${inputEl.dataset.field}`);
+        } else if (!inputEl && lastActiveInputRef.current) {
+          const cached = lastActiveInputRef.current;
+          const cachedCard = cached.closest("[data-item-id]") as HTMLElement | null;
+          // Prefer cached input only if it is within the same card (or if the
+          // target had no card context). This avoids accidentally using an
+          // unrelated input from elsewhere in the list.
+          if ((card && cachedCard && cachedCard === card) || (!card && cachedCard)) {
+            inputEl = cached;
+            console.log(`[pricing:list] contextmenu: tier-3 cached fallback field=${inputEl.dataset.field}`);
+            // consume the cached ref to avoid reuse on subsequent unrelated events
+            lastActiveInputRef.current = null;
+          }
         }
       }
 
