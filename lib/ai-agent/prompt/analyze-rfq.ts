@@ -14,7 +14,7 @@ Output schema:
     "analysis_status": "completed"
   },
   "customer_partial": {
-    "company_name": "Full legal company name",/
+    "company_name": "Full legal company name",
     "customer_address": "Full mailing address"
   }
 }
@@ -24,7 +24,7 @@ Rules:
 - rfq_analysis.analysis_content: summarize scope, key requirements, deadlines, compliance notes, anything needing clarification, added <br> tags to separate the distinct sections for better readability.
 - rfq_analysis.analysis_status: always "completed".
 - customer_partial.company_name: extract the full legal company name of the SENDER (not the recipient).
-- customer_partial.customer_address: extract full mailing address from email signature or body.
+- customer_partial.customer_address: extract the mailing address of the SENDER's company ONLY (the company in the From header / from_email domain). If the body or attachment contains an address belonging to a DIFFERENT organization — e.g. a forwarded RFQ whose original issuer is a third party — DO NOT return that address. Return "" instead and surface a clarification note in analysis_content.
 - If a field is not found, use empty string "".
 - Do NOT extract: email, phone, fax, items, quantities — these are handled separately.`;
 

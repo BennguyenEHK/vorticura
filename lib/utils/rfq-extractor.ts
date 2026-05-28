@@ -214,9 +214,9 @@ function extractAttentionPerson(
 /**
  * Extract carbon copy persons from attachment text or email CC header.
  *
- * Priority:
- *   1. Attachment "C.c:" / "Cc:" lines (formal RFQ document)
- *   2. Email CC header (already an array of email addresses)
+ * Handles both newline-separated entries and flattened single-line CC blocks
+ * where names are separated by salutation lookahead (Mr/Mrs/Ms/Dr).
+ * Priority: Attachment CC block → Email CC header.
  */
 function extractCarbonCopy(
   ccHeader: string[],
@@ -225,16 +225,30 @@ function extractCarbonCopy(
 ): string[] {
   const result: string[] = [];
 
-  // ── Source 1: Attachment "C.c:" / "Cc:" lines ──
-  const ccBlockMatch = attachmentText.match(
-    /C\.?c[:\s]+\n*((?:[^\n]*[A-Z][a-z]+[^\n]*\n?)+)/i
+  // ── Source 1: Attachment "C.c:" / "Cc:" block ──
+  const ccPayloadMatch = attachmentText.match(
+    /C\.?c\s*:\s*([^\n]*?)(?=\s{2,}(?:Page|Subject|Dear|Enclosed|Re:|To:|From:|Attn:|Phone)\b|\n\n|$)/i
   );
-  if (ccBlockMatch) {
-    const lines = ccBlockMatch[1].split('\n').filter(l => l.trim());
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.length >= 3 && /[A-Z]/.test(trimmed)) {
-        result.push(trimmed);
+
+  if (ccPayloadMatch) {
+    const payload = ccPayloadMatch[1];
+
+    // Split by salutation lookahead: Mr/Mrs/Ms/Dr followed by uppercase letter
+    const segments = payload.split(/(?=\b(?:Mr|Mrs|Ms|Dr)\.?\s+[A-Z])/g);
+
+    for (const segment of segments) {
+      let trimmed = segment.trim();
+      if (!trimmed) continue;
+
+      // Strip leading salutation
+      trimmed = trimmed.replace(/^(?:Mr|Mrs|Ms|Dr)\.?\s+/i, '');
+
+      // Cut at first comma (job title / department / company)
+      const beforeComma = trimmed.split(',')[0].trim();
+
+      // Reject if <3 chars after cleanup
+      if (beforeComma.length >= 3) {
+        result.push(beforeComma);
       }
     }
   }
@@ -267,22 +281,20 @@ function extractFax(body: string): string {
 
 /**
  * Extract RFQ line items from text.
- * Strategy 1: Pipe-delimited table (email body format)
- * Strategy 2: PDF-extracted structured text (item number, maximo, description on separate lines, QTY block)
+ * Unified state-machine approach handles both email body (newline-separated tokens)
+ * and PDF (single-line with ≥2 spaces as separators).
+ * Falls back to pipe-delimited strategy if table SM yields zero items.
  */
 export function extractRfqItems(text: string): ExtractedItem[] {
-  // Strategy 1: Pipe-delimited tables (existing logic)
-  const pipeItems = extractPipeDelimitedItems(text);
-  if (pipeItems.length > 0) return pipeItems;
+  // Try state machine first (works for both email and PDF layouts)
+  const smItems = extractTableStateMachine(text);
+  if (smItems.length > 0) return smItems;
 
-  // Strategy 2: PDF-extracted structured text
-  const pdfItems = extractPdfStructuredItems(text);
-  if (pdfItems.length > 0) return pdfItems;
-
-  return [];
+  // Fallback: pipe-delimited tables (for existing pipe-delimited tests)
+  return extractPipeDelimitedItems(text);
 }
 
-/** Strategy 1: Pipe-delimited table rows */
+/** Pipe-delimited table rows — fast path for pipe-separated formats */
 function extractPipeDelimitedItems(body: string): ExtractedItem[] {
   const items: ExtractedItem[] = [];
   const pipeRows = body.match(/^\d+\s*\|.+$/gm);
@@ -309,72 +321,98 @@ function extractPipeDelimitedItems(body: string): ExtractedItem[] {
   return items;
 }
 
-/** Strategy 2: PDF-extracted text where items and QTY are in separate blocks */
-function extractPdfStructuredItems(text: string): ExtractedItem[] {
+/** State machine to extract RFQ items from both email and PDF layouts */
+function extractTableStateMachine(text: string): ExtractedItem[] {
+  // Locate table region
+  const startPattern = /(?:1\.\s*)?(?:Scope\s+of\s+Requirement|Description\s+of\s+Goods\/Services)/i;
+  const endPattern = /(?:\d+\.\s*(?:Price\s+Terms|Payment|Delivery|Warranty|Special)|^\s*\*+\s*$|(?:Thank\s+you|Sincerely|Best\s+regards|Kind\s+regards))/im;
+
+  const startMatch = text.search(startPattern);
+  if (startMatch === -1) return [];
+
+  const afterStart = text.slice(startMatch);
+  const endMatch = afterStart.search(endPattern);
+  const tableSlice = endMatch >= 0 ? afterStart.slice(0, endMatch) : afterStart;
+
+  // Extract table-wide UOM from first QTY (column header)
+  const uomMatch = tableSlice.match(/QTY\s*\(([A-Z]+)\)/i);
+  const tableUom = uomMatch ? uomMatch[1].toUpperCase() : 'EA';
+
+  // Normalize layout: collapse ≥2 spaces to newlines, strip markdown bold
+  const normalized = tableSlice
+    .replace(/[\*_]+/g, '') // Strip markdown bold
+    .replace(/  +/g, '\n') // Collapse ≥2 spaces into newlines
+    .split(/\s+/) // Final tokenization
+    .filter(t => t.length > 0);
+
+  // State machine
+  type State = 'EXPECT_ITEM_NUM' | 'EXPECT_MAXIMO_OR_DESC' | 'COLLECT_DESC';
+  let state: State = 'EXPECT_ITEM_NUM';
+  let lastEmittedItemId = 0;
+  let currentItemNum = 0;
+  let currentMaximo = '';
+  let descBuffer: string[] = [];
   const items: ExtractedItem[] = [];
 
-  // Locate the "Scope of Requirement" section (or "Description of Goods/Services")
-  const scopeStart = text.search(/(?:Scope\s+of\s+Requirement|Description\s+of\s+Goods)/i);
-  if (scopeStart === -1) return items;
+  for (let i = 0; i < normalized.length; i++) {
+    const token = normalized[i];
 
-  // Locate the end marker (next numbered section: "2. Price Terms" or similar)
-  const afterScope = text.slice(scopeStart);
-  const scopeEnd = afterScope.search(/^\d+\.\s+(?:Price|Payment|Delivery|Warranty|Special)/im);
-  const scopeText = scopeEnd > 0 ? afterScope.slice(0, scopeEnd) : afterScope;
-
-  const lines = scopeText.split(/\r?\n/);
-  let currentItem: { num: number; maximo: string; descLines: string[] } | null = null;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-
-    if (/^\d{1,2}$/.test(line)) {
-      const num = parseInt(line, 10);
-      if (currentItem) items.push(buildItemFromBlock(currentItem));
-      currentItem = { num, maximo: '', descLines: [] };
+    if (state === 'EXPECT_ITEM_NUM') {
+      // state: EXPECT_ITEM_NUM → EXPECT_MAXIMO_OR_DESC
+      if (/^\d{1,2}$/.test(token)) {
+        const num = parseInt(token, 10);
+        if (num === lastEmittedItemId + 1) {
+          currentItemNum = num;
+          currentMaximo = '';
+          descBuffer = [];
+          state = 'EXPECT_MAXIMO_OR_DESC';
+        }
+      }
       continue;
     }
 
-    if (!currentItem) continue;
-
-    if (/^\d{5,7}$/.test(line) && !currentItem.maximo) {
-      currentItem.maximo = line;
+    if (state === 'EXPECT_MAXIMO_OR_DESC') {
+      // state: EXPECT_MAXIMO_OR_DESC → COLLECT_DESC
+      if (/^\d{5,7}$/.test(token)) {
+        currentMaximo = token;
+        state = 'COLLECT_DESC';
+      } else {
+        state = 'COLLECT_DESC';
+        descBuffer.push(token); // First desc token
+      }
       continue;
     }
 
-    if (/^QTY\b/i.test(line) || /^Page\s+\d/i.test(line)) break;
-    currentItem.descLines.push(line);
-  }
-  if (currentItem) items.push(buildItemFromBlock(currentItem));
+    if (state === 'COLLECT_DESC') {
+      // Check if token is qty (1–4 digits) followed by next item number or end-of-stream
+      if (/^\d{1,4}$/.test(token)) {
+        const nextIdx = i + 1;
+        const nextToken = nextIdx < normalized.length ? normalized[nextIdx] : null;
+        const isQty =
+          nextIdx >= normalized.length || // end-of-stream
+          (nextToken && String(lastEmittedItemId + 2) === nextToken); // next item number
 
-  // ── Parse QTY block ──
-  const qtyBlockMatch = text.match(
-    /(?:QTY\s*(?:\([A-Z]+\))?\s*\n+)((?:\s*\d+\s*\n)+)/im
-  );
-  if (qtyBlockMatch) {
-    const qtyLines = qtyBlockMatch[1].trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    for (let i = 0; i < Math.min(qtyLines.length, items.length); i++) {
-      const qty = parseInt(qtyLines[i], 10);
-      if (!isNaN(qty)) items[i].qty = qty;
+        if (isQty) {
+          // state: COLLECT_DESC → emit and reset
+          const qty = parseInt(token, 10);
+          const desc = descBuffer.join(' ').trim();
+          const fullDesc = currentMaximo ? `${currentMaximo} | ${desc}` : desc;
+          items.push({
+            item_id: currentItemNum,
+            company_description: fullDesc,
+            qty,
+            uom: tableUom,
+          });
+          lastEmittedItemId = currentItemNum;
+          state = 'EXPECT_ITEM_NUM';
+          continue;
+        }
+      }
+      descBuffer.push(token);
     }
   }
 
   return items;
-}
-
-/** Build ExtractedItem from a parsed block */
-function buildItemFromBlock(
-  block: { num: number; maximo: string; descLines: string[] }
-): ExtractedItem {
-  const desc = block.descLines.join(' ').trim();
-  const fullDesc = block.maximo ? `${block.maximo} | ${desc}` : desc;
-  return {
-    item_id: block.num,
-    company_description: fullDesc,
-    qty: 1,  // Default — will be overwritten by QTY block parsing
-    uom: 'EA',
-  };
 }
 
 /**

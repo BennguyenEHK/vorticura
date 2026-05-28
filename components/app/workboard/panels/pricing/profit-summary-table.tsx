@@ -79,14 +79,16 @@ export function ProfitSummaryTable({ className = "" }: ProfitSummaryTableProps) 
 
       {/* Table */}
       <div className="rounded-lg border border-border bg-card overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="h-8 text-xs">Item</TableHead>
-              <TableHead className="h-8 text-xs text-center w-16">Qty</TableHead>
-              <TableHead className="h-8 text-xs text-right">Profit</TableHead>
-            </TableRow>
-          </TableHeader>
+        {/* 6 body rows × 32px = 192px body + 32px sticky header = 224px viewport */}
+        <div className={calculatedPricing.length > 6 ? "max-h-[224px] overflow-y-auto scroll-smooth" : ""}>
+          <Table>
+            <TableHeader className={calculatedPricing.length > 6 ? "sticky top-0 z-10 bg-card" : ""}>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="h-8 text-xs">Item</TableHead>
+                <TableHead className="h-8 text-xs text-center w-16">Qty</TableHead>
+                <TableHead className="h-8 text-xs text-right">Profit</TableHead>
+              </TableRow>
+            </TableHeader>
           <TableBody>
             {calculatedPricing.map((pricing) => {
               const item = itemsMap.get(pricing.item_id);
@@ -115,7 +117,8 @@ export function ProfitSummaryTable({ className = "" }: ProfitSummaryTableProps) 
               );
             })}
           </TableBody>
-        </Table>
+          </Table>
+        </div>
       </div>
 
       {/* Total row */}
