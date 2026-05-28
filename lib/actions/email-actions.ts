@@ -14,7 +14,7 @@ import { eq, and } from 'drizzle-orm';
 import { decryptToken, refreshGoogleToken, refreshMicrosoftToken, encryptToken } from '@/lib/services/email/oauth-helper';
 import { sendGmailMessage } from '@/lib/services/email/gmail-client';
 import { sendOutlookMessage } from '@/lib/services/email/outlook-client';
-import { hfChatCompletion } from '@/lib/ai-agent/hf-client';
+import { aiChatCompletion } from '@/lib/ai-agent/ai-router';
 import { GENERATE_EMAIL_PROMPT, buildEmailUserMessage, buildRegenerateEmailUserMessage } from '@/lib/ai-agent/prompt/generate-email';
 
 // ---------------------------------------------
@@ -60,7 +60,7 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
     switch (effectiveActionType) {
       case 'generate': {
         // Call AI to generate supplier inquiry email from RFQ context
-        const generated = await hfChatCompletion<{ subject: string; email_body: string }>(
+        const generated = await aiChatCompletion<{ subject: string; email_body: string }>(
           GENERATE_EMAIL_PROMPT,
           buildEmailUserMessage({
             emailType: 'supplier_inquiry',
@@ -77,7 +77,7 @@ export async function processEmail(input: ProcessorInput): Promise<ProcessorResu
       }
       case 're_generate': {
         // Re-generate email with user feedback via AI
-        const generated = await hfChatCompletion<{ subject: string; email_body: string }>(
+        const generated = await aiChatCompletion<{ subject: string; email_body: string }>(
           GENERATE_EMAIL_PROMPT,
           buildRegenerateEmailUserMessage({
             emailType: 'supplier_inquiry',

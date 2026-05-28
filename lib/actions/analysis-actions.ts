@@ -5,24 +5,17 @@
 // Flow: ProcessorInput → Pass 1 (deterministic extraction) → Pass 2 (AI) → merge → DB → result
 // Supports: analyze | reanalyze | handleRFQ (incoming_email routed)
 
-import { hfChatCompletion} from '@/lib/ai-agent/hf-client';
+import { aiChatCompletion } from '@/lib/ai-agent/ai-router';
 import { ANALYZE_RFQ_PROMPT, buildAnalyzeUserMessage, buildReanalyzeUserMessage } from '@/lib/ai-agent/prompt';
 import { modifyDatabase } from '@/lib/utils/databaseHandler';
 import { getData } from '@/lib/db/queries';
 // Sidebar queue push — emits a QueuedRFQ upsert on the 'rfq-queue' SSE channel
 import { emitQueuedRFQs } from '@/lib/services/rfq-queue/queue-manager';
-import { getLocalModel } from '@/lib/ai-agent/local-model';
 import { extractAll, type ExtractionResult } from '@/lib/utils/rfq-extractor';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
 import type { AnalysisData, MergedAnalysisData } from '@/types/ai-agent';
 import { getServerActionWorkspace } from '@/lib/middleware/get-workspace';
 import type { WorkspaceContext } from '@/lib/middleware/workspace-context';
-// ---------------------------------------------
-// Configuration
-// ---------------------------------------------
-
-/** AI inference mode: 'local' = run model locally, anything else = call remote API */
-const AI_MODE = process.env.AI_MODE || 'remote';
 
 // Prompt builder map: action_type → message builder function
 // handleRFQ/analyze → buildAnalyzeUserMessage (initial analysis from email or direct)
@@ -353,14 +346,8 @@ async function callAIAnalysis(input: ProcessorInput, subject: string, analysisCo
     });
   }
 
-  // Route: local model inference (no network required)
-  if (AI_MODE === 'local') {
-    console.log('[Analysis] Using local AI model');
-    return await getLocalModel().chatCompletion<AnalysisData>(ANALYZE_RFQ_PROMPT, userMessage);
-  }
-
-  // Route: remote API call via HuggingFace Inference SDK
-  return await hfChatCompletion<AnalysisData>(ANALYZE_RFQ_PROMPT, userMessage);
+  // Router picks HF or local per AI_MODE and falls back HF→local on remote failure
+  return await aiChatCompletion<AnalysisData>(ANALYZE_RFQ_PROMPT, userMessage);
 }
 
 // ---------------------------------------------

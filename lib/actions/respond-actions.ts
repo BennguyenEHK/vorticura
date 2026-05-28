@@ -17,17 +17,10 @@
 
 import { getData, updateData, insertData } from '@/lib/db/queries';
 import { buildSupplierItemStatusPayload } from '@/lib/utils/databaseHandler';
-import { getLocalModel } from '@/lib/ai-agent/local-model';
-import { hfChatCompletion, SUPPLIER_RESPOND_SYSTEM_PROMPT } from '@/lib/ai-agent/hf-client';
+import { aiChatCompletion } from '@/lib/ai-agent/ai-router';
+import { SUPPLIER_RESPOND_SYSTEM_PROMPT } from '@/lib/ai-agent/hf-client';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
 import type { WorkspaceContext } from '@/lib/middleware/workspace-context';
-
-// ---------------------------------------------
-// Configuration
-// ---------------------------------------------
-
-/** AI inference mode: 'local' = run model locally, anything else = call remote API */
-const AI_MODE = process.env.AI_MODE || 'remote';
 
 // ---------------------------------------------
 // Types
@@ -282,16 +275,11 @@ async function extractSupplierResponseFromEmail(
   // Build user message with full email context for AI extraction
   const userMessage = `From: ${emailData.from_name} <${emailData.from_email}>\nSubject: ${emailData.subject}\n\nEmail Body:\n${fullContent}${supplierMatch ? `\n\nContext: Supplier ID ${supplierMatch.supplierId}, RFQ ID ${supplierMatch.rfqId}` : ''}`;
 
-  // Call AI (local or remote) — both use the same prompt + message pattern
-  let extracted: { supplier_name: string; items: ExtractedItem[]; confidence: number };
-  if (AI_MODE === 'local') {
-    console.log('[Supplier Respond] Using local AI model for extraction');
-    // Generic chatCompletion<T> matches hf-client pattern
-    extracted = await getLocalModel().chatCompletion<typeof extracted>(SUPPLIER_RESPOND_SYSTEM_PROMPT, userMessage);
-  } else {
-    console.log('[Supplier Respond] Using HF Inference API for extraction');
-    extracted = await hfChatCompletion<typeof extracted>(SUPPLIER_RESPOND_SYSTEM_PROMPT, userMessage);
-  }
+  // Router gates on AI_MODE and falls back HF→local automatically
+  const extracted = await aiChatCompletion<{ supplier_name: string; items: ExtractedItem[]; confidence: number }>(
+    SUPPLIER_RESPOND_SYSTEM_PROMPT,
+    userMessage,
+  );
 
   // Fail fast if supplier could not be matched — prevent orphaned records with id=0
   if (!supplierMatch) {

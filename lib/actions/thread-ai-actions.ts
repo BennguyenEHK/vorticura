@@ -7,7 +7,7 @@
 
 'use server';
 
-import { hfChatCompletion } from '@/lib/ai-agent/hf-client';
+import { aiChatCompletion } from '@/lib/ai-agent/ai-router';
 import { getData, updateData } from '@/lib/db/queries';
 import { getServerActionWorkspace } from '@/lib/middleware/get-workspace';
 
@@ -33,7 +33,7 @@ export async function generateAIThreadSummary(
   const threadText = thread
     .map(m => `[${m.direction === 'outbound' ? 'You' : supplierName}]: ${m.body}`)
     .join('\n\n');
-  const result = await hfChatCompletion<{ text: string }>(
+  const result = await aiChatCompletion<{ text: string }>(
     SUMMARY_SYSTEM_PROMPT,
     `Supplier: ${supplierName}\nItem: ${itemName}\n\nThread:\n${threadText}`,
   );
@@ -207,7 +207,7 @@ export async function generateAIDraftReply(
   const threadText = thread.length > 0
     ? thread.map(m => `[${m.direction === 'outbound' ? 'You' : supplierName}]: ${m.body}`).join('\n\n')
     : '(No prior messages — this is the first follow-up)';
-  const result = await hfChatCompletion<{ text: string }>(
+  const result = await aiChatCompletion<{ text: string }>(
     DRAFT_REPLY_SYSTEM_PROMPT,
     `Write a follow-up reply to ${supplierName} regarding item: ${itemName}\n\nThread context:\n${threadText}`,
   );
