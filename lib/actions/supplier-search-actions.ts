@@ -2,8 +2,9 @@
 // SUPPLIER SEARCH ACTIONS — RAG pipeline (Tavily + vLLM guided extraction)
 // =============================================
 // Internal server module (called by data-processor, NOT a server action).
-// Flow: ProcessorInput → fetch rfq_items → per-item (Tavily search → vLLM
-// extract with guided_json) → URL guards → save to DB → ProcessorResult.
+// Flow: ProcessorInput → fetch rfq_items → sort by item_id ASC →
+//       per-item (tier-cascaded search → vLLM extract → stock filter →
+//       alt-URL re-loop) → URL guards → deterministic supplier_id → save → result.
 //
 // Both action_types route through the same RAG flow:
 //   - 'search'   : initial supplier discovery for an RFQ
@@ -18,7 +19,7 @@ import {
 import { getData } from '@/lib/db/queries';
 import { modifyDatabase } from '@/lib/utils/databaseHandler';
 import { aiChatCompletion } from '@/lib/ai-agent/ai-router';
-import { searchWeb } from '@/lib/services/search';
+import { searchWeb, isProductPage } from '@/lib/services/search';
 import { SUPPLIER_SCHEMA, type SupplierExtraction } from '@/lib/ai-agent/schemas/supplier';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
 
@@ -28,6 +29,13 @@ import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
 
 /** Per-RFQ concurrency cap — keeps Tavily free-tier happy and prevents pod OOM */
 const RAG_CONCURRENCY = 8;
+
+/**
+ * Maximum re-loop depth for alternative_source_url follow-ups. depth=1 means
+ * "primary supplier may have ONE alt; the alt has no alts of its own." Beyond
+ * this and we'd burn budget chasing cross-linked supplier graphs.
+ */
+const ALT_URL_MAX_DEPTH = 1;
 
 // ---------------------------------------------
 // DB row shape (mirrors items_source columns)
@@ -52,21 +60,8 @@ interface ItemSourceRow {
 // ---------------------------------------------
 // URL Guards
 // ---------------------------------------------
-
-/**
- * True only when the URL points at a specific page (not a bare domain).
- * Defensive net behind the LLM prompt's "no homepage" rule — the model is
- * good at this but we never fully trust it.
- */
-function isProductPage(url: string): boolean {
-  if (!url) return false;
-  try {
-    const u = new URL(url);
-    return u.pathname.length > 1;
-  } catch {
-    return false;
-  }
-}
+// isProductPage lives in lib/services/search — single source of truth shared
+// with the tier cascade. We re-export it implicitly via the import above.
 
 /**
  * HEAD-check each url in parallel; mark items dead when status >= 400 or fetch
@@ -119,7 +114,7 @@ function buildSearchContent(rfqReference: string, rows: ItemSourceRow[], dropped
 }
 
 // ---------------------------------------------
-// Per-item RAG: Tavily search → vLLM extract → typed row
+// Per-item RAG: tier-cascaded search → vLLM extract → typed rows
 // ---------------------------------------------
 
 interface RfqItemInput {
@@ -129,11 +124,33 @@ interface RfqItemInput {
   uom: string;
 }
 
-async function extractSupplierForItem(item: RfqItemInput): Promise<ItemSourceRow | null> {
-  // (1) Tier-walked Tavily search w/ Redis cache
+/**
+ * Extract one or more supplier rows for a single RFQ item.
+ *
+ * The function returns an ARRAY because of the alt-URL re-loop: the primary
+ * extracted supplier may explicitly reference an alternative product on a
+ * different page, which we follow once (depth=1) and return as an additional
+ * row tagged with "via_alt:<origin_supplier_id>" in its notes.
+ *
+ * Filters applied in order:
+ *   (1) Stock Protection — drop row if 0 < available_qty < (qty + 2).
+ *       available_qty === 0 means "unknown" and is treated as a bypass —
+ *       we never punish unknowns because the LLM can't extract what isn't
+ *       stated on the page.
+ *   (2) Alt-URL re-loop — at depth 0, follow alternative_source_url if
+ *       present and not already visited. Visited set is shared across the
+ *       recursion so cross-linked vendors can't infinite-loop.
+ */
+async function extractSupplierForItem(
+  item: RfqItemInput,
+  depth: number = 0,
+  visitedUrls: Set<string> = new Set(),
+): Promise<ItemSourceRow[] | null> {
+  // (1) Tier-walked Tavily search w/ Redis cache. Tier 3 is invoked INSIDE
+  //     searchWeb when Tiers 1/2 fall short of the verified threshold.
   const search = await searchWeb({ description: item.description, qty: item.qty, uom: item.uom });
   if (search.snippets.length === 0) {
-    console.warn(`[supplier-search] item=${item.itemId} no snippets after tier walk`);
+    console.warn(`[supplier-search] item=${item.itemId} depth=${depth} no snippets after tier walk`);
     return null;
   }
 
@@ -153,12 +170,28 @@ async function extractSupplierForItem(item: RfqItemInput): Promise<ItemSourceRow
       SUPPLIER_SCHEMA,    // honored by local vLLM; ignored by HF (see ai-router.ts)
     );
   } catch (err) {
-    console.warn(`[supplier-search] item=${item.itemId} llm error:`, err instanceof Error ? err.message : err);
+    console.warn(`[supplier-search] item=${item.itemId} depth=${depth} llm error:`, err instanceof Error ? err.message : err);
     return null;
   }
-  console.log(`[ai-server] item=${item.itemId} extract latency=${Date.now() - llmStart}ms`);
+  console.log(`[ai-server] item=${item.itemId} depth=${depth} extract latency=${Date.now() - llmStart}ms`);
 
-  return {
+  // (3) Stock Protection Rule — guard against suppliers who can't fulfill.
+  //     Required buffer is item.qty + 2. available_qty === 0 = "not stated" and
+  //     bypasses the filter (we don't have grounds to drop unknowns).
+  if (extracted.available_qty > 0 && extracted.available_qty < item.qty + 2) {
+    console.log(`[supplier-search] item=${item.itemId} depth=${depth} stock=${extracted.available_qty} below qty+2=${item.qty + 2}, dropping`);
+    return null;
+  }
+
+  // (4) Build the primary supplier row. notes carries both the LLM-authored
+  //     content and a structured stock summary prefix (for UI display);
+  //     when this is an alt-loop row, prepend the via_alt provenance tag.
+  const stockPrefix = extracted.available_qty > 0
+    ? `Stock: ${extracted.available_qty} available. `
+    : '';
+  const altTag = depth > 0 ? `via_alt: ` : '';
+
+  const primaryRow: ItemSourceRow = {
     item_id: item.itemId,
     supplier_id: 0,                      // placeholder — assigned post-merge
     supplier_name: extracted.supplier_name,
@@ -169,10 +202,38 @@ async function extractSupplierForItem(item: RfqItemInput): Promise<ItemSourceRow
     bidder_unit_price: extracted.bidder_unit_price,
     currency_code: extracted.currency_code || 'USD',
     compliance_deviation: extracted.compliance_deviation,
-    notes: extracted.notes,
+    notes: `${altTag}${stockPrefix}${extracted.notes}`.trim(),
     contact_email: extracted.contact_email,
     contact_phone: extracted.contact_phone,
   };
+
+  const rows: ItemSourceRow[] = [primaryRow];
+
+  // (5) Alt-URL re-loop — depth-capped + visited-set guarded.
+  //     The alternative_source_url is an EXPLICIT link the supplier offered;
+  //     we feed it back into the search loop as a new search subject so the
+  //     existing tier cascade discovers / extracts it. Reuses all infra.
+  if (
+    depth < ALT_URL_MAX_DEPTH &&
+    extracted.alternative_source_url &&
+    !visitedUrls.has(extracted.alternative_source_url)
+  ) {
+    // Mark both the current source and the alternative as visited BEFORE
+    // recursing — defends against A→B→A loops between cross-linked vendors.
+    if (extracted.source_url) visitedUrls.add(extracted.source_url);
+    visitedUrls.add(extracted.alternative_source_url);
+
+    const altRows = await extractSupplierForItem(
+      { ...item, description: extracted.alternative_source_url },
+      depth + 1,
+      visitedUrls,
+    );
+    if (altRows) {
+      rows.push(...altRows);
+    }
+  }
+
+  return rows;
 }
 
 // ---------------------------------------------
@@ -202,19 +263,28 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
       console.log(`[supplier-search] research feedback: notes=${noteCount} general=${(ai_comments.general_feedback || '').length}c`);
     }
 
-    // Fetch RFQ items from DB — single source of truth for "what to source"
-    const itemRows = rfq_id
+    // (1) Fetch RFQ items from DB — single source of truth for "what to source"
+    const itemRowsRaw = rfq_id
       ? ((await getData('rfqItems', { rfqId: rfq_id }, workspace)) as Array<Record<string, unknown>>)
       : [];
 
-    if (itemRows.length === 0) {
+    if (itemRowsRaw.length === 0) {
       throw new Error(`No rfq_items found for rfq_id=${rfq_id}`);
     }
+
+    // (2) Pre-sorting layer — sort by itemId ASC so supplier_id assignment is
+    //     deterministic and reproducible across re-runs. A re-run with the same
+    //     RFQ must always produce the same supplier_id sequence.
+    const itemRows = itemRowsRaw
+      .slice()
+      .sort((a, b) => Number(a.itemId) - Number(b.itemId));
 
     // Cap per-item concurrency so 30 items don't fire 30 parallel Tavily/vLLM calls
     const limit = pLimit(RAG_CONCURRENCY);
 
-    const rawItems = await Promise.all(
+    // (3) Per-item extraction. Returns arrays because one item may produce
+    //     {primary + 1 alt} rows when the alt-URL re-loop fires.
+    const rawItemArrays = await Promise.all(
       itemRows.map((row) =>
         limit(() =>
           extractSupplierForItem({
@@ -227,8 +297,10 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
       ),
     );
 
-    // Drop hard failures so downstream code only sees real items
-    const beforeUrlGuards = rawItems.filter((r): r is ItemSourceRow => r !== null);
+    // Drop hard failures (null) and flatten the alt-row arrays into one set.
+    const beforeUrlGuards: ItemSourceRow[] = rawItemArrays
+      .filter((r): r is ItemSourceRow[] => r !== null)
+      .flat();
 
     // URL guard — drop homepages even if the LLM slipped past the prompt rule.
     // We KEEP rows with empty source_url (those are explicit "no product page" markers).
@@ -239,8 +311,13 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     const itemsWithoutUrl = productPageItems.filter((r) => r.source_url === '');
     const { live, dropped: deadUrlCount } = await filterLiveUrls(itemsWithUrl);
 
-    // Sequential supplier_id assignment across the merged set (deterministic, no LLM)
-    const finalItems: ItemSourceRow[] = [...live, ...itemsWithoutUrl].map((row, idx) => ({
+    // (4) Merge survivors and assign supplier_id deterministically: sort by
+    //     item_id ASC, then enumerate. Rows from the same item_id are kept
+    //     adjacent (primary first, alts after — order preserved from the
+    //     extractor's rows[] return) because Array.sort() is stable in ES2019+.
+    const merged = [...live, ...itemsWithoutUrl];
+    merged.sort((a, b) => a.item_id - b.item_id);
+    const finalItems: ItemSourceRow[] = merged.map((row, idx) => ({
       ...row,
       supplier_id: idx + 1,
     }));
