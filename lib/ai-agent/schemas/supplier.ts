@@ -75,3 +75,91 @@ export interface SupplierExtraction {
   available_qty: number;
   alternative_source_url: string;
 }
+
+// =============================================
+// Normalization — defensive coercion of raw LLM output → SupplierExtraction
+// =============================================
+// The local vLLM path is schema-enforced (guided_json), but the HuggingFace
+// remote path is NOT — the Inference API has no guided_json equivalent, so Qwen
+// can return a wrapped object ({"supplier":{...}}), a single-element array,
+// alternate key casing (sourceUrl / url / href), or omit fields entirely.
+// parseJSON() in hf-client only guarantees "valid JSON", not "valid shape", so
+// an unnormalized result silently yields `undefined` fields that get dropped
+// downstream: an undefined source_url fails the URL guard, and an undefined
+// available_qty bypasses the stock filter. That is the "returned=0 dropped=9"
+// wipeout. This wrapper guarantees every consumer sees a fully-populated,
+// correctly-typed object regardless of which provider produced it.
+
+type RawRecord = Record<string, unknown>;
+
+/** Unwrap arrays / common wrapper keys so we operate on the supplier object itself. */
+function unwrapSupplier(raw: unknown): RawRecord {
+  if (Array.isArray(raw)) {
+    const first = raw[0];
+    return first && typeof first === 'object' ? (first as RawRecord) : {};
+  }
+  if (raw && typeof raw === 'object') {
+    const obj = raw as RawRecord;
+    for (const key of ['supplier', 'result', 'data', 'extraction']) {
+      const inner = obj[key];
+      if (inner && typeof inner === 'object' && !Array.isArray(inner)) {
+        return inner as RawRecord;
+      }
+    }
+    return obj;
+  }
+  return {};
+}
+
+/** Index object entries by a loose key (lowercased, separators stripped) for alias matching. */
+function indexByLooseKey(obj: RawRecord): Map<string, unknown> {
+  const m = new Map<string, unknown>();
+  for (const [k, v] of Object.entries(obj)) {
+    m.set(k.toLowerCase().replace(/[_\s-]/g, ''), v);
+  }
+  return m;
+}
+
+function pickString(m: Map<string, unknown>, aliases: string[]): string {
+  for (const a of aliases) {
+    const v = m.get(a);
+    if (typeof v === 'string') return v.trim();
+    if (typeof v === 'number' && Number.isFinite(v)) return String(v);
+  }
+  return '';
+}
+
+function pickNumber(m: Map<string, unknown>, aliases: string[]): number {
+  for (const a of aliases) {
+    const v = m.get(a);
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    if (typeof v === 'string') {
+      const n = parseFloat(v.replace(/[^0-9.\-]/g, ''));
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  return 0;
+}
+
+/**
+ * Coerce an arbitrary parsed-JSON value into a guaranteed-valid SupplierExtraction.
+ * Never throws — unknown/missing fields fall back to safe defaults (empty string,
+ * 0). currency_code defaults to "USD" when unspecified.
+ */
+export function normalizeSupplierExtraction(raw: unknown): SupplierExtraction {
+  const m = indexByLooseKey(unwrapSupplier(raw));
+  return {
+    supplier_name:          pickString(m, ['suppliername', 'supplier', 'name', 'company', 'companyname']),
+    source_url:             pickString(m, ['sourceurl', 'url', 'link', 'href', 'producturl', 'productpage']),
+    bidder_description:     pickString(m, ['bidderdescription', 'description', 'productdescription', 'desc']),
+    bidder_unit_price:      pickNumber(m, ['bidderunitprice', 'unitprice', 'price', 'unitcost']),
+    currency_code:          pickString(m, ['currencycode', 'currency', 'ccy']) || 'USD',
+    delivery_time:          pickString(m, ['deliverytime', 'leadtime', 'delivery', 'lead']),
+    compliance_deviation:   pickString(m, ['compliancedeviation', 'compliance', 'deviation']),
+    notes:                  pickString(m, ['notes', 'note', 'remarks', 'remark', 'comment']),
+    contact_email:          pickString(m, ['contactemail', 'email', 'mail']),
+    contact_phone:          pickString(m, ['contactphone', 'phone', 'telephone', 'tel', 'mobile']),
+    available_qty:          pickNumber(m, ['availableqty', 'availablequantity', 'stock', 'quantityavailable', 'instock', 'qty']),
+    alternative_source_url: pickString(m, ['alternativesourceurl', 'alternativeurl', 'alturl', 'alternatesourceurl', 'alternativelink']),
+  };
+}

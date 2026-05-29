@@ -20,7 +20,7 @@ import { getData } from '@/lib/db/queries';
 import { modifyDatabase } from '@/lib/utils/databaseHandler';
 import { aiChatCompletion } from '@/lib/ai-agent/ai-router';
 import { searchWeb, isProductPage } from '@/lib/services/search';
-import { SUPPLIER_SCHEMA, type SupplierExtraction } from '@/lib/ai-agent/schemas/supplier';
+import { SUPPLIER_SCHEMA, normalizeSupplierExtraction, type SupplierExtraction } from '@/lib/ai-agent/schemas/supplier';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
 
 // ---------------------------------------------
@@ -160,7 +160,13 @@ async function extractSupplierForItem(
   const llmStart = Date.now();
   let extracted: SupplierExtraction;
   try {
-    extracted = await aiChatCompletion<SupplierExtraction>(
+    // Provider-agnostic extraction: local vLLM enforces SUPPLIER_SCHEMA via
+    // guided_json, but the HF remote path is schema-less, so we ALWAYS run the
+    // raw response through normalizeSupplierExtraction(). This coerces wrapped /
+    // aliased / missing fields into the typed shape and is the fix for the
+    // "returned=0 dropped=9" wipeout — previously an undefined source_url failed
+    // the URL guard and an undefined available_qty bypassed the stock filter.
+    const rawExtracted = await aiChatCompletion<unknown>(
       EXTRACT_SUPPLIER_FROM_SNIPPETS_PROMPT,
       buildExtractUserMessage({
         item,
@@ -169,6 +175,7 @@ async function extractSupplierForItem(
       600,                // tight cap — one supplier object is small (~200-400 tokens)
       SUPPLIER_SCHEMA,    // honored by local vLLM; ignored by HF (see ai-router.ts)
     );
+    extracted = normalizeSupplierExtraction(rawExtracted);
   } catch (err) {
     console.warn(`[supplier-search] item=${item.itemId} depth=${depth} llm error:`, err instanceof Error ? err.message : err);
     return null;
@@ -223,13 +230,19 @@ async function extractSupplierForItem(
     if (extracted.source_url) visitedUrls.add(extracted.source_url);
     visitedUrls.add(extracted.alternative_source_url);
 
-    const altRows = await extractSupplierForItem(
-      { ...item, description: extracted.alternative_source_url },
-      depth + 1,
-      visitedUrls,
-    );
-    if (altRows) {
-      rows.push(...altRows);
+    // An alt-URL follow-up failure must NEVER drop the primary row we already
+    // hold — isolate the recursion so a thrown error degrades to "no alt found".
+    try {
+      const altRows = await extractSupplierForItem(
+        { ...item, description: extracted.alternative_source_url },
+        depth + 1,
+        visitedUrls,
+      );
+      if (altRows) {
+        rows.push(...altRows);
+      }
+    } catch (err) {
+      console.warn(`[supplier-search] item=${item.itemId} alt-loop error (primary kept):`, err instanceof Error ? err.message : err);
     }
   }
 
@@ -355,7 +368,13 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
           rfq_id,
           rfq_reference,
           suppliers_search,
-          items_source: finalItems.map((item) => ({ ...item, rfq_id })),  // FK linkage for supplierItemStatus
+          // Explicit item_id ASC sort on the DB payload — guarantees a
+          // deterministic supplier_id ↔ item_id ordering in supplierItemStatus
+          // independent of any upstream reordering. FK linkage via rfq_id.
+          items_source: finalItems
+            .slice()
+            .sort((a, b) => a.item_id - b.item_id)
+            .map((item) => ({ ...item, rfq_id })),
         },
         workspace,
       );

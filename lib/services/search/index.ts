@@ -19,6 +19,7 @@ import { buildTier1Queries, buildTier2Queries, type QueryItem } from './query-bu
 import { runAgenticTier3 } from './tier3-agent';
 import { tavilySearch, type TavilySnippet } from './tavily-client';
 import { getCachedSearch, setCachedSearch } from './cache';
+import { isLikelyProductPage } from './html-gate';
 
 // ---------------------------------------------
 // Tier thresholds — verified product-page count
@@ -56,7 +57,21 @@ export function isProductPage(url: string): boolean {
   if (!url) return false;
   try {
     const u = new URL(url);
-    return u.pathname.length > 1;
+    // Reject bare domains / homepages — a "/" pathname is never a product page.
+    if (u.pathname.length <= 1) return false;
+    // Reject non-product surfaces that DO carry a path but never represent a
+    // single sourceable product (search results, taxonomy, editorial, account,
+    // checkout). Previously this guard was `pathname.length > 1` alone, which
+    // passed every one of these — the root cause of Tier 1's false-positive
+    // "verified" count that suppressed the Tier 2/3 fallback.
+    const path = u.pathname.toLowerCase();
+    const NON_PRODUCT_SEGMENTS = [
+      '/search', '/s/', '/category', '/categories', '/collections',
+      '/tag', '/tags', '/blog', '/news', '/about', '/contact',
+      '/login', '/signin', '/account', '/cart', '/checkout',
+    ];
+    if (NON_PRODUCT_SEGMENTS.some((seg) => path.startsWith(seg))) return false;
+    return true;
   } catch {
     return false;
   }
@@ -95,9 +110,21 @@ async function runQueryAndDedup(
     await setCachedSearch(query, snippets);
   }
 
-  // (3) Merge into accumulator, applying the product-page guard and URL dedup.
+  // (3) Merge into accumulator. Verification runs BEFORE the caller counts the
+  //     accumulator against a tier threshold, so acc.size only ever reflects
+  //     genuinely-verified product pages — that is what drives the < 5 / < 3
+  //     fallback decisions in searchWeb().
   for (const snippet of snippets) {
+    // (a) URL structural guard — specific page, not homepage / search / taxonomy.
     if (!isProductPage(snippet.url)) continue;
+    // (b) HTML structural guard — when Tavily returned raw markup, require
+    //     product signals (schema.org/Product, og:type=product, itemprop=price)
+    //     before counting this as verified. When Tavily returned cleaned text
+    //     (no tags to inspect), the URL guard above stands alone rather than
+    //     rejecting a candidate we simply cannot structurally parse.
+    const rawContent = snippet.content || '';
+    if (rawContent.includes('<') && !isLikelyProductPage(rawContent)) continue;
+    // (c) Dedup by URL.
     if (acc.has(snippet.url)) continue;
     acc.set(snippet.url, snippet);
   }
