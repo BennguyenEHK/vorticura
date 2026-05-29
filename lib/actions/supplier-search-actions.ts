@@ -22,6 +22,17 @@ import { aiChatCompletion } from '@/lib/ai-agent/ai-router';
 import { searchWeb, isProductPage } from '@/lib/services/search';
 import { SUPPLIER_SCHEMA, normalizeSupplierExtraction, type SupplierExtraction } from '@/lib/ai-agent/schemas/supplier';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
+// Stage 11 — budget circuit-breaker + Stage 10 — alt-URL relevance floor
+import {
+  createBudget,
+  consumeLlmCall,
+  isExhausted,
+  lexicalRelevance,
+  ALT_RELEVANCE_FLOOR,
+  type SearchBudget,
+} from '@/lib/services/search/budget';
+// Stage 7 — deterministic microdata price extraction
+import { extractMicrodataPrice } from '@/lib/services/search/html-gate';
 
 // ---------------------------------------------
 // Configuration
@@ -55,6 +66,12 @@ interface ItemSourceRow {
   notes: string;
   contact_email: string;
   contact_phone: string;
+  // Stage 7 — quantity in stock at time of extraction (0 = not stated by LLM)
+  available_qty: number;
+  // Stage 7 — which search tier (1|2|3) produced the snippets this row was built from
+  source_tier: number;
+  // Stage 7 — 'deterministic' if microdata overrode LLM price; 'llm' otherwise
+  extraction_track: string;
 }
 
 // ---------------------------------------------
@@ -124,6 +141,13 @@ interface RfqItemInput {
   uom: string;
 }
 
+// Stage 14 — extractSupplierForItem returns rows + Tavily call count so the
+// orchestrator can accumulate pipeline-wide telemetry without a global counter.
+interface ExtractResult {
+  rows: ItemSourceRow[] | null;
+  tavilyCalls: number;
+}
+
 /**
  * Extract one or more supplier rows for a single RFQ item.
  *
@@ -140,18 +164,39 @@ interface RfqItemInput {
  *   (2) Alt-URL re-loop — at depth 0, follow alternative_source_url if
  *       present and not already visited. Visited set is shared across the
  *       recursion so cross-linked vendors can't infinite-loop.
+ *
+ * Stage 11: One SearchBudget is threaded through the entire recursion for this
+ * item. consumeLlmCall() is called BEFORE the LLM — if the budget is spent the
+ * LLM is skipped and we degrade gracefully instead of burning serverless quota.
+ *
+ * Stage 14: Returns { rows, tavilyCalls } so the orchestrator can accumulate
+ * search_telemetry across all items without shared mutable state.
  */
 async function extractSupplierForItem(
   item: RfqItemInput,
+  budget: SearchBudget,       // Stage 11 — per-item circuit-breaker budget
   depth: number = 0,
   visitedUrls: Set<string> = new Set(),
-): Promise<ItemSourceRow[] | null> {
+): Promise<ExtractResult> {
   // (1) Tier-walked Tavily search w/ Redis cache. Tier 3 is invoked INSIDE
   //     searchWeb when Tiers 1/2 fall short of the verified threshold.
   const search = await searchWeb({ description: item.description, qty: item.qty, uom: item.uom });
   if (search.snippets.length === 0) {
     console.warn(`[supplier-search] item=${item.itemId} depth=${depth} no snippets after tier walk`);
-    return null;
+    // Stage 14 — return tavilyCalls even on early-out so the orchestrator
+    // accumulates the quota this item spent before deciding there was nothing.
+    return { rows: null, tavilyCalls: search.tavilyCalls };
+  }
+
+  // Stage 11 — Circuit-breaker: reserve one LLM call against the budget BEFORE
+  // invoking the model. consumeLlmCall() returns false when the ceiling is
+  // already crossed. Degrade to null at depth 0 or return what we have deeper.
+  if (!consumeLlmCall(budget)) {
+    console.warn(
+      `[supplier-search] item=${item.itemId} depth=${depth} budget exhausted — skipping LLM extraction`,
+    );
+    // depth > 0 means we're in an alt-URL recursion — no primary row to return.
+    return { rows: null, tavilyCalls: search.tavilyCalls };
   }
 
   // (2) Extraction via ai-router — local mode enforces SUPPLIER_SCHEMA with
@@ -178,7 +223,7 @@ async function extractSupplierForItem(
     extracted = normalizeSupplierExtraction(rawExtracted);
   } catch (err) {
     console.warn(`[supplier-search] item=${item.itemId} depth=${depth} llm error:`, err instanceof Error ? err.message : err);
-    return null;
+    return { rows: null, tavilyCalls: search.tavilyCalls };
   }
   console.log(`[ai-server] item=${item.itemId} depth=${depth} extract latency=${Date.now() - llmStart}ms`);
 
@@ -187,7 +232,42 @@ async function extractSupplierForItem(
   //     bypasses the filter (we don't have grounds to drop unknowns).
   if (extracted.available_qty > 0 && extracted.available_qty < item.qty + 2) {
     console.log(`[supplier-search] item=${item.itemId} depth=${depth} stock=${extracted.available_qty} below qty+2=${item.qty + 2}, dropping`);
-    return null;
+    return { rows: null, tavilyCalls: search.tavilyCalls };
+  }
+
+  // Stage 7 — Deterministic microdata price override.
+  // Decision rule: if microdata returns a price AND the LLM produced 0 (i.e.,
+  // nothing useful was found on the page), we trust the structured ground truth
+  // instead. We only override when LLM found nothing so we never clobber a
+  // page-specific quote the LLM correctly read. The snippet whose URL matches
+  // the extracted source_url is the most relevant candidate; fall back to the
+  // first snippet that yields a result if no exact URL match exists.
+  let resolvedPrice = extracted.bidder_unit_price;
+  let resolvedCurrency = extracted.currency_code || 'USD';
+  let extractionTrack: string = 'llm';
+
+  if (extracted.bidder_unit_price === 0) {
+    // Prefer the snippet whose URL matches the LLM's chosen source_url.
+    const matchingSnippet = search.snippets.find((s) => s.url === extracted.source_url);
+    const candidateSnippets = matchingSnippet
+      ? [matchingSnippet, ...search.snippets.filter((s) => s.url !== extracted.source_url)]
+      : search.snippets;
+
+    for (const snippet of candidateSnippets) {
+      const microdata = extractMicrodataPrice(snippet.content || '');
+      if (microdata) {
+        // Microdata is structured ground truth — use it as the price.
+        resolvedPrice = microdata.value;
+        if (microdata.currency) {
+          resolvedCurrency = microdata.currency;
+        }
+        extractionTrack = 'deterministic';
+        console.log(
+          `[supplier-search] item=${item.itemId} depth=${depth} microdata price override: ${resolvedCurrency} ${resolvedPrice} (llm had 0)`,
+        );
+        break;
+      }
+    }
   }
 
   // (4) Build the primary supplier row. notes carries both the LLM-authored
@@ -206,24 +286,35 @@ async function extractSupplierForItem(
     status: 'pending',                   // schema constant — never AI-derived
     delivery_time: extracted.delivery_time,
     bidder_description: extracted.bidder_description,
-    bidder_unit_price: extracted.bidder_unit_price,
-    currency_code: extracted.currency_code || 'USD',
+    bidder_unit_price: resolvedPrice,    // Stage 7 — microdata or LLM
+    currency_code: resolvedCurrency,     // Stage 7 — microdata or LLM
     compliance_deviation: extracted.compliance_deviation,
     notes: `${altTag}${stockPrefix}${extracted.notes}`.trim(),
     contact_email: extracted.contact_email,
     contact_phone: extracted.contact_phone,
+    // Stage 7 — provenance fields persisted to items_source
+    available_qty: extracted.available_qty,
+    source_tier: search.tier,
+    extraction_track: extractionTrack,
   };
 
   const rows: ItemSourceRow[] = [primaryRow];
+
+  // Running Tavily call count for this recursion branch.
+  let totalTavilyCalls = search.tavilyCalls;
 
   // (5) Alt-URL re-loop — depth-capped + visited-set guarded.
   //     The alternative_source_url is an EXPLICIT link the supplier offered;
   //     we feed it back into the search loop as a new search subject so the
   //     existing tier cascade discovers / extracts it. Reuses all infra.
+  //
+  //     Stage 11 — also skip the alt-URL follow if the budget is already spent:
+  //     preserve the primary row but don't burn more quota on an alt.
   if (
     depth < ALT_URL_MAX_DEPTH &&
     extracted.alternative_source_url &&
-    !visitedUrls.has(extracted.alternative_source_url)
+    !visitedUrls.has(extracted.alternative_source_url) &&
+    !isExhausted(budget)  // Stage 11 — budget guard on the alt-URL hop
   ) {
     // Mark both the current source and the alternative as visited BEFORE
     // recursing — defends against A→B→A loops between cross-linked vendors.
@@ -233,20 +324,42 @@ async function extractSupplierForItem(
     // An alt-URL follow-up failure must NEVER drop the primary row we already
     // hold — isolate the recursion so a thrown error degrades to "no alt found".
     try {
-      const altRows = await extractSupplierForItem(
+      // Stage 11 — thread the SAME budget object into the recursive call so
+      // LLM calls from alt hops count against this item's ceiling too.
+      // Stage 14 — collect tavilyCalls from the alt recursion.
+      const altResult = await extractSupplierForItem(
         { ...item, description: extracted.alternative_source_url },
+        budget,
         depth + 1,
         visitedUrls,
       );
-      if (altRows) {
-        rows.push(...altRows);
+
+      // Stage 14 — accumulate Tavily calls from the alt branch.
+      totalTavilyCalls += altResult.tavilyCalls;
+
+      if (altResult.rows) {
+        // Stage 10 — Relevance floor: only keep alt rows whose extracted
+        // description still resembles the RFQ item (Jaccard ≥ ALT_RELEVANCE_FLOOR).
+        // This prevents the alt-URL loop from drifting into off-spec products
+        // that merely satisfy the source count but wouldn't fulfill the actual need.
+        for (const altRow of altResult.rows) {
+          const relevance = lexicalRelevance(item.description, altRow.bidder_description);
+          if (relevance >= ALT_RELEVANCE_FLOOR) {
+            rows.push(altRow);
+          } else {
+            console.log(
+              `[supplier-search] item=${item.itemId} alt row dropped (relevance=${relevance.toFixed(3)} < floor=${ALT_RELEVANCE_FLOOR}): "${altRow.bidder_description.slice(0, 60)}"`,
+            );
+          }
+        }
       }
     } catch (err) {
       console.warn(`[supplier-search] item=${item.itemId} alt-loop error (primary kept):`, err instanceof Error ? err.message : err);
     }
   }
 
-  return rows;
+  // Stage 14 — return row array and total Tavily calls consumed by this item.
+  return { rows, tavilyCalls: totalTavilyCalls };
 }
 
 // ---------------------------------------------
@@ -295,25 +408,33 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     // Cap per-item concurrency so 30 items don't fire 30 parallel Tavily/vLLM calls
     const limit = pLimit(RAG_CONCURRENCY);
 
-    // (3) Per-item extraction. Returns arrays because one item may produce
-    //     {primary + 1 alt} rows when the alt-URL re-loop fires.
-    const rawItemArrays = await Promise.all(
-      itemRows.map((row) =>
-        limit(() =>
-          extractSupplierForItem({
-            itemId: Number(row.itemId),
-            description: String(row.companyDescription || ''),
-            qty: Number(row.qty || 0),
-            uom: String(row.uom || 'EA'),
-          }),
-        ),
-      ),
+    // (3) Per-item extraction with one budget per item (Stage 11).
+    //     Returns arrays because one item may produce {primary + 1 alt} rows
+    //     when the alt-URL re-loop fires.
+    //     Stage 14 — each result now carries { rows, tavilyCalls } for telemetry.
+    const rawItemResults = await Promise.all(
+      itemRows.map((row) => {
+        // Stage 11 — create ONE budget per item, scoped to this map callback so
+        // each item's LLM ceiling is independent. Pass budget into extractor.
+        const budget = createBudget();
+        return limit(() =>
+          extractSupplierForItem(
+            {
+              itemId: Number(row.itemId),
+              description: String(row.companyDescription || ''),
+              qty: Number(row.qty || 0),
+              uom: String(row.uom || 'EA'),
+            },
+            budget,
+          ).then((result) => ({ result, budget, itemId: Number(row.itemId) })),
+        );
+      }),
     );
 
-    // Drop hard failures (null) and flatten the alt-row arrays into one set.
-    const beforeUrlGuards: ItemSourceRow[] = rawItemArrays
-      .filter((r): r is ItemSourceRow[] => r !== null)
-      .flat();
+    // Drop hard failures (null rows) and flatten the alt-row arrays into one set.
+    const beforeUrlGuards: ItemSourceRow[] = rawItemResults
+      .filter((r) => r.result.rows !== null)
+      .flatMap((r) => r.result.rows as ItemSourceRow[]);
 
     // URL guard — drop homepages even if the LLM slipped past the prompt rule.
     // We KEEP rows with empty source_url (those are explicit "no product page" markers).
@@ -338,11 +459,42 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     const totalDropped = beforeUrlGuards.length - productPageItems.length + deadUrlCount;
     console.log(`[supplier-search] done rfq_id=${rfq_id} returned=${finalItems.length} dropped=${totalDropped}`);
 
-    // Build suppliers_search summary deterministically — NO LLM call here
+    // Stage 14 — Aggregate pipeline telemetry across all items.
+    // tavily_calls: sum of Tavily API calls consumed (cache hits excluded).
+    // llm_calls: sum of LLM calls consumed per budget (read after awaits complete).
+    // budget_exhausted: latched true if ANY item hit its LLM/wall-clock ceiling.
+    // dropped_count: URL-guard + liveness drops (existing totalDropped).
+    // items_below_target: item_ids that produced ZERO rows in the final set.
+    const finalItemIdSet = new Set(finalItems.map((r) => r.item_id));
+    const tavily_calls = rawItemResults.reduce((sum, r) => sum + r.result.tavilyCalls, 0);
+    const llm_calls = rawItemResults.reduce((sum, r) => sum + r.budget.llmCallsUsed, 0);
+    const budget_exhausted = rawItemResults.some((r) => r.budget.exhausted);
+    const dropped_count = totalDropped;
+    const items_below_target = rawItemResults
+      .filter((r) => !finalItemIdSet.has(r.itemId))
+      .map((r) => r.itemId);
+
+    const search_telemetry = {
+      tavily_calls,
+      llm_calls,
+      dropped_count,
+      budget_exhausted,
+      items_below_target,
+    };
+
+    console.log(
+      `[supplier-search] telemetry rfq_id=${rfq_id} tavily=${tavily_calls} llm=${llm_calls} exhausted=${budget_exhausted} items_below_target=${items_below_target.length}`,
+    );
+
+    // Build suppliers_search summary deterministically — NO LLM call here.
+    // Stage 14 — attach search_telemetry so modifyDatabase can persist it to
+    // the supplier_search jsonb column (lead mapped data.search_telemetry →
+    // searchTelemetry via TC_supplierSearch spread in databaseHandler.ts).
     const suppliers_search = {
       subject: `Supplier Search Results - ${rfq_reference || `RFQ ${rfq_id}`}`,
       search_content: buildSearchContent(rfq_reference || `${rfq_id ?? ''}`, finalItems, totalDropped),
       search_status: 'completed',
+      search_telemetry,
     };
 
     const result: ProcessorResult = {

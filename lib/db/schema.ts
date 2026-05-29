@@ -421,6 +421,10 @@ export const supplierSearch = pgTable('supplier_search', {
   // Search status
   searchStatus: varchar('search_status', { length: 30 }).default('completed'),
 
+  // Run telemetry (cost/latency observability for the budget-bounded pipeline):
+  // { tavily_calls, llm_calls, dropped_count, budget_exhausted, items_below_target[] }
+  searchTelemetry: jsonb('search_telemetry').default({}),
+
   // Timestamps
   createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false })
@@ -462,6 +466,12 @@ export const supplierItemStatus = pgTable('supplier_item_status', {
 
   // Supplier notes/comments about this item
   notes: text('notes'),
+
+  // Provenance / extraction signals (Stage 7/10/11 of the search pipeline).
+  // Nullable + additive — populated by supplier-search, ignored by other flows.
+  availableQty: integer('available_qty'),                      // stock as stated on page; NULL = unknown
+  sourceTier: integer('source_tier'),                          // 1|2|3 search tier that produced this row
+  extractionTrack: varchar('extraction_track', { length: 12 }), // 'deterministic' | 'llm'
 
   // Supplier contact information
   contactEmail: varchar('contact_email', { length: 255 }),  // Supplier's contact email

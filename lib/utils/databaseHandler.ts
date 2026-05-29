@@ -245,6 +245,8 @@ export function buildSupplierSearchPayload(data: Record<string, unknown>, update
   if (data.subject != null) payload.subject = String(data.subject);
   if (data.search_content != null) payload.searchContent = String(data.search_content);
   if (data.search_status != null) payload.searchStatus = String(data.search_status);
+  // Run telemetry blob (jsonb) — store as-is when the orchestrator provides it
+  if (data.search_telemetry != null) payload.searchTelemetry = data.search_telemetry;
 
   return payload;
 }
@@ -271,6 +273,10 @@ export function buildSupplierItemStatusPayload(data: Record<string, unknown>, up
   if (data.notes != null) payload.notes = String(data.notes);
   if (data.contact_email != null) payload.contactEmail = String(data.contact_email);   // Map to DB column
   if (data.contact_phone != null) payload.contactPhone = String(data.contact_phone);   // Map to DB column
+  // Provenance / extraction signals (additive — only the supplier-search flow sets these)
+  if (data.available_qty != null) payload.availableQty = parseInt(String(data.available_qty), 10);
+  if (data.source_tier != null) payload.sourceTier = parseInt(String(data.source_tier), 10);
+  if (data.extraction_track != null) payload.extractionTrack = String(data.extraction_track);
   if (data.responded_at != null) payload.respondedAt = data.responded_at;
 
   return payload;
