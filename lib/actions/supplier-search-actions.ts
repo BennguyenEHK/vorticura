@@ -3,8 +3,11 @@
 // =============================================
 // Internal server module (called by data-processor, NOT a server action).
 // Flow: ProcessorInput → fetch rfq_items → sort by item_id ASC →
-//       per-item (tier-cascaded search → vLLM extract → stock filter →
-//       alt-URL re-loop) → URL guards → deterministic supplier_id → save → result.
+//       per-item (tier-cascaded search → liveness gate → Track A microdata
+//       OR Track B vLLM extract → stock filter → alt-URL re-loop) →
+//       URL guards → deterministic supplier_id → save → result.
+// Liveness (Stage 5) and Track A (Stage 7) run BEFORE the LLM so dead links and
+// pages with complete structured pricing never cost an LLM call.
 //
 // Both action_types route through the same RAG flow:
 //   - 'search'   : initial supplier discovery for an RFQ
@@ -31,8 +34,10 @@ import {
   ALT_RELEVANCE_FLOOR,
   type SearchBudget,
 } from '@/lib/services/search/budget';
-// Stage 7 — deterministic microdata price extraction
+// Stage 7 — deterministic microdata price extraction (Track A short-circuit)
 import { extractMicrodataPrice } from '@/lib/services/search/html-gate';
+import { buildDeterministicSupplier } from '@/lib/services/search/track-a';
+import type { TavilySnippet } from '@/lib/services/search/tavily-client';
 
 // ---------------------------------------------
 // Configuration
@@ -81,14 +86,16 @@ interface ItemSourceRow {
 // with the tier cascade. We re-export it implicitly via the import above.
 
 /**
- * HEAD-check each url in parallel; mark items dead when status >= 400 or fetch
- * throws/times out. Bounded by AbortSignal.timeout so a slow site can't hang
- * the whole pipeline against the Vercel function timeout.
+ * Stage 5 — Liveness Gate. HEAD-check each snippet URL in parallel; drop dead
+ * links (status >= 400, or fetch throws/times out) BEFORE any extraction so we
+ * never spend LLM tokens (or microdata effort) on a page that no longer exists.
+ * Bounded by AbortSignal.timeout so a slow site can't hang the whole pipeline
+ * against the Vercel function timeout.
  */
-async function filterLiveUrls(items: ItemSourceRow[]): Promise<{ live: ItemSourceRow[]; dropped: number }> {
+async function filterLiveSnippets(snippets: TavilySnippet[]): Promise<{ live: TavilySnippet[]; dropped: number }> {
   const checks = await Promise.allSettled(
-    items.map((item) =>
-      fetch(item.source_url, {
+    snippets.map((s) =>
+      fetch(s.url, {
         method: 'HEAD',
         signal: AbortSignal.timeout(3_000),
         // Some servers reject default fetch UA — set a generic one to reduce false-drops
@@ -97,16 +104,16 @@ async function filterLiveUrls(items: ItemSourceRow[]): Promise<{ live: ItemSourc
     ),
   );
 
-  const live: ItemSourceRow[] = [];
+  const live: TavilySnippet[] = [];
   let dropped = 0;
   checks.forEach((result, idx) => {
-    const item = items[idx];
+    const snippet = snippets[idx];
     // Treat fetch reject (timeout, DNS, TLS) as dead
     if (result.status !== 'fulfilled') { dropped++; return; }
     // Some sites reject HEAD with 405 but the page itself is fine — keep those
-    if (result.value.status === 405) { live.push(item); return; }
+    if (result.value.status === 405) { live.push(snippet); return; }
     if (result.value.status >= 400) { dropped++; return; }
-    live.push(item);
+    live.push(snippet);
   });
 
   return { live, dropped };
@@ -146,6 +153,8 @@ interface RfqItemInput {
 interface ExtractResult {
   rows: ItemSourceRow[] | null;
   tavilyCalls: number;
+  // Stage 5 — snippet URLs dropped by the per-item liveness gate (pre-extraction).
+  deadUrls: number;
 }
 
 /**
@@ -185,18 +194,63 @@ async function extractSupplierForItem(
     console.warn(`[supplier-search] item=${item.itemId} depth=${depth} no snippets after tier walk`);
     // Stage 14 — return tavilyCalls even on early-out so the orchestrator
     // accumulates the quota this item spent before deciding there was nothing.
-    return { rows: null, tavilyCalls: search.tavilyCalls };
+    return { rows: null, tavilyCalls: search.tavilyCalls, deadUrls: 0 };
   }
 
-  // Stage 11 — Circuit-breaker: reserve one LLM call against the budget BEFORE
-  // invoking the model. consumeLlmCall() returns false when the ceiling is
-  // already crossed. Degrade to null at depth 0 or return what we have deeper.
+  // Stage 5 — Liveness Gate: HEAD-check candidate URLs and drop dead links
+  // BEFORE spending LLM tokens or microdata effort (spec ordering:
+  // search → liveness → page-type → Track A → Track B).
+  const { live: liveSnippets, dropped: deadUrls } = await filterLiveSnippets(search.snippets);
+  if (liveSnippets.length === 0) {
+    console.warn(
+      `[supplier-search] item=${item.itemId} depth=${depth} all ${search.snippets.length} URL(s) dead after liveness gate`,
+    );
+    return { rows: null, tavilyCalls: search.tavilyCalls, deadUrls };
+  }
+
+  // Stage 7 — Track A (deterministic): if a live product page exposes COMPLETE
+  // price+currency microdata, build the supplier row from structured ground
+  // truth and SKIP the LLM entirely (free + instant). No budget is consumed —
+  // this is what keeps llm_calls below item-count when pages are well-marked.
+  // available_qty=0 ("unknown") bypasses the stock filter; microdata carries no
+  // alternative link so the alt-URL re-loop does not apply to Track A rows.
+  const deterministic = buildDeterministicSupplier(liveSnippets, isProductPage);
+  if (deterministic) {
+    console.log(
+      `[supplier-search] item=${item.itemId} depth=${depth} track=A deterministic ${deterministic.currency_code} ${deterministic.bidder_unit_price} (LLM skipped)`,
+    );
+    const deterministicRow: ItemSourceRow = {
+      item_id: item.itemId,
+      supplier_id: 0,                      // placeholder — assigned post-merge
+      supplier_name: deterministic.supplier_name,
+      source_url: deterministic.source_url,
+      status: 'pending',                   // schema constant — never AI-derived
+      delivery_time: '',                   // not in microdata
+      bidder_description: deterministic.bidder_description,
+      bidder_unit_price: deterministic.bidder_unit_price,
+      currency_code: deterministic.currency_code,
+      compliance_deviation: '',
+      notes: depth > 0 ? 'via_alt: ' : '',
+      contact_email: '',
+      contact_phone: '',
+      available_qty: 0,                    // unknown — bypasses the stock filter
+      source_tier: search.tier,
+      extraction_track: 'deterministic',
+    };
+    return { rows: [deterministicRow], tavilyCalls: search.tavilyCalls, deadUrls };
+  }
+
+  // Stage 8 — Track B (LLM extract): only reached when Track A couldn't fully
+  // parse any live page. Stage 11 circuit-breaker: reserve one LLM call against
+  // the budget BEFORE invoking the model. consumeLlmCall() returns false when
+  // the ceiling is already crossed. Degrade to null at depth 0 or return what
+  // we have deeper.
   if (!consumeLlmCall(budget)) {
     console.warn(
       `[supplier-search] item=${item.itemId} depth=${depth} budget exhausted — skipping LLM extraction`,
     );
     // depth > 0 means we're in an alt-URL recursion — no primary row to return.
-    return { rows: null, tavilyCalls: search.tavilyCalls };
+    return { rows: null, tavilyCalls: search.tavilyCalls, deadUrls };
   }
 
   // (2) Extraction via ai-router — local mode enforces SUPPLIER_SCHEMA with
@@ -215,7 +269,7 @@ async function extractSupplierForItem(
       EXTRACT_SUPPLIER_FROM_SNIPPETS_PROMPT,
       buildExtractUserMessage({
         item,
-        snippets: search.snippets,
+        snippets: liveSnippets,
       }),
       600,                // tight cap — one supplier object is small (~200-400 tokens)
       SUPPLIER_SCHEMA,    // honored by local vLLM; ignored by HF (see ai-router.ts)
@@ -223,7 +277,7 @@ async function extractSupplierForItem(
     extracted = normalizeSupplierExtraction(rawExtracted);
   } catch (err) {
     console.warn(`[supplier-search] item=${item.itemId} depth=${depth} llm error:`, err instanceof Error ? err.message : err);
-    return { rows: null, tavilyCalls: search.tavilyCalls };
+    return { rows: null, tavilyCalls: search.tavilyCalls, deadUrls };
   }
   console.log(`[ai-server] item=${item.itemId} depth=${depth} extract latency=${Date.now() - llmStart}ms`);
 
@@ -232,7 +286,7 @@ async function extractSupplierForItem(
   //     bypasses the filter (we don't have grounds to drop unknowns).
   if (extracted.available_qty > 0 && extracted.available_qty < item.qty + 2) {
     console.log(`[supplier-search] item=${item.itemId} depth=${depth} stock=${extracted.available_qty} below qty+2=${item.qty + 2}, dropping`);
-    return { rows: null, tavilyCalls: search.tavilyCalls };
+    return { rows: null, tavilyCalls: search.tavilyCalls, deadUrls };
   }
 
   // Stage 7 — Deterministic microdata price override.
@@ -248,10 +302,10 @@ async function extractSupplierForItem(
 
   if (extracted.bidder_unit_price === 0) {
     // Prefer the snippet whose URL matches the LLM's chosen source_url.
-    const matchingSnippet = search.snippets.find((s) => s.url === extracted.source_url);
+    const matchingSnippet = liveSnippets.find((s) => s.url === extracted.source_url);
     const candidateSnippets = matchingSnippet
-      ? [matchingSnippet, ...search.snippets.filter((s) => s.url !== extracted.source_url)]
-      : search.snippets;
+      ? [matchingSnippet, ...liveSnippets.filter((s) => s.url !== extracted.source_url)]
+      : liveSnippets;
 
     for (const snippet of candidateSnippets) {
       const microdata = extractMicrodataPrice(snippet.content || '');
@@ -300,8 +354,9 @@ async function extractSupplierForItem(
 
   const rows: ItemSourceRow[] = [primaryRow];
 
-  // Running Tavily call count for this recursion branch.
+  // Running Tavily call + dead-URL counts for this recursion branch.
   let totalTavilyCalls = search.tavilyCalls;
+  let totalDeadUrls = deadUrls;
 
   // (5) Alt-URL re-loop — depth-capped + visited-set guarded.
   //     The alternative_source_url is an EXPLICIT link the supplier offered;
@@ -334,8 +389,9 @@ async function extractSupplierForItem(
         visitedUrls,
       );
 
-      // Stage 14 — accumulate Tavily calls from the alt branch.
+      // Stage 14 — accumulate Tavily calls + dead-URL drops from the alt branch.
       totalTavilyCalls += altResult.tavilyCalls;
+      totalDeadUrls += altResult.deadUrls;
 
       if (altResult.rows) {
         // Stage 10 — Relevance floor: only keep alt rows whose extracted
@@ -358,8 +414,8 @@ async function extractSupplierForItem(
     }
   }
 
-  // Stage 14 — return row array and total Tavily calls consumed by this item.
-  return { rows, tavilyCalls: totalTavilyCalls };
+  // Stage 14 — return row array + total Tavily calls and dead-URL drops for this item.
+  return { rows, tavilyCalls: totalTavilyCalls, deadUrls: totalDeadUrls };
 }
 
 // ---------------------------------------------
@@ -438,25 +494,26 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
 
     // URL guard — drop homepages even if the LLM slipped past the prompt rule.
     // We KEEP rows with empty source_url (those are explicit "no product page" markers).
+    // NOTE: liveness (Stage 5) already ran per-item on the snippet URLs BEFORE
+    // extraction, so every chosen source_url here is already known-live — no
+    // second HEAD pass is needed (that was the spec-ordering bug we fixed).
     const productPageItems = beforeUrlGuards.filter((r) => r.source_url === '' || isProductPage(r.source_url));
-
-    // Liveness check — HEAD each URL, drop dead ones (parallelized)
-    const itemsWithUrl = productPageItems.filter((r) => r.source_url !== '');
-    const itemsWithoutUrl = productPageItems.filter((r) => r.source_url === '');
-    const { live, dropped: deadUrlCount } = await filterLiveUrls(itemsWithUrl);
 
     // (4) Merge survivors and assign supplier_id deterministically: sort by
     //     item_id ASC, then enumerate. Rows from the same item_id are kept
     //     adjacent (primary first, alts after — order preserved from the
     //     extractor's rows[] return) because Array.sort() is stable in ES2019+.
-    const merged = [...live, ...itemsWithoutUrl];
+    const merged = [...productPageItems];
     merged.sort((a, b) => a.item_id - b.item_id);
     const finalItems: ItemSourceRow[] = merged.map((row, idx) => ({
       ...row,
       supplier_id: idx + 1,
     }));
 
-    const totalDropped = beforeUrlGuards.length - productPageItems.length + deadUrlCount;
+    // Dead-URL drops happened pre-extraction (Stage 5); aggregate the per-item
+    // counts and add the row-level URL-guard drops for the total dropped figure.
+    const deadUrlCount = rawItemResults.reduce((sum, r) => sum + r.result.deadUrls, 0);
+    const totalDropped = (beforeUrlGuards.length - productPageItems.length) + deadUrlCount;
     console.log(`[supplier-search] done rfq_id=${rfq_id} returned=${finalItems.length} dropped=${totalDropped}`);
 
     // Stage 14 — Aggregate pipeline telemetry across all items.
