@@ -20,7 +20,7 @@ import {
   buildExtractUserMessage,
 } from '@/lib/ai-agent/prompt/search-suppliers';
 import { getData } from '@/lib/db/queries';
-import { modifyDatabase } from '@/lib/utils/databaseHandler';
+import { modifyDatabase, type WriteFailure } from '@/lib/utils/databaseHandler';
 import { aiChatCompletion } from '@/lib/ai-agent/ai-router';
 import { searchWeb, isProductPage } from '@/lib/services/search';
 import { SUPPLIER_SCHEMA, normalizeSupplierExtraction, type SupplierExtraction } from '@/lib/ai-agent/schemas/supplier';
@@ -34,6 +34,13 @@ import {
   ALT_RELEVANCE_FLOOR,
   type SearchBudget,
 } from '@/lib/services/search/budget';
+// Stage 11+ — density-validation loop (the source-count floor) + telemetry
+import {
+  gatherSourcesForItem,
+  computeItemsBelowTarget,
+  MIN_SOURCES,
+} from '@/lib/services/search/density-loop';
+import { logSearchStage } from '@/lib/services/search/telemetry';
 // Stage 7 — deterministic microdata price extraction (Track A short-circuit)
 import { extractMicrodataPrice } from '@/lib/services/search/html-gate';
 import { buildDeterministicSupplier } from '@/lib/services/search/track-a';
@@ -197,6 +204,18 @@ async function extractSupplierForItem(
   // (1) Tier-walked Tavily search w/ Redis cache. Tier 3 is invoked INSIDE
   //     searchWeb when Tiers 1/2 fall short of the verified threshold.
   const search = await searchWeb({ description: item.description, qty: item.qty, uom: item.uom });
+
+  // Stage 2 — Raw Search Execution telemetry: query → verified-page payload shape.
+  logSearchStage('raw-search', {
+    item_id: item.itemId,
+    depth,
+    tier: search.tier,
+    verifiedCount: search.verifiedCount,
+    snippets: search.snippets.length,
+    tavilyCalls: search.tavilyCalls,
+    sampleUrls: search.snippets.map((s) => s.url),
+  });
+
   if (search.snippets.length === 0) {
     console.warn(`[supplier-search] item=${item.itemId} depth=${depth} no snippets after tier walk`);
     // Stage 14 — return tavilyCalls even on early-out so the orchestrator
@@ -247,6 +266,15 @@ async function extractSupplierForItem(
       pack_size: 0,
       match_reasoning: '',                 // deterministic rows are exact product-page matches
     };
+    // Stage 7 — Extraction telemetry (Track A, no LLM consumed).
+    logSearchStage('extract', {
+      item_id: item.itemId, depth, track: 'A-deterministic',
+      liveSnippets: liveSnippets.length,
+      source_url: deterministicRow.source_url,
+      bidder_unit_price: deterministicRow.bidder_unit_price,
+      currency_code: deterministicRow.currency_code,
+      rowsEmitted: 1,
+    });
     return { rows: [deterministicRow], tavilyCalls: search.tavilyCalls, deadUrls };
   }
 
@@ -371,6 +399,20 @@ async function extractSupplierForItem(
 
   const rows: ItemSourceRow[] = [primaryRow];
 
+  // Stage 8 — Extraction telemetry (Track B; extractionTrack notes microdata override).
+  logSearchStage('extract', {
+    item_id: item.itemId, depth,
+    track: extractionTrack === 'deterministic' ? 'B-llm+microdata' : 'B-llm',
+    liveSnippets: liveSnippets.length,
+    source_url: primaryRow.source_url,
+    bidder_unit_price: primaryRow.bidder_unit_price,
+    currency_code: primaryRow.currency_code,
+    available_qty: primaryRow.available_qty,
+    selling_unit: primaryRow.selling_unit,
+    pack_size: primaryRow.pack_size,
+    rowsEmitted: 1,
+  });
+
   // Running Tavily call + dead-URL counts for this recursion branch.
   let totalTavilyCalls = search.tavilyCalls;
   let totalDeadUrls = deadUrls;
@@ -482,33 +524,40 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     // Cap per-item concurrency so 30 items don't fire 30 parallel Tavily/vLLM calls
     const limit = pLimit(RAG_CONCURRENCY);
 
-    // (3) Per-item extraction with one budget per item (Stage 11).
-    //     Returns arrays because one item may produce {primary + 1 alt} rows
-    //     when the alt-URL re-loop fires.
-    //     Stage 14 — each result now carries { rows, tavilyCalls } for telemetry.
+    // (3) Per-item DENSITY LOOP with one budget per item (Stage 11+).
+    //     gatherSourcesForItem keeps mutating the query + re-extracting until the
+    //     item reaches MIN_SOURCES distinct sources OR the budget/retry ceiling
+    //     stops it. The injected extractor preserves the ORIGINAL description as
+    //     originalDescription so alt-URL match_reasoning/relevance still compares
+    //     against the real requirement (not the mutated probe).
     const rawItemResults = await Promise.all(
       itemRows.map((row) => {
         // Stage 11 — create ONE budget per item, scoped to this map callback so
-        // each item's LLM ceiling is independent. Pass budget into extractor.
+        // each item's LLM ceiling is independent. The SAME budget threads through
+        // every density-loop attempt, so retries can never exceed the per-item cap.
         const budget = createBudget();
+        const baseItem = {
+          itemId: Number(row.itemId),
+          description: String(row.companyDescription || ''),
+          qty: Number(row.qty || 0),
+          uom: String(row.uom || 'EA'),
+        };
         return limit(() =>
-          extractSupplierForItem(
-            {
-              itemId: Number(row.itemId),
-              description: String(row.companyDescription || ''),
-              qty: Number(row.qty || 0),
-              uom: String(row.uom || 'EA'),
-            },
+          gatherSourcesForItem<ItemSourceRow>(
+            baseItem,
             budget,
-          ).then((result) => ({ result, budget, itemId: Number(row.itemId) })),
+            // One search+extract pass for a (mutated) probe. Reset visited-set per
+            // attempt; pin originalDescription to the un-mutated requirement.
+            (probe, b) =>
+              extractSupplierForItem(probe, b, 0, new Set<string>(), baseItem.description),
+          ).then((result) => ({ result, budget, itemId: baseItem.itemId })),
         );
       }),
     );
 
-    // Drop hard failures (null rows) and flatten the alt-row arrays into one set.
-    const beforeUrlGuards: ItemSourceRow[] = rawItemResults
-      .filter((r) => r.result.rows !== null)
-      .flatMap((r) => r.result.rows as ItemSourceRow[]);
+    // Flatten the gathered rows into one set. gatherSourcesForItem always returns
+    // an array (possibly empty) — never null — so no null filter is needed.
+    const beforeUrlGuards: ItemSourceRow[] = rawItemResults.flatMap((r) => r.result.rows);
 
     // URL guard — drop homepages even if the LLM slipped past the prompt rule.
     // We KEEP rows with empty source_url (those are explicit "no product page" markers).
@@ -539,22 +588,27 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     // llm_calls: sum of LLM calls consumed per budget (read after awaits complete).
     // budget_exhausted: latched true if ANY item hit its LLM/wall-clock ceiling.
     // dropped_count: URL-guard + liveness drops (existing totalDropped).
-    // items_below_target: item_ids that produced ZERO rows in the final set.
-    const finalItemIdSet = new Set(finalItems.map((r) => r.item_id));
+    // items_below_target: item_ids whose distinct-source count is BELOW the floor
+    //   (MIN_SOURCES) — now includes both under-filled AND zero-row items.
     const tavily_calls = rawItemResults.reduce((sum, r) => sum + r.result.tavilyCalls, 0);
     const llm_calls = rawItemResults.reduce((sum, r) => sum + r.budget.llmCallsUsed, 0);
     const budget_exhausted = rawItemResults.some((r) => r.budget.exhausted);
     const dropped_count = totalDropped;
-    const items_below_target = rawItemResults
-      .filter((r) => !finalItemIdSet.has(r.itemId))
-      .map((r) => r.itemId);
+    const items_below_target = computeItemsBelowTarget(
+      rawItemResults.map((r) => r.itemId),
+      finalItems,
+      MIN_SOURCES,
+    );
 
+    // write_failures is populated AFTER the DB save (a write can't know its own
+    // outcome before it runs); initialised here so the telemetry shape is stable.
     const search_telemetry = {
       tavily_calls,
       llm_calls,
       dropped_count,
       budget_exhausted,
       items_below_target,
+      write_failures: [] as WriteFailure[],
     };
 
     console.log(
@@ -587,9 +641,13 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
       timestamp,
     };
 
-    // Persist — modifyDatabase contract is unchanged so DB schema is untouched
+    // Persist — modifyDatabase contract is unchanged so DB schema is untouched.
+    // It now RETURNS WriteFailure[] (per-row isolation): we surface those into
+    // telemetry instead of discarding them, so a silent persistence drop is
+    // visible in the run summary / SSE payload.
+    let writeFailures: WriteFailure[] = [];
     try {
-      await modifyDatabase(
+      writeFailures = await modifyDatabase(
         {
           data_type: 'supplier_search',
           rfq_id,
@@ -607,7 +665,35 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
       );
     } catch (dbError) {
       console.error('[supplier-search] DB save failed (non-blocking):', dbError);
+      // A thrown save (not a per-row failure) is itself a write failure to report.
+      writeFailures = [{ table: 'supplier_search', error: dbError instanceof Error ? dbError.message : String(dbError) }];
     }
+
+    // Surface the persistence outcome into the returned telemetry (search_telemetry
+    // is shared by reference with result.data.suppliers_search, so the SSE/UI sees it).
+    search_telemetry.write_failures = writeFailures;
+
+    // Stage 4 — Persistence telemetry: rows handed to the DB + any failures.
+    logSearchStage('persist', {
+      rfq_id: rfq_id ?? null,
+      table: 'supplierItemStatus',
+      rows: finalItems.length,
+      failures: writeFailures,
+    });
+
+    // Run summary — density floor coverage + persistence in one record.
+    logSearchStage('run-summary', {
+      rfq_id: rfq_id ?? null,
+      tavily_calls,
+      llm_calls,
+      dropped_count,
+      budget_exhausted,
+      items_total: itemRows.length,
+      items_at_or_above_floor: itemRows.length - items_below_target.length,
+      items_below_target,
+      rows_written: finalItems.length,
+      write_failures: writeFailures,
+    });
 
     return result;
   } catch (error) {

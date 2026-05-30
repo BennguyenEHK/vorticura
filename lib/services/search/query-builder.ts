@@ -10,6 +10,7 @@
 // Tier 1 returns [], skip to Tier 2 (and then Tier 3, defined elsewhere).
 
 import type { ExtractedAnchors } from './tokenizer';
+import { extractAnchors } from './tokenizer';
 
 // =============================================
 // Types
@@ -201,4 +202,125 @@ export function buildTier2Queries(item: QueryItem, anchors: ExtractedAnchors): s
   }
 
   return queries;
+}
+
+// =============================================
+// Query Mutation — density-loop retry helper
+// =============================================
+// When an item finds too few supplier sources, the orchestrator retries with
+// a progressively broader query. Each attempt level applies one transformation
+// strategy. Pure, no I/O. Callers iterate: attempt 0 → 1 → 2 → 3+ until
+// enough sources are found or budget is exhausted.
+
+/** The four mutation strategies, ordered narrowest to broadest. */
+export type QueryMutation = 'exact' | 'relaxed' | 'synonyms' | 'category';
+
+/**
+ * Procurement-focused synonym map. Whole-word, case-insensitive replacement.
+ * When the original term is too specific, substituting a broader procurement
+ * category noun widens the supplier search without losing relevance.
+ *
+ * Keys are all lowercase; the replacement is applied to the first match in
+ * the description (case-insensitive, whole-word boundary).
+ */
+const SYNONYM_MAP: Record<string, string> = {
+  bolt:    'fastener',
+  screw:   'fastener',
+  valve:   'valve actuator',
+  gasket:  'seal',
+  pump:    'pump unit',
+  bearing: 'roller bearing',
+  hose:    'flexible hose',
+  sensor:  'transducer',
+};
+
+/**
+ * Produce a mutated QueryItem for retry `attempt` of the density loop.
+ * Pure, no I/O. Keeps qty/uom; only `description` changes.
+ *
+ *   attempt 0 → 'exact'    : description unchanged.
+ *   attempt 1 → 'relaxed'  : drop the tightest spec tokens (every dimension and
+ *                             rating string found by extractAnchors) so the query
+ *                             widens. Collapses resulting double-spaces; trims.
+ *   attempt 2 → 'synonyms' : replace the FIRST occurrence (case-insensitive,
+ *                             whole word) of any key in SYNONYM_MAP with its
+ *                             value. If none match, description is unchanged but
+ *                             mutation is still 'synonyms'.
+ *   attempt >=3 → 'category': reduce to a category head = the first brandHint
+ *                             (if any) plus the first up-to-3 tokens of
+ *                             cleanedDescription; if no brandHint, just the first
+ *                             up-to-3 tokens of cleanedDescription. Trims and
+ *                             collapses spaces. Never returns empty — falls back
+ *                             to the original description if reduction is empty.
+ */
+export function mutateQueryItem(
+  item: QueryItem,
+  attempt: number,
+): { item: QueryItem; mutation: QueryMutation } {
+  // attempt 0 — exact: no change at all.
+  if (attempt === 0) {
+    return { item: { ...item }, mutation: 'exact' };
+  }
+
+  // attempt 1 — relaxed: strip dimension and rating tokens extracted by the tokenizer.
+  if (attempt === 1) {
+    const anchors = extractAnchors(item.description);
+    // Build a set of tokens to drop: all dimensions + all ratings.
+    const dropTokens = new Set<string>([
+      ...anchors.dimensions,
+      ...anchors.ratings,
+    ]);
+
+    // Remove each drop-token as a whole-word match (case-insensitive).
+    let relaxed = item.description;
+    for (const tok of dropTokens) {
+      // Escape special regex chars in the token literal.
+      const escaped = tok.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      relaxed = relaxed.replace(new RegExp(`\\b${escaped}\\b`, 'gi'), ' ');
+    }
+    // Collapse multi-spaces and trim.
+    relaxed = relaxed.replace(/\s{2,}/g, ' ').trim();
+
+    return { item: { ...item, description: relaxed }, mutation: 'relaxed' };
+  }
+
+  // attempt 2 — synonyms: replace FIRST matched key with its mapped value.
+  if (attempt === 2) {
+    let mutated = item.description;
+    let replaced = false;
+    for (const [key, replacement] of Object.entries(SYNONYM_MAP)) {
+      if (replaced) break;
+      const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(`\\b${escaped}\\b`, 'i');
+      if (re.test(mutated)) {
+        mutated = mutated.replace(re, replacement);
+        replaced = true;
+      }
+    }
+    return { item: { ...item, description: mutated }, mutation: 'synonyms' };
+  }
+
+  // attempt >= 3 — category: reduce to first brandHint + first ≤3 clean tokens.
+  const anchors = extractAnchors(item.description);
+  const cleanTokens = anchors.cleanedDescription
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 3);
+
+  const parts: string[] = [];
+  if (anchors.brandHints.length > 0) {
+    parts.push(anchors.brandHints[0]);
+  }
+  for (const tok of cleanTokens) {
+    // Avoid duplicating the brand hint if it surfaces in cleanTokens too.
+    if (!parts.includes(tok)) {
+      parts.push(tok);
+    }
+  }
+
+  const categoryDesc = parts.join(' ').replace(/\s{2,}/g, ' ').trim();
+  // Never return empty — fall back to the original description.
+  const finalDesc = categoryDesc.length > 0 ? categoryDesc : item.description;
+
+  return { item: { ...item, description: finalDesc }, mutation: 'category' };
 }
