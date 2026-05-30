@@ -251,6 +251,33 @@ export function buildSupplierSearchPayload(data: Record<string, unknown>, update
   return payload;
 }
 
+// ─── Column-fit clamps for supplier_item_status ───────────────────────────────
+// The HuggingFace remote extraction path is schema-less, so the LLM can emit
+// values that overflow narrow columns (e.g. currency_code "US Dollar" vs
+// varchar(3)). An overflow makes insertData() throw, and the non-isolated write
+// loop then abandons every subsequent row — the confirmed root cause of the
+// "9 items processed, only 3 saved" data loss. Clamping each value to its
+// schema width/precision here guarantees no row can throw a constraint error.
+// Widths mirror lib/db/schema.ts → supplierItemStatus.
+
+/** Trim a string to a maximum length (varchar(n) safety). */
+function clampStr(value: unknown, max: number): string {
+  return String(value).slice(0, max);
+}
+
+/** Coerce to a 3-char uppercase ISO-style currency code (varchar(3) safety). */
+function clampCurrency(value: unknown): string {
+  const code = String(value).replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 3);
+  return code || 'USD';
+}
+
+/** Keep a price within numeric(15,4) — 11 integer digits. Garbage/overflow → 0 (unknown). */
+function clampPrice(value: unknown): string {
+  const n = Number(value);
+  if (!Number.isFinite(n) || Math.abs(n) >= 1e11) return '0';
+  return String(n);
+}
+
 /**
  * Build supplier item status payload for SUPPLIER_ITEM_STATUS table
  */
@@ -261,18 +288,18 @@ export function buildSupplierItemStatusPayload(data: Record<string, unknown>, up
   if (!update && data.rfq_id != null) payload.rfqId = parseInt(String(data.rfq_id), 10);
   if (data.item_id != null) payload.itemId = parseInt(String(data.item_id), 10);
   if (data.supplier_id != null) payload.supplierId = parseInt(String(data.supplier_id), 10);
-  if (data.supplier_name != null) payload.supplierName = String(data.supplier_name);
-  if (data.source_url != null) payload.sourceUrl = String(data.source_url);
-  if (data.status != null) payload.status = String(data.status);
-  if (data.bidder_unit_price != null) payload.bidderUnitPrice = String(data.bidder_unit_price);
-  else if (data.unit_price != null) payload.bidderUnitPrice = String(data.unit_price);
-  if (data.currency_code != null) payload.currencyCode = String(data.currency_code);
-  if (data.delivery_time != null) payload.deliveryTime = String(data.delivery_time);
-  if (data.bidder_description != null) payload.bidderDescription = String(data.bidder_description);
-  if (data.compliance_deviation != null) payload.complianceDeviation = String(data.compliance_deviation);
-  if (data.notes != null) payload.notes = String(data.notes);
-  if (data.contact_email != null) payload.contactEmail = String(data.contact_email);   // Map to DB column
-  if (data.contact_phone != null) payload.contactPhone = String(data.contact_phone);   // Map to DB column
+  if (data.supplier_name != null) payload.supplierName = clampStr(data.supplier_name, 255);
+  if (data.source_url != null) payload.sourceUrl = String(data.source_url);  // text — no width limit
+  if (data.status != null) payload.status = clampStr(data.status, 20);
+  if (data.bidder_unit_price != null) payload.bidderUnitPrice = clampPrice(data.bidder_unit_price);
+  else if (data.unit_price != null) payload.bidderUnitPrice = clampPrice(data.unit_price);
+  if (data.currency_code != null) payload.currencyCode = clampCurrency(data.currency_code);
+  if (data.delivery_time != null) payload.deliveryTime = clampStr(data.delivery_time, 100);
+  if (data.bidder_description != null) payload.bidderDescription = String(data.bidder_description);  // text
+  if (data.compliance_deviation != null) payload.complianceDeviation = String(data.compliance_deviation);  // text
+  if (data.notes != null) payload.notes = String(data.notes);  // text
+  if (data.contact_email != null) payload.contactEmail = clampStr(data.contact_email, 255);   // Map to DB column
+  if (data.contact_phone != null) payload.contactPhone = clampStr(data.contact_phone, 50);   // Map to DB column
   // Provenance / extraction signals (additive — only the supplier-search flow sets these)
   if (data.available_qty != null) payload.availableQty = parseInt(String(data.available_qty), 10);
   if (data.source_tier != null) payload.sourceTier = parseInt(String(data.source_tier), 10);
@@ -423,6 +450,41 @@ const TC_supplierSearch: TableWriteConfig = {
 
 // ─── SUPPLIER ITEM STATUS (unified: search + quotation) ─
 
+/**
+ * Stable upsert-existence key for supplier_item_status (Cause C fix).
+ *
+ * Search rows carry a natural identity — `source_url`, the supplier's product
+ * page — which is stable across re-runs. Keying on it makes a `research` re-run
+ * UPDATE the same row instead of inserting a duplicate when the synthetic
+ * supplier_id enumeration (idx+1) shifts. Quotation-flow rows have no
+ * `source_url`, so they keep the real `supplier_id` as the discriminator.
+ * Empty `source_url` ("no product page" marker) is treated as absent.
+ */
+export function supplierItemStatusExistsFilter(
+  data: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const rfqId = data.rfq_id ? Number(data.rfq_id) : null;
+  if (!rfqId) return null;
+  const filter: Record<string, unknown> = { rfqId };
+  if (data.item_id != null) filter.itemId = Number(data.item_id);
+  if (data.source_url) filter.sourceUrl = String(data.source_url);
+  else if (data.supplier_id != null) filter.supplierId = Number(data.supplier_id);
+  return filter;
+}
+
+/** Update filter mirrors {@link supplierItemStatusExistsFilter} so UPDATE targets the matched row. */
+export function supplierItemStatusUpdateFilter(
+  data: Record<string, unknown>,
+): Record<string, unknown> {
+  const filter: Record<string, unknown> = {
+    rfqId: Number(data.rfq_id),
+    itemId: Number(data.item_id),
+  };
+  if (data.source_url) filter.sourceUrl = String(data.source_url);
+  else if (data.supplier_id != null) filter.supplierId = Number(data.supplier_id);
+  return filter;
+}
+
 const TC_supplierItemStatus: TableWriteConfig = {
   table: 'supplierItemStatus',
   builder: buildSupplierItemStatusPayload,
@@ -444,19 +506,8 @@ const TC_supplierItemStatus: TableWriteConfig = {
       ...(item.bidder_proposal as Record<string, unknown>),
     }));
   },
-  getExistsComposite: (data) => {
-    const rfqId = data.rfq_id ? Number(data.rfq_id) : null;
-    if (!rfqId) return null;
-    const filter: Record<string, unknown> = { rfqId };
-    if (data.item_id) filter.itemId = Number(data.item_id);
-    if (data.supplier_id) filter.supplierId = Number(data.supplier_id);
-    return filter;
-  },
-  getUpdateFilter: (data) => ({
-    rfqId: Number(data.rfq_id),
-    itemId: Number(data.item_id),
-    supplierId: Number(data.supplier_id),
-  }),
+  getExistsComposite: (data) => supplierItemStatusExistsFilter(data),
+  getUpdateFilter: (data) => supplierItemStatusUpdateFilter(data),
 };
 
 // ─── QUOTATION ─────────────────────────────────
@@ -611,11 +662,64 @@ const WRITE_MAP: Record<string, TableWriteConfig[]> = {
 // UNIFIED HANDLER — 3 Layers
 // =============================================
 
-async function handleWrite(
+/** A row that failed to persist — surfaced to the caller instead of silently lost. */
+export interface WriteFailure {
+  table: string;
+  error: string;
+}
+
+/** Injectable DB ops — defaults to the real queries; overridden in unit tests. */
+interface WriteOps {
+  getData: typeof getData;
+  insertData: typeof insertData;
+  updateData: typeof updateData;
+}
+
+/** Write one extracted row: existence check → update or insert. May throw. */
+async function writeRow(
+  config: TableWriteConfig,
+  item: Record<string, unknown>,
+  input: ModifyDatabaseInput,
+  workspace: WorkspaceContext,
+  ops: WriteOps,
+): Promise<void> {
+  // Layer 2: Check existence via composite filter
+  let existing: Record<string, unknown>[] = [];
+  const filter = config.getExistsComposite(item, input);
+  if (filter !== null) {
+    existing = await ops.getData(config.table, filter, workspace) as Record<string, unknown>[];
+  }
+
+  if (existing.length > 0) {
+    const updatePayload = config.builder(item, true);
+    if (Object.keys(updatePayload).length === 0) return;
+    const updateFilter = config.getUpdateFilter(item, input);
+    await ops.updateData(config.table, updateFilter, updatePayload, workspace);
+    console.log(`[DB] ${config.table} updated`);
+    return;
+  }
+
+  // Layer 3: Insert (skip if updateOnly)
+  if (config.updateOnly) return;
+
+  const insertPayload = config.builder(item, false);
+  if (Object.keys(insertPayload).length === 0) return;
+  const result = await ops.insertData(config.table, {}, insertPayload, workspace);
+  console.log(`[DB] ${config.table} inserted`);
+
+  if (config.onInsert && result) {
+    config.onInsert(result, input);
+  }
+}
+
+export async function handleWrite(
   configs: TableWriteConfig[],
   input: ModifyDatabaseInput,
-  workspace: WorkspaceContext
-): Promise<void> {
+  workspace: WorkspaceContext,
+  ops: WriteOps = { getData, insertData, updateData },
+): Promise<WriteFailure[]> {
+  const failures: WriteFailure[] = [];
+
   for (const config of configs) {
     // Layer 1: Extract data
     const extracted = config.extract(input);
@@ -624,35 +728,24 @@ async function handleWrite(
     const items: Record<string, unknown>[] = Array.isArray(extracted) ? extracted : [extracted];
 
     for (const item of items) {
-      // Layer 2: Check existence via composite filter
-      let existing: Record<string, unknown>[] = [];
-      const filter = config.getExistsComposite(item, input);
-      if (filter !== null) {
-        existing = await getData(config.table, filter, workspace) as Record<string, unknown>[];
-      }
-
-      if (existing.length > 0) {
-        const updatePayload = config.builder(item, true);
-        if (Object.keys(updatePayload).length === 0) continue;
-        const updateFilter = config.getUpdateFilter(item, input);
-        await updateData(config.table, updateFilter, updatePayload, workspace);
-        console.log(`[DB] ${config.table} updated`);
-        continue;
-      }
-
-      // Layer 3: Insert (skip if updateOnly)
-      if (config.updateOnly) continue;
-
-      const insertPayload = config.builder(item, false);
-      if (Object.keys(insertPayload).length === 0) continue;
-      const result = await insertData(config.table, {}, insertPayload, workspace);
-      console.log(`[DB] ${config.table} inserted`);
-
-      if (config.onInsert && result) {
-        config.onInsert(result, input);
+      // Per-row isolation: a single failing row (e.g. a constraint violation)
+      // must NOT abandon the remaining rows in the batch. This is the resilience
+      // half of the "9 items, only 3 saved" fix — the clamp removes the most
+      // likely trigger; this guarantees one bad row can never silently drop the rest.
+      try {
+        await writeRow(config, item, input, workspace, ops);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        failures.push({ table: config.table, error: msg });
+        console.error(`[DB] ${config.table} row write failed (isolated, continuing):`, msg);
       }
     }
   }
+
+  if (failures.length > 0) {
+    console.warn(`[DB] ${failures.length} row(s) failed to persist (batch continued):`, failures);
+  }
+  return failures;
 }
 
 // =============================================
@@ -662,7 +755,7 @@ async function handleWrite(
 export async function modifyDatabase(
   input: ModifyDatabaseInput,
   workspace: WorkspaceContext
-): Promise<void> {
+): Promise<WriteFailure[]> {
   const { data_type } = input;
 
   const configs = WRITE_MAP[data_type];
@@ -671,6 +764,7 @@ export async function modifyDatabase(
   }
 
   console.log(`[DB] Writing ${data_type} → ${configs.map(c => c.table).join(', ')}`);
-  await handleWrite(configs, input, workspace);
-  console.log('[DB] Database modification completed');
+  const failures = await handleWrite(configs, input, workspace);
+  console.log(`[DB] Database modification completed${failures.length ? ` (${failures.length} row failure(s))` : ''}`);
+  return failures;
 }
