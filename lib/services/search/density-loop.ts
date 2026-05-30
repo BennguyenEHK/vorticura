@@ -3,21 +3,20 @@
 // =============================================
 // The search cascade's tier thresholds are early-exit BONUSES, not floors — an
 // item can legitimately exit with 0–1 verified sources. This module adds the
-// floor: keep mutating the query and re-searching until an item reaches
+// floor: walk a pre-ranked LLM query list and re-search until an item reaches
 // MIN_SOURCES distinct supplier sources.
 //
 // Termination contract (honours search_mecha.md): the loop is bounded by BOTH
-// the per-item SearchBudget (LLM-call + wall-clock ceiling) AND a hard
-// MAX_RETRIES cap. Reaching MIN_SOURCES is the goal; the budget/retry ceiling is
-// the guarantee of termination — a hard-to-source item degrades to best-effort
-// instead of looping forever.
+// the per-item SearchBudget (LLM-call + wall-clock ceiling) AND the length of
+// the pre-computed query list. Reaching MIN_SOURCES is the goal; the
+// budget/list-length ceiling is the guarantee of termination — a hard-to-source
+// item degrades to best-effort instead of looping forever.
 //
 // Dependency-injected extractor: the orchestrator passes extractSupplierForItem
 // in. This keeps the loop free of the DB/LLM import graph so it stays a pure,
 // unit-testable control structure (see tests/test_unit/testDensityLoop.ts).
 
 import { isExhausted, type SearchBudget } from './budget';
-import { mutateQueryItem } from './query-builder';
 import { logSearchStage } from './telemetry';
 
 // ---------------------------------------------
@@ -28,8 +27,6 @@ import { logSearchStage } from './telemetry';
 export const MIN_SOURCES = 3;
 /** Inner cap: stop accumulating within a single attempt once this many gathered. */
 export const TARGET_SOURCES = 5;
-/** Hard ceiling on query-mutation attempts, independent of the budget. */
-export const MAX_RETRIES = 4;
 
 // ---------------------------------------------
 // Types — minimal shapes so this module avoids the actions/db import graph
@@ -67,9 +64,9 @@ export interface DensityExtractResult<R> {
   deadUrls: number;
 }
 
-/** Injected extractor — runs one search+extract pass for the (mutated) probe. */
+/** Injected extractor — runs one search+extract pass for the given query string. */
 export type DensityExtractFn<R> = (
-  item: DensityItem,
+  query: string,
   budget: SearchBudget,
 ) => Promise<DensityExtractResult<R>>;
 
@@ -86,12 +83,13 @@ export interface GatherResult<R> {
 // ---------------------------------------------
 
 /**
- * Gather distinct supplier sources for one item, mutating the query each retry
- * until MIN_SOURCES is met or the budget / retry ceiling stops us. Sources are
+ * Gather distinct supplier sources for one item, walking a pre-ranked LLM query
+ * list until MIN_SOURCES is met or the list / budget is exhausted. Sources are
  * deduped by source_url so a vendor re-found across attempts counts once.
  */
 export async function gatherSourcesForItem<R extends MinimalRow>(
   item: DensityItem,
+  queries: string[],
   budget: SearchBudget,
   extract: DensityExtractFn<R>,
 ): Promise<GatherResult<R>> {
@@ -103,25 +101,19 @@ export async function gatherSourcesForItem<R extends MinimalRow>(
   while (
     collected.size < MIN_SOURCES &&  // floor not yet met
     !isExhausted(budget) &&          // circuit breaker still holds the leash
-    attempt < MAX_RETRIES            // independent safety ceiling
+    attempt < queries.length         // list length is the natural attempt ceiling
   ) {
-    // Stage 3 — Query Generation: mutate the base item for this attempt.
-    const mutated = mutateQueryItem(
-      { description: item.description, qty: item.qty, uom: item.uom },
-      attempt,
-    );
-    const probe: DensityItem = { ...item, description: mutated.item.description };
+    const query = queries[attempt];
 
     logSearchStage('query-gen', {
       item_id: item.itemId,
       attempt,
-      mutation: mutated.mutation,
-      description: probe.description,
+      query,
       qty: item.qty,
       uom: item.uom,
     });
 
-    const res = await extract(probe, budget);
+    const res = await extract(query, budget);
     tavilyCalls += res.tavilyCalls;
     deadUrls += res.deadUrls;
 
@@ -137,7 +129,7 @@ export async function gatherSourcesForItem<R extends MinimalRow>(
     logSearchStage('density-check', {
       item_id: item.itemId,
       attempt,
-      mutation: mutated.mutation,
+      query,
       have: collected.size,
       need: MIN_SOURCES,
       budgetLeft: budget.maxLlmCalls - budget.llmCallsUsed,

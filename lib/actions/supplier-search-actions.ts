@@ -3,11 +3,11 @@
 // =============================================
 // Internal server module (called by data-processor, NOT a server action).
 // Flow: ProcessorInput → fetch rfq_items → sort by item_id ASC →
-//       per-item (tier-cascaded search → liveness gate → Track A microdata
-//       OR Track B vLLM extract → stock filter → alt-URL re-loop) →
+//       per-item (LLM-planned ranked queries → single-query Tavily search →
+//       Track A microdata OR Track B LLM extract → stock filter → alt-URL re-loop) →
 //       URL guards → deterministic supplier_id → save → result.
-// Liveness (Stage 5) and Track A (Stage 7) run BEFORE the LLM so dead links and
-// pages with complete structured pricing never cost an LLM call.
+// Track A (Stage 7) runs BEFORE the LLM so pages with complete structured
+// pricing never cost an LLM call.
 //
 // Both action_types route through the same RAG flow:
 //   - 'search'   : initial supplier discovery for an RFQ
@@ -22,7 +22,8 @@ import {
 import { getData } from '@/lib/db/queries';
 import { modifyDatabase, type WriteFailure } from '@/lib/utils/databaseHandler';
 import { aiChatCompletion } from '@/lib/ai-agent/ai-router';
-import { searchWeb, isProductPage } from '@/lib/services/search';
+import { searchOneQuery, isProductPage } from '@/lib/services/search';
+import { planQueries } from '@/lib/services/search/query-planner';
 import { SUPPLIER_SCHEMA, normalizeSupplierExtraction, type SupplierExtraction } from '@/lib/ai-agent/schemas/supplier';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
 // Stage 11 — budget circuit-breaker + Stage 10 — alt-URL relevance floor
@@ -45,7 +46,7 @@ import { logSearchStage } from '@/lib/services/search/telemetry';
 // Stage 7 — deterministic microdata price extraction (Track A short-circuit)
 import { extractMicrodataPrice } from '@/lib/services/search/html-gate';
 import { buildDeterministicSupplier } from '@/lib/services/search/track-a';
-import type { TavilySnippet } from '@/lib/services/search/tavily-client';
+
 
 // ---------------------------------------------
 // Configuration
@@ -97,40 +98,6 @@ interface ItemSourceRow {
 // isProductPage lives in lib/services/search — single source of truth shared
 // with the tier cascade. We re-export it implicitly via the import above.
 
-/**
- * Stage 5 — Liveness Gate. HEAD-check each snippet URL in parallel; drop dead
- * links (status >= 400, or fetch throws/times out) BEFORE any extraction so we
- * never spend LLM tokens (or microdata effort) on a page that no longer exists.
- * Bounded by AbortSignal.timeout so a slow site can't hang the whole pipeline
- * against the Vercel function timeout.
- */
-async function filterLiveSnippets(snippets: TavilySnippet[]): Promise<{ live: TavilySnippet[]; dropped: number }> {
-  const checks = await Promise.allSettled(
-    snippets.map((s) =>
-      fetch(s.url, {
-        method: 'HEAD',
-        signal: AbortSignal.timeout(3_000),
-        // Some servers reject default fetch UA — set a generic one to reduce false-drops
-        headers: { 'User-Agent': 'Mozilla/5.0 QuoteFlowBot/1.0' },
-      }),
-    ),
-  );
-
-  const live: TavilySnippet[] = [];
-  let dropped = 0;
-  checks.forEach((result, idx) => {
-    const snippet = snippets[idx];
-    // Treat fetch reject (timeout, DNS, TLS) as dead
-    if (result.status !== 'fulfilled') { dropped++; return; }
-    // Some sites reject HEAD with 405 but the page itself is fine — keep those
-    if (result.value.status === 405) { live.push(snippet); return; }
-    if (result.value.status >= 400) { dropped++; return; }
-    live.push(snippet);
-  });
-
-  return { live, dropped };
-}
-
 // ---------------------------------------------
 // Deterministic suppliers_search summary (no LLM)
 // ---------------------------------------------
@@ -150,7 +117,7 @@ function buildSearchContent(rfqReference: string, rows: ItemSourceRow[], dropped
 }
 
 // ---------------------------------------------
-// Per-item RAG: tier-cascaded search → vLLM extract → typed rows
+// Per-item RAG: LLM-planned ranked queries → single-query Tavily search → typed rows
 // ---------------------------------------------
 
 interface RfqItemInput {
@@ -165,7 +132,7 @@ interface RfqItemInput {
 interface ExtractResult {
   rows: ItemSourceRow[] | null;
   tavilyCalls: number;
-  // Stage 5 — snippet URLs dropped by the per-item liveness gate (pre-extraction).
+  // Snippet URLs dropped pre-extraction (kept at 0; liveness gate removed).
   deadUrls: number;
 }
 
@@ -178,7 +145,7 @@ interface ExtractResult {
  * row tagged with "via_alt:<origin_supplier_id>" in its notes.
  *
  * Filters applied in order:
- *   (1) Stock Protection — drop row if 0 < available_qty < (qty + 2).
+ *   (1) Stock Protection — drop row if 0 < available_qty < (qty + 5).
  *       available_qty === 0 means "unknown" and is treated as a bypass —
  *       we never punish unknowns because the LLM can't extract what isn't
  *       stated on the page.
@@ -194,6 +161,7 @@ interface ExtractResult {
  * search_telemetry across all items without shared mutable state.
  */
 async function extractSupplierForItem(
+  query: string,
   item: RfqItemInput,
   budget: SearchBudget,       // Stage 11 — per-item circuit-breaker budget
   depth: number = 0,
@@ -202,38 +170,31 @@ async function extractSupplierForItem(
   // substitutes found at depth>0 can be justified against the real need.
   originalDescription: string = item.description,
 ): Promise<ExtractResult> {
-  // (1) Tier-walked Tavily search w/ Redis cache. Tier 3 is invoked INSIDE
-  //     searchWeb when Tiers 1/2 fall short of the verified threshold.
-  const search = await searchWeb({ description: item.description, qty: item.qty, uom: item.uom });
+  // (1) Single-query Tavily search (cache-first). The query is LLM-planned
+  //     upstream by planQueries() — no tier walk or query mutation here.
+  const search = await searchOneQuery(query);
 
   // Stage 2 — Raw Search Execution telemetry: query → verified-page payload shape.
   logSearchStage('raw-search', {
     item_id: item.itemId,
     depth,
-    tier: search.tier,
-    verifiedCount: search.verifiedCount,
+    query,
     snippets: search.snippets.length,
     tavilyCalls: search.tavilyCalls,
     sampleUrls: search.snippets.map((s) => s.url),
   });
 
   if (search.snippets.length === 0) {
-    console.warn(`[supplier-search] item=${item.itemId} depth=${depth} no snippets after tier walk`);
+    console.warn(`[supplier-search] item=${item.itemId} depth=${depth} no snippets for query`);
     // Stage 14 — return tavilyCalls even on early-out so the orchestrator
     // accumulates the quota this item spent before deciding there was nothing.
     return { rows: null, tavilyCalls: search.tavilyCalls, deadUrls: 0 };
   }
 
-  // Stage 5 — Liveness Gate: HEAD-check candidate URLs and drop dead links
-  // BEFORE spending LLM tokens or microdata effort (spec ordering:
-  // search → liveness → page-type → Track A → Track B).
-  const { live: liveSnippets, dropped: deadUrls } = await filterLiveSnippets(search.snippets);
-  if (liveSnippets.length === 0) {
-    console.warn(
-      `[supplier-search] item=${item.itemId} depth=${depth} all ${search.snippets.length} URL(s) dead after liveness gate`,
-    );
-    return { rows: null, tavilyCalls: search.tavilyCalls, deadUrls };
-  }
+  // Liveness gate removed — searchOneQuery already filters to verified product
+  // pages; HEAD-checking adds latency without improving precision in this flow.
+  const liveSnippets = search.snippets;
+  const deadUrls = 0;
 
   // Stage 7 — Track A (deterministic): if a live product page exposes COMPLETE
   // price+currency microdata, build the supplier row from structured ground
@@ -261,7 +222,7 @@ async function extractSupplierForItem(
       contact_email: '',
       contact_phone: '',
       available_qty: 0,                    // unknown — bypasses the stock filter
-      source_tier: search.tier,
+      source_tier: 0,                      // tiers removed; 0 = n/a
       extraction_track: 'deterministic',
       selling_unit: '',                    // microdata carries no packaging info
       pack_size: 0,
@@ -322,10 +283,10 @@ async function extractSupplierForItem(
   console.log(`[ai-server] item=${item.itemId} depth=${depth} extract latency=${Date.now() - llmStart}ms`);
 
   // (3) Stock Protection Rule — guard against suppliers who can't fulfill.
-  //     Required buffer is item.qty + 2. available_qty === 0 = "not stated" and
+  //     Required buffer is item.qty + 5. available_qty === 0 = "not stated" and
   //     bypasses the filter (we don't have grounds to drop unknowns).
-  if (extracted.available_qty > 0 && extracted.available_qty < item.qty + 2) {
-    console.log(`[supplier-search] item=${item.itemId} depth=${depth} stock=${extracted.available_qty} below qty+2=${item.qty + 2}, dropping`);
+  if (extracted.available_qty > 0 && extracted.available_qty < item.qty + 5) {
+    console.log(`[supplier-search] item=${item.itemId} depth=${depth} stock=${extracted.available_qty} below qty+5=${item.qty + 5}, dropping`);
     return { rows: null, tavilyCalls: search.tavilyCalls, deadUrls };
   }
 
@@ -388,7 +349,7 @@ async function extractSupplierForItem(
     contact_phone: extracted.contact_phone,
     // Stage 7 — provenance fields persisted to items_source
     available_qty: extracted.available_qty,
-    source_tier: search.tier,
+    source_tier: 0,                      // tiers removed; 0 = n/a
     extraction_track: extractionTrack,
     // Dossier signals from the LLM extraction
     selling_unit: extracted.selling_unit,
@@ -420,8 +381,8 @@ async function extractSupplierForItem(
 
   // (5) Alt-URL re-loop — depth-capped + visited-set guarded.
   //     The alternative_source_url is an EXPLICIT link the supplier offered;
-  //     we feed it back into the search loop as a new search subject so the
-  //     existing tier cascade discovers / extracts it. Reuses all infra.
+  //     we feed it directly as the search query for one searchOneQuery call.
+  //     Reuses all infra.
   //
   //     Stage 11 — also skip the alt-URL follow if the budget is already spent:
   //     preserve the primary row but don't burn more quota on an alt.
@@ -442,7 +403,10 @@ async function extractSupplierForItem(
       // Stage 11 — thread the SAME budget object into the recursive call so
       // LLM calls from alt hops count against this item's ceiling too.
       // Stage 14 — collect tavilyCalls from the alt recursion.
+      // The alternative URL becomes the search query at depth+1 (the new
+      // single-query flow uses the URL as the exact query string).
       const altResult = await extractSupplierForItem(
+        extracted.alternative_source_url,
         { ...item, description: extracted.alternative_source_url },
         budget,
         depth + 1,
@@ -477,6 +441,41 @@ async function extractSupplierForItem(
 
   // Stage 14 — return row array + total Tavily calls and dead-URL drops for this item.
   return { rows, tavilyCalls: totalTavilyCalls, deadUrls: totalDeadUrls };
+}
+
+// ---------------------------------------------
+// Search-text builder — collapses AgentItemSummary into a flat query string
+// ---------------------------------------------
+
+/**
+ * Build the free-text blob passed to planQueries() for a single RFQ item row.
+ *
+ * Preference order:
+ *   1. agentItemSummary (AI 4-axis summary) — join all string/string[] values
+ *      from all axes with '; ' for the richest signal.
+ *   2. companyDescription — raw description from the RFQ.
+ *
+ * Coded defensively: the DB row comes in as Record<string, unknown>, and
+ * AgentItemSummary structure may not always be fully populated.
+ */
+function buildSearchText(row: Record<string, unknown>): string {
+  const summary = row.agentItemSummary;
+  if (summary !== null && summary !== undefined && typeof summary === 'object') {
+    const parts: string[] = [];
+    for (const val of Object.values(summary as Record<string, unknown>)) {
+      if (Array.isArray(val)) {
+        for (const v of val) {
+          if (typeof v === 'string' && v.trim()) parts.push(v.trim());
+        }
+      } else if (typeof val === 'string' && val.trim()) {
+        parts.push(val.trim());
+      }
+    }
+    const serialized = parts.join('; ');
+    if (serialized) return serialized;
+  }
+  // Fall back to raw company description when summary is absent or empty.
+  return String(row.companyDescription || '');
 }
 
 // ---------------------------------------------
@@ -526,16 +525,14 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     const limit = pLimit(RAG_CONCURRENCY);
 
     // (3) Per-item DENSITY LOOP with one budget per item (Stage 11+).
-    //     gatherSourcesForItem keeps mutating the query + re-extracting until the
-    //     item reaches MIN_SOURCES distinct sources OR the budget/retry ceiling
-    //     stops it. The injected extractor preserves the ORIGINAL description as
-    //     originalDescription so alt-URL match_reasoning/relevance still compares
-    //     against the real requirement (not the mutated probe).
+    //     planQueries() generates up to 8 LLM-ranked queries for the item.
+    //     gatherSourcesForItem walks the query list and re-extracts until the
+    //     item reaches MIN_SOURCES distinct sources OR the query list / budget
+    //     ceiling stops it. Each extractor call issues one Tavily query.
+    //     originalDescription is pinned to the un-mutated requirement so
+    //     alt-URL match_reasoning/relevance compares against the real need.
     const rawItemResults = await Promise.all(
       itemRows.map((row) => {
-        // Stage 11 — create ONE budget per item, scoped to this map callback so
-        // each item's LLM ceiling is independent. The SAME budget threads through
-        // every density-loop attempt, so retries can never exceed the per-item cap.
         const budget = createBudget();
         const baseItem = {
           itemId: Number(row.itemId),
@@ -543,16 +540,17 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
           qty: Number(row.qty || 0),
           uom: String(row.uom || 'EA'),
         };
-        return limit(() =>
-          gatherSourcesForItem<ItemSourceRow>(
+        const searchText = buildSearchText(row);
+        return limit(async () => {
+          const queries = await planQueries(searchText);
+          const result = await gatherSourcesForItem<ItemSourceRow>(
             baseItem,
+            queries,
             budget,
-            // One search+extract pass for a (mutated) probe. Reset visited-set per
-            // attempt; pin originalDescription to the un-mutated requirement.
-            (probe, b) =>
-              extractSupplierForItem(probe, b, 0, new Set<string>(), baseItem.description),
-          ).then((result) => ({ result, budget, itemId: baseItem.itemId })),
-        );
+            (query, b) => extractSupplierForItem(query, baseItem, b, 0, new Set<string>(), baseItem.description),
+          );
+          return { result, budget, itemId: baseItem.itemId };
+        });
       }),
     );
 
@@ -563,11 +561,10 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     // URL guard — a row only survives if it points at a REAL product page.
     // Empty-source_url rows are "No product page found" results (often a
     // hallucinated supplier name/contact lifted from a homepage or directory
-    // listing); we now DROP them instead of persisting them as markers — storing
+    // listing); we DROP them instead of persisting them as markers — storing
     // them only inflated the row count with junk. isUsableSourceRow rejects empty
     // urls; isProductPage rejects homepages/PDFs/listings even if the LLM slipped.
-    // NOTE: liveness (Stage 5) already ran per-item on the snippet URLs BEFORE
-    // extraction, so every chosen source_url here is already known-live.
+    // searchOneQuery already filters to verified product pages before extraction.
     const productPageItems = beforeUrlGuards.filter((r) => isUsableSourceRow(r) && isProductPage(r.source_url));
 
     // (4) Merge survivors and assign supplier_id deterministically: sort by
@@ -581,8 +578,8 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
       supplier_id: idx + 1,
     }));
 
-    // Dead-URL drops happened pre-extraction (Stage 5); aggregate the per-item
-    // counts and add the row-level URL-guard drops for the total dropped figure.
+    // deadUrls is 0 per-item (liveness gate removed); aggregate and add the
+    // row-level URL-guard drops for the total dropped figure.
     const deadUrlCount = rawItemResults.reduce((sum, r) => sum + r.result.deadUrls, 0);
     const totalDropped = (beforeUrlGuards.length - productPageItems.length) + deadUrlCount;
     console.log(`[supplier-search] done rfq_id=${rfq_id} returned=${finalItems.length} dropped=${totalDropped}`);

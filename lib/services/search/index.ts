@@ -1,65 +1,59 @@
 // =============================================
-// SEARCH WEB — three-tier semantic cascade
+// SEARCH WEB — single-query search with cache + relevance gate
 // =============================================
-// Public entrypoint for the RAG pipeline. Replaces the old single-query
-// full-text Tavily lookup with a deliberate three-tier cascade:
-//   Tier 1 — exact-match queries built from extracted anchors (verified ≥ 5)
-//   Tier 2 — keyword combination engine                       (verified ≥ 3)
-//   Tier 3 — agentic AI loop mining carry-forward snippets/notes
+// Public entrypoint for the RAG pipeline. Executes one Tavily query,
+// applies a cache-first strategy, filters results through the product-page
+// relevance gate, and deduplicates by URL.
 //
-// "Verified" means: the URL passes isProductPage (specific page, not a bare
-// domain). We threshold on verified URLs, not raw snippet counts, because
-// homepage / generic-listing hits are useless to the downstream extractor.
-//
-// One searchWeb() call per RFQ item. The supplier-search action wraps these
-// in p-limit(8) so we never overwhelm Tavily's free-tier rate limit.
+// One searchOneQuery() call per composed query string. The supplier-search
+// action is responsible for query construction and concurrency management.
 
 import pLimit from 'p-limit';
-import { extractAnchors } from './tokenizer';
-import { buildTier1Queries, buildTier2Queries, type QueryItem } from './query-builder';
-import { runAgenticTier3 } from './tier3-agent';
 import { tavilySearch, type TavilySnippet } from './tavily-client';
 import { getCachedSearch, setCachedSearch } from './cache';
 import { isLikelyProductPage, hasProductSignals } from './html-gate';
 
 // ---------------------------------------------
-// Tier thresholds — verified product-page count
+// Global Tavily concurrency cap
 // ---------------------------------------------
-// Tier 1 demands more verified sources (5) because exact-match queries that
-// return < 5 product pages indicate the anchor is too narrow; widening helps.
-// Tier 2 is the safety net at 3 — the lowest count we can still extract from.
-const TIER1_VERIFIED_THRESHOLD = 5;
-const TIER2_VERIFIED_THRESHOLD = 3;
+// The orchestrator runs items through pLimit(RAG_CONCURRENCY); within an item
+// the density loop walks queries sequentially. This module-level limiter is the
+// ABSOLUTE ceiling on simultaneous live Tavily calls across ALL items, so a
+// burst of concurrent items can't overrun Tavily's (free-tier) rate limit.
+// Cache hits bypass the limiter — only live round-trips are gated.
+const SEARCH_QUERY_CONCURRENCY = Number(process.env.SEARCH_QUERY_CONCURRENCY ?? 6);
+const tavilyLimit = pLimit(SEARCH_QUERY_CONCURRENCY);
+
+// Re-export TavilySnippet for consumers that import it from this module.
+export type { TavilySnippet };
 
 // ---------------------------------------------
-// Query concurrency — global Tavily call cap
+// QueryItem — local type (formerly re-exported from query-builder)
 // ---------------------------------------------
-// GLOBAL cap shared across all concurrent RFQ items. The orchestrator already
-// wraps items in pLimit(8), so peak in-flight Tavily calls = 8 * 6 worst-case,
-// but in practice tiers resolve quickly and the cap prevents burst overruns.
-const QUERY_CONCURRENCY = 6;
-const queryLimit = pLimit(QUERY_CONCURRENCY);
 
-export interface SearchOutcome {
-  /** Tier that produced the final accumulator. 0 = nothing found. */
-  tier: 0 | 1 | 2 | 3;
-  /** Count of verified (product-page) URLs in `snippets`. */
-  verifiedCount: number;
-  /** Verified snippets, unique by URL, ordered by first-seen. */
-  snippets: TavilySnippet[];
-  /** Telemetry: number of live Tavily API calls this search consumed (cache
-   *  hits excluded). Aggregated by the orchestrator into search_telemetry. */
-  tavilyCalls: number;
+/** One item from an RFQ line, used to drive query construction upstream. */
+export interface QueryItem {
+  description: string;
+  qty?: number;
+  uom?: string;
 }
 
-export type { QueryItem };
+// ---------------------------------------------
+// SearchResult — return type for searchOneQuery
+// ---------------------------------------------
+
+export interface SearchResult {
+  /** Verified, deduplicated product-page snippets. */
+  snippets: TavilySnippet[];
+  /** Number of live Tavily API calls made (0 = cache hit, 1 = cache miss). */
+  tavilyCalls: number;
+}
 
 // ---------------------------------------------
 // URL guard — shared with the orchestrator
 // ---------------------------------------------
-// Lives here (not in supplier-search-actions) so the search cascade can apply
-// the same guard at the tier-verification stage that the orchestrator applies
-// to the LLM's chosen source_url. Single definition = no drift.
+// Lives here so the search layer and orchestrator apply the same guard when
+// evaluating source_url. Single definition = no drift.
 
 /**
  * True only when the URL points at a specific page (not a bare domain).
@@ -92,9 +86,6 @@ export function isProductPage(url: string): boolean {
     // Reject non-product surfaces that DO carry a path but never represent a
     // single sourceable product (search results, taxonomy, editorial, account,
     // checkout, company/corporate info, directory listings, government gazettes).
-    // Previously this guard was `pathname.length > 1` alone, which
-    // passed every one of these — the root cause of Tier 1's false-positive
-    // "verified" count that suppressed the Tier 2/3 fallback.
     //
     // startsWith — segments that always appear at the path root:
     const NON_PRODUCT_PREFIXES = [
@@ -130,65 +121,57 @@ export function isProductPage(url: string): boolean {
 }
 
 // ---------------------------------------------
-// Per-query runner — cache lookup + dedup
+// Public API — single-query search
 // ---------------------------------------------
 
 /**
- * Execute one query (cache-first), filter to product pages, and merge into
- * the running accumulator. Never throws — a single bad query must not abort
- * the whole tier walk. The accumulator is keyed by URL so duplicates across
- * queries / tiers are collapsed automatically.
+ * Execute one search query (cache-first), filter results to verified product
+ * pages, and return deduplicated snippets.
  *
- * Returns 1 if a live Tavily API call was made (cache miss), 0 if served from
- * cache. A call that throws still counts as 1 — we attempted the round-trip.
+ * Cache hit  → tavilyCalls = 0.
+ * Cache miss → tavilyCalls = 1 (even if the Tavily call throws).
+ *
+ * Never throws — a Tavily error returns an empty snippets array so the caller
+ * can decide how to handle missing results.
  */
-async function runQueryAndDedup(
-  query: string,
-  acc: Map<string, TavilySnippet>,
-): Promise<number> {
-  // (1) Cache lookup — keyed by exact query string (sha1 inside cache layer).
+export async function searchOneQuery(query: string): Promise<SearchResult> {
+  // (1) Cache-first lookup.
   let snippets = await getCachedSearch(query);
+  let tavilyCalls = 0;
 
-  // (2) Cache miss → call Tavily. We mark isLiveCall=true before the try so
-  //     that a thrown error (e.g. 429) still counts as an attempted live call.
-  //     Errors are logged + swallowed: the next query in the tier (or the next
-  //     tier itself) will pick up the slack.
-  let isLiveCall = false;
   if (!snippets) {
-    isLiveCall = true; // mark before try — a 429/network error still counts
+    // Cache miss — attempt a live Tavily call.
+    tavilyCalls = 1;
     try {
-      snippets = await tavilySearch(query);
+      snippets = await tavilyLimit(() => tavilySearch(query));
     } catch (err) {
       console.warn(
         `[search] tavily error for "${query.slice(0, 60)}":`,
         err instanceof Error ? err.message : err,
       );
-      return 1; // live call was attempted even though it threw
+      return { snippets: [], tavilyCalls: 1 };
     }
     // Cache even empty arrays — saves Tavily quota on known-bad queries.
     await setCachedSearch(query, snippets);
   }
 
-  // (3) Merge into accumulator. Verification runs BEFORE the caller counts the
-  //     accumulator against a tier threshold, so acc.size only ever reflects
-  //     genuinely-verified product pages — that is what drives the < 5 / < 3
-  //     fallback decisions in searchWeb().
+  // (2) Relevance gate + dedup.
+  // acc is keyed by URL so duplicates are collapsed automatically.
+  const acc = new Map<string, TavilySnippet>();
+
   for (const snippet of snippets) {
     // (a) URL structural guard — specific page, not homepage / search / taxonomy.
     if (!isProductPage(snippet.url)) continue;
+
     // (b) Content verification gate — a candidate is only counted as verified
     //     when its content shows product signals. Two branches:
     //
     //   • Raw HTML (Tavily returned markup): require schema.org/OG/itemprop
-    //     signals via isLikelyProductPage. This branch was always correct but
-    //     fires rarely because Tavily strips tags before returning.
+    //     signals via isLikelyProductPage.
     //
     //   • Cleaned text (no '<' characters, the typical Tavily response): require
     //     at least one plain-text product signal (currency near a number, or a
-    //     procurement keyword) via hasProductSignals. This replaces the old
-    //     "URL guard alone" posture that allowed trade yearbooks, company pages,
-    //     and government gazettes to pass because they have plausible paths but
-    //     carry no commerce content.
+    //     procurement keyword) via hasProductSignals.
     const rawContent = snippet.content || '';
     if (rawContent.includes('<')) {
       if (!isLikelyProductPage(rawContent)) continue;
@@ -196,107 +179,11 @@ async function runQueryAndDedup(
       const snippetText = (snippet.snippet || '') + ' ' + rawContent;
       if (!hasProductSignals(snippetText)) continue;
     }
+
     // (c) Dedup by URL.
     if (acc.has(snippet.url)) continue;
     acc.set(snippet.url, snippet);
   }
 
-  // Return 1 if a live Tavily call was made (cache miss), 0 for a cache hit.
-  return isLiveCall ? 1 : 0;
-}
-
-// ---------------------------------------------
-// Public API — three-tier cascade
-// ---------------------------------------------
-
-/**
- * Run a tier-cascaded web search for one RFQ item.
- *
- * Flow:
- *   1. Extract anchors from `item.description` (part numbers, certs, etc).
- *   2. Tier 1 queries until verified-URL count ≥ 5 (early-exit on threshold).
- *   3. Tier 2 queries until combined verified ≥ 3.
- *   4. Tier 3 agentic loop fills the rest (uses Tier 1/2 carry as substrate).
- *
- * Returns whatever was accumulated — empty `snippets` is a legitimate "no
- * matches found" signal the orchestrator handles by skipping the item.
- *
- * Logging contract: one [search] line per terminal tier with the tier index,
- * verified count, and total latency.
- */
-export async function searchWeb(item: QueryItem): Promise<SearchOutcome> {
-  const startTime = Date.now();
-
-  // (1) Tokenize once — anchors feed BOTH Tier 1 and Tier 2 query builders.
-  const anchors = extractAnchors(item.description);
-
-  // (2) Single shared accumulator across all tiers — carries verified hits
-  //     forward so a sparse Tier 1 still contributes to the Tier 2 threshold.
-  //     Node is single-threaded; Map mutations inside Promise.all are safe
-  //     because all synchronous operations between awaits are atomic.
-  const acc = new Map<string, TavilySnippet>();
-
-  // Running count of live Tavily API calls (cache misses only).
-  let tavilyCalls = 0;
-
-  // ----- Tier 1 — exact match (parallel wave) -----
-  // Fire ALL tier-1 queries concurrently through queryLimit, then check the
-  // threshold once after the wave settles. This replaces the old sequential
-  // for-of-await which serialized ~5 Tavily round-trips unnecessarily.
-  const tier1Queries = buildTier1Queries(item, anchors);
-  const tier1Results = await Promise.all(
-    tier1Queries.map((query) => queryLimit(() => runQueryAndDedup(query, acc))),
-  );
-  // Accumulate live-call count from the tier-1 wave.
-  tavilyCalls += tier1Results.reduce((sum, n) => sum + n, 0);
-
-  if (acc.size >= TIER1_VERIFIED_THRESHOLD) {
-    console.log(
-      `[search] item="${item.description.slice(0, 40)}" tier=1 verified=${acc.size} ${Date.now() - startTime}ms`,
-    );
-    return { tier: 1, verifiedCount: acc.size, snippets: Array.from(acc.values()), tavilyCalls };
-  }
-
-  // ----- Tier 2 — keyword combinations (parallel wave) -----
-  // Same wave pattern: fire all queries, await, then check threshold once.
-  // Early-exit above ensures we only reach here when Tier 1 fell short.
-  const tier2Queries = buildTier2Queries(item, anchors);
-  const tier2Results = await Promise.all(
-    tier2Queries.map((query) => queryLimit(() => runQueryAndDedup(query, acc))),
-  );
-  // Accumulate live-call count from the tier-2 wave.
-  tavilyCalls += tier2Results.reduce((sum, n) => sum + n, 0);
-
-  if (acc.size >= TIER2_VERIFIED_THRESHOLD) {
-    console.log(
-      `[search] item="${item.description.slice(0, 40)}" tier=2 verified=${acc.size} ${Date.now() - startTime}ms`,
-    );
-    return { tier: 2, verifiedCount: acc.size, snippets: Array.from(acc.values()), tavilyCalls };
-  }
-
-  // ----- Tier 3 — agentic mining fallback -----
-  // Carry the accumulated snippets in as substrate. carryNotes is empty here
-  // because the orchestrator owns notes — Tier 3 will be re-invoked from the
-  // orchestrator with richer carry if/when an alt-URL re-loop fires.
-  // NOTE: tier-3 internal Tavily calls are not counted in tavilyCalls (separate module)
-  const tier3 = await runAgenticTier3({
-    description: item.description,
-    qty: item.qty,
-    uom: item.uom,
-    carrySnippets: Array.from(acc.values()),
-    carryNotes: [],
-    isProductPage,
-  });
-  for (const snippet of tier3.snippets) {
-    if (acc.has(snippet.url)) continue;
-    acc.set(snippet.url, snippet);
-  }
-
-  const finalSnippets = Array.from(acc.values());
-  const terminalTier: 0 | 3 = finalSnippets.length > 0 ? 3 : 0;
-  console.log(
-    `[search] item="${item.description.slice(0, 40)}" tier=${terminalTier} verified=${acc.size} t3iters=${tier3.iterations} ${Date.now() - startTime}ms`,
-  );
-
-  return { tier: terminalTier, verifiedCount: acc.size, snippets: finalSnippets, tavilyCalls };
+  return { snippets: Array.from(acc.values()), tavilyCalls };
 }

@@ -4,9 +4,7 @@
 // Single concern: POST to Tavily and return typed snippets.
 // No caching, no tier-walking, no cleanup — those live in cache.ts and index.ts.
 //
-// Defence-in-depth for "Vietnam first": this layer sets country:'vietnam'
-// and search_depth:'advanced' so Tavily itself biases the result ranking
-// toward Vietnamese sources before we ever read the response.
+// No geo bias is applied — results are ranked by Tavily's default relevance.
 //
 // Docs: https://docs.tavily.com/api-reference/endpoint/search
 
@@ -54,7 +52,6 @@ export async function tavilySearch(query: string, opts: TavilyOptions = {}): Pro
   // up without a server restart in dev — production is set at boot anyway.
   const maxResults = opts.maxResults ?? Number(process.env.SEARCH_RESULTS_PER_QUERY ?? 5);
   const searchDepth = opts.searchDepth ?? 'advanced';
-  const country = opts.country ?? 'vietnam';
 
   const response = await fetch(TAVILY_ENDPOINT, {
     method: 'POST',
@@ -64,7 +61,6 @@ export async function tavilySearch(query: string, opts: TavilyOptions = {}): Pro
       query,
       max_results: maxResults,
       search_depth: searchDepth,
-      country,
       // Pull full page text so the LLM can extract price / contact info from
       // the actual product page, not just the Tavily snippet.
       include_raw_content: true,
