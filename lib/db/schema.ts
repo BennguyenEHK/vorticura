@@ -300,6 +300,12 @@ export const rfqItems = pgTable('rfq_items', {
   // Item descriptions (company requirement only — bidder fields moved to supplier_item_status)
   companyDescription: text('company_description'),
 
+  // AI-generated 4-axis functional context for the RFQ analysis detail panel.
+  // Structured jsonb shape (see types/preview.ts → AgentItemSummary):
+  //   { identification[], classification[], application[], purpose[], features[] }
+  // Nullable + additive — NULL for legacy rows / items not yet enriched.
+  agentItemSummary: jsonb('agent_item_summary'),
+
   // Quantity and unit of measure
   qty: numeric('qty', { precision: 10, scale: 0 }),
   uom: varchar('uom', { length: 20 }),
@@ -472,6 +478,12 @@ export const supplierItemStatus = pgTable('supplier_item_status', {
   availableQty: integer('available_qty'),                      // stock as stated on page; NULL = unknown
   sourceTier: integer('source_tier'),                          // 1|2|3 search tier that produced this row
   extractionTrack: varchar('extraction_track', { length: 12 }), // 'deterministic' | 'llm'
+
+  // Supplier dossier signals (additive — populated by supplier-search, rendered
+  // in the redesigned supplier panel). All nullable.
+  sellingUnit: varchar('selling_unit', { length: 12 }),        // 'per_unit' | 'per_pack' | NULL=unknown
+  packSize: integer('pack_size'),                              // units per pack when selling_unit='per_pack'
+  matchReasoning: text('match_reasoning'),                     // why an ALTERNATIVE is a valid substitute (alt rows only)
 
   // Supplier contact information
   contactEmail: varchar('contact_email', { length: 255 }),  // Supplier's contact email

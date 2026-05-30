@@ -1,130 +1,399 @@
-// =============================================
-// SUPPLIER SEARCH DOCUMENT - React Component
-// =============================================
-
 'use client';
+
+import { useState, useRef, useCallback } from 'react';
+import {
+  ChevronRight, ChevronDown, ExternalLink, Package, Mail, Phone,
+} from 'lucide-react';
 
 import type { SupplierSearchDocumentData } from '@/types/preview';
 
 interface SupplierSearchDocumentProps {
   data: SupplierSearchDocumentData;
-  isEditing: boolean;
-  onFieldChange: (path: string, value: string) => void;
+  isEditing: boolean;                            // will be unused, subject/search_content are read-only
+  onFieldChange: (path: string, value: string) => void; // will be unused
 }
 
-export function SupplierSearchDocument({ data, isEditing, onFieldChange }: SupplierSearchDocumentProps) {
-  const hasItems = data.items_source && data.items_source.length > 0;
-  const isScrollable = hasItems && data.items_source.length > 5;
+// Key identifying the selected supplier row
+interface SelectedKey { itemId: number; category: 'source' | 'alternative'; idx: number }
+
+const COLS = '24px 1fr 100px 100px'; // For upper panel: Chevron, Supplier Name/Item ID, Price, Delivery Time
+
+export function SupplierSearchDocument({ data }: SupplierSearchDocumentProps) {
+  // Split percentage: upper panel height (clamped 25–75)
+  const [splitPct, setSplitPct] = useState(60);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+
+  // Which item groups are expanded (default: first item open)
+  const [expanded, setExpanded] = useState<Set<number>>(
+    () => {
+      const initialExpanded = new Set<number>();
+      if (data.items_source.length > 0) {
+        initialExpanded.add(data.items_source[0].item_id);
+      }
+      return initialExpanded;
+    }
+  );
+
+  // Selected supplier row — drives the lower supplier dossier panel
+  const [selected, setSelected] = useState<SelectedKey | null>(null);
+
+  // Group items by item_id
+  const itemsGrouped = data.items_source.reduce((acc, current) => {
+    let itemArray = acc[current.item_id];
+    if (!itemArray) {
+      itemArray = [];
+      acc[current.item_id] = itemArray;
+    }
+    itemArray.push(current);
+    return acc;
+  }, {} as Record<number, SupplierSearchDocumentData['items_source'][0][]>);
+
+  // ── Toggle item group ──────────────────────────────────────────────────────
+  const toggleItem = useCallback((id: number) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  // ── Select a supplier child row ────────────────────────────────────────────
+  const selectRow = useCallback((itemId: number, category: 'source' | 'alternative', idx: number) => {
+    setSelected(prev =>
+      prev?.itemId === itemId && prev?.category === category && prev?.idx === idx ? null : { itemId, category, idx }
+    );
+  }, []);
+
+  // ── Drag-to-resize divider ─────────────────────────────────────────────────
+  const onDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    const move = (ev: MouseEvent | TouchEvent) => {
+      if (!dragging.current || !containerRef.current) return;
+      const clientY = 'touches' in ev ? ev.touches[0].clientY : ev.clientY;
+      const rect = containerRef.current.getBoundingClientRect();
+      const pct = ((clientY - rect.top) / rect.height) * 100;
+      setSplitPct(Math.min(Math.max(pct, 25), 75)); // clamp 25–75%
+    };
+    const up = () => {
+      dragging.current = false;
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('touchmove', move);
+      window.removeEventListener('mouseup', up);
+      window.removeEventListener('touchend', up);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('touchmove', move, { passive: true });
+    window.addEventListener('mouseup', up);
+    window.addEventListener('touchend', up);
+  }, []);
+
+  const selectedSupplier = selected
+    ? itemsGrouped[selected.itemId]
+        ?.filter(s => s.category === selected.category)[selected.idx]
+    : null;
+
+  const renderBulletPoints = (text: string | null) => {
+    if (!text) return null;
+    // Prefer explicit line/bullet breaks. Only fall back to sentence splitting
+    // when the text is a single line — and split on ". " before a capital so
+    // decimals (1.5) and abbreviations (e.g.) are not broken apart.
+    let points = text.split(/\n|(?:^|\s)[•\-–]\s+/).map(p => p.trim()).filter(Boolean);
+    if (points.length <= 1) {
+      points = text.split(/(?<=\.)\s+(?=[A-Z])/).map(p => p.trim()).filter(Boolean);
+    }
+    if (points.length === 0) return null;
+    return (
+      <ul className="list-disc list-inside text-[11px] text-gray-300 space-y-0.5">
+        {points.map((point, i) => <li key={i}>{point.trim()}</li>)}
+      </ul>
+    );
+  };
 
   return (
-    <div className="font-serif text-[16px] leading-relaxed text-gray-800 bg-white p-10 min-h-full max-w-[900px] mx-auto shadow">
-      {/* Header */}
-      <div className="mb-8 border-b-2 border-green-600 pb-4">
-        {isEditing ? (
-          <input
-            value={data.subject}
-            onChange={(e) => onFieldChange('subject', e.target.value)}
-            className="text-[28px] font-bold text-green-600 w-full border-b border-green-400 bg-green-50/50 outline-none"
-          />
-        ) : (
-          <h1 className="text-[28px] font-bold text-green-600 m-0">{data.subject}</h1>
-        )}
+    // Escape the parent p-4 so the panel fills the full available area
+    <div
+      className="flex flex-col bg-[#0d1117] text-gray-100 overflow-hidden"
+      style={{ margin: '-1rem', height: 'calc(100% + 2rem)' }}
+    >
+      {/* ================================================================
+          TOP STRIP — Subject and Search Content (Read-only)
+      ================================================================ */}
+      <div className="flex-none px-4 py-2.5 bg-[#111827] border-b border-[#1f2937] select-none">
+        <h1 className="text-[12px] font-semibold text-gray-300 truncate mb-1">Subject: {data.subject}</h1>
+        <p className="text-[11px] text-gray-500 line-clamp-2">{data.search_content}</p>
       </div>
 
-      {/* Search Content */}
-      <div className="mt-5 text-[16px]">
-        {isEditing ? (
-          <textarea
-            value={data.search_content}
-            onChange={(e) => onFieldChange('search_content', e.target.value)}
-            className="w-full min-h-[300px] border border-green-400 bg-green-50/50 rounded p-3 outline-none font-serif text-[16px]"
-          />
-        ) : (
-          <div className="whitespace-pre-wrap">{data.search_content}</div>
-        )}
-      </div>
+      {/* ================================================================
+          SPLIT PANEL CONTAINER — resize driven by splitPct state
+      ================================================================ */}
+      <div ref={containerRef} className="flex-1 flex flex-col overflow-hidden">
 
-      {/* Items Source Summary — rendered only when items exist */}
-      {hasItems && (
-        <div className="mt-8">
-          {/* Section header with item count badge */}
-          <div className="flex items-center gap-3 mb-3 pb-2 border-b border-green-200">
-            <h2 className="text-[15px] font-semibold text-green-700 uppercase tracking-wide m-0">
-              Items Source Summary
-            </h2>
-            <span className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-bold bg-green-600 text-white rounded-full min-w-[22px]">
-              {data.items_source.length}
-            </span>
+        {/* ── UPPER: Source Tree (Master Panel) ────────── */}
+        <div
+          className="flex-none overflow-y-auto overflow-x-hidden"
+          style={{ height: `${splitPct}%` }}
+        >
+          {/* Sticky column header */}
+          <div
+            className="sticky top-0 z-10 grid items-center bg-[#0a0d14] border-b border-[#1a2030] select-none"
+            style={{ gridTemplateColumns: COLS, padding: '5px 16px' }}
+          >
+            <div />
+            <div className="text-[9px] font-bold uppercase tracking-widest text-gray-600">Item / Supplier</div>
+            <div className="text-[9px] font-bold uppercase tracking-widest text-gray-600 text-right pr-2">Price</div>
+            <div className="text-[9px] font-bold uppercase tracking-widest text-gray-600">Delivery</div>
           </div>
 
-          {/* Scrollable container — vertical scroll when items > 5 */}
-          <div className={isScrollable ? 'max-h-[280px] overflow-y-auto pr-1' : ''}>
-            {/* Horizontal scroll wrapper for wide rows */}
-            <div className="overflow-x-auto">
-              <div className="min-w-[800px] space-y-2">
-                {data.items_source.map((item, index) => (
-                  <div
-                    key={`${item.item_id}-${item.supplier_name}-${index}`}
-                    className="flex items-start gap-3 px-3 py-2.5 rounded-lg bg-green-50/60 border border-green-100 hover:bg-green-50 transition-colors"
-                  >
-                    {/* Item number pill — neon-emerald ring with glow */}
-                    <span className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full bg-neon-emerald/15 text-neon-emerald border border-neon-emerald/40 text-[11px] font-bold mt-0.5 neon-glow-sm">
-                      {item.item_id || index + 1}
-                    </span>
+          {/* Item groups */}
+          {Object.entries(itemsGrouped).map(([itemIdStr, suppliersForItem]) => {
+            const itemId = parseInt(itemIdStr, 10);
+            const isOpen = expanded.has(itemId);
 
-                    {/* Supplier name — fixed width */}
-                    <span className="shrink-0 w-[120px] text-[13px] font-semibold text-gray-800 truncate" title={item.supplier_name}>
-                      {item.supplier_name}
-                    </span>
+            // Separate suppliers into sources and alternatives
+            const sources = suppliersForItem.filter(s => s.category === 'source');
+            const alternatives = suppliersForItem.filter(s => s.category === 'alternative');
 
-                    {/* Bidder description — takes remaining space, truncated */}
-                    <p className="flex-1 text-[13px] text-gray-600 leading-snug truncate m-0" title={item.bidder_description}>
-                      {item.bidder_description || '(no description)'}
-                    </p>
+            return (
+              <div key={itemId} className="border-b border-[#131a27] last:border-0">
 
-                    {/* Price + delivery — right section */}
-                    <div className="shrink-0 flex flex-col items-end gap-1">
-                      {/* Unit price — neon-amber (live AI-sourced financial signal) */}
-                      <span className="font-data text-[13px] font-semibold tabular-nums text-neon-amber whitespace-nowrap neon-glow-sm">
-                        ${item.bidder_unit_price.toFixed(2)}
-                      </span>
-                      {/* Delivery time — neon-cyan (active pipeline status) */}
-                      <span className="text-[10px] font-medium px-1.5 py-0.5 bg-neon-cyan/10 text-neon-cyan rounded border border-neon-cyan/25 whitespace-nowrap">
-                        {item.delivery_time || 'N/A'}
-                      </span>
-                    </div>
-
-                    {/* Contact info — rightmost column */}
-                    <div className="shrink-0 flex flex-col items-end gap-1 min-w-[140px]">
-                      {/* Contact email */}
-                      {item.contact_email ? (
-                        <span className="text-[11px] text-blue-600 truncate max-w-[140px]" title={item.contact_email}>
-                          {item.contact_email}
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-gray-400 italic">no email</span>
-                      )}
-                      {/* Contact phone */}
-                      {item.contact_phone ? (
-                        <span className="text-[11px] text-gray-600 whitespace-nowrap">
-                          {item.contact_phone}
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-gray-400 italic">no phone</span>
-                      )}
-                    </div>
+                {/* ── Parent item row (collapsible) */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => toggleItem(itemId)}
+                  onKeyDown={e => e.key === 'Enter' && toggleItem(itemId)}
+                  className="grid items-center px-4 py-2.5 cursor-pointer hover:bg-[#131c2e] transition-colors duration-100 group select-none"
+                  style={{ gridTemplateColumns: COLS }}
+                >
+                  {/* Expand arrow */}
+                  <div className="text-gray-600 group-hover:text-gray-400 transition-colors">
+                    {isOpen
+                      ? <ChevronDown className="w-3.5 h-3.5" />
+                      : <ChevronRight className="w-3.5 h-3.5" />}
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
+                  {/* Item name + ID */}
+                  <div className="flex items-center gap-2 min-w-0 pr-2">
+                    <span className="text-[12px] font-medium text-gray-100 truncate">Item {itemId}</span>
+                    <span className="text-[10px] text-gray-600 shrink-0">({suppliersForItem.length} suppliers)</span>
+                  </div>
+                  {/* Empty cells for price and delivery in the item header */}
+                  <div/><div/>
+                </div>
 
-          {/* Subtle fade gradient at bottom when scrollable */}
-          {isScrollable && (
-            <div className="h-4 bg-gradient-to-t from-white to-transparent -mt-4 relative z-10 pointer-events-none" />
+                {/* ── Supplier child rows (Sources) */}
+                {isOpen && sources.length > 0 && (
+                  <div className="pl-6 border-b border-[#0f1520] last:border-0">
+                    <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-600 pt-2 pb-1">Sources</h3>
+                    {sources.map((supplier, idx) => {
+                      const isSelected = selected?.itemId === itemId && selected?.category === 'source' && selected?.idx === idx;
+                      return (
+                        <div
+                          key={`${itemId}-source-${idx}`}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => selectRow(itemId, 'source', idx)}
+                          onKeyDown={e => e.key === 'Enter' && selectRow(itemId, 'source', idx)}
+                          className={`grid items-center py-2 cursor-pointer transition-all duration-100 border-b border-[#0f1520] last:border-0 ${
+                            isSelected
+                              ? 'bg-[#1e3a5f] border-l-[2px] border-l-blue-500'
+                              : 'bg-[#0a0e18] hover:bg-[#111927]'
+                          }`}
+                          style={{
+                            gridTemplateColumns: COLS,
+                            paddingLeft: isSelected ? '14px' : '16px',
+                            paddingRight: '16px',
+                          }}
+                        >
+                          <div/> {/* Empty for chevron column */}
+                          <div className="text-[11px] text-gray-400 truncate pr-2">{supplier.supplier_name}</div>
+                          <div className="text-right pr-2 font-mono text-[11px]">
+                            {supplier.bidder_unit_price !== null
+                              ? <span className="text-emerald-400">{supplier.currency_code} {supplier.bidder_unit_price.toFixed(2)}</span>
+                              : <span className="text-gray-700">—</span>}
+                          </div>
+                          <div className="text-[10px] text-gray-600 text-center">{supplier.delivery_time || '—'}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* ── Supplier child rows (Alternatives) */}
+                {isOpen && alternatives.length > 0 && (
+                  <div className="pl-6 pb-2">
+                    <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-600 pt-2 pb-1">Alternatives</h3>
+                    {alternatives.map((supplier, idx) => {
+                      const isSelected = selected?.itemId === itemId && selected?.category === 'alternative' && selected?.idx === idx;
+                      return (
+                        <div
+                          key={`${itemId}-alternative-${idx}`}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => selectRow(itemId, 'alternative', idx)}
+                          onKeyDown={e => e.key === 'Enter' && selectRow(itemId, 'alternative', idx)}
+                          className={`grid items-center py-2 cursor-pointer transition-all duration-100 border-b border-[#0f1520] last:border-0 ${
+                            isSelected
+                              ? 'bg-[#1e3a5f] border-l-[2px] border-l-blue-500'
+                              : 'bg-[#0a0e18] hover:bg-[#111927]'
+                          }`}
+                          style={{
+                            gridTemplateColumns: COLS,
+                            paddingLeft: isSelected ? '14px' : '16px',
+                            paddingRight: '16px',
+                          }}
+                        >
+                          <div/> {/* Empty for chevron column */}
+                          <div className="text-[11px] text-gray-400 truncate pr-2">Alternative {idx + 1}: {supplier.supplier_name}</div>
+                          <div className="text-right pr-2 font-mono text-[11px]">
+                            {supplier.bidder_unit_price !== null
+                              ? <span className="text-emerald-400">{supplier.currency_code} {supplier.bidder_unit_price.toFixed(2)}</span>
+                              : <span className="text-gray-700">—</span>}
+                          </div>
+                          <div className="text-[10px] text-gray-600 text-center">{supplier.delivery_time || '—'}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ── DRAG DIVIDER ─────────────────────────────────────────────── */}
+        <div
+          role="separator"
+          aria-label="Resize panels"
+          onMouseDown={onDragStart}
+          onTouchStart={onDragStart}
+          className="flex-none flex items-center justify-center h-[10px] bg-[#131a27] border-y border-[#1f2937] cursor-row-resize hover:bg-[#1a2535] group transition-colors select-none"
+        >
+          <div className="w-10 h-[3px] rounded-full bg-[#2a3447] group-hover:bg-[#3d4f66] transition-colors" />
+        </div>
+
+        {/* ── LOWER: Supplier Dossier (Detail Panel) */}
+        <div
+          className="flex-none overflow-y-auto overflow-x-hidden bg-[#0d1117]"
+          style={{ height: `${100 - splitPct}%` }}
+        >
+          {selectedSupplier ? (
+            <div className="px-4 py-3 space-y-4">
+              {/* Dossier Header */}
+              <div className="flex items-center gap-2 pb-2 border-b border-[#1a2030]">
+                <h2 className="text-[14px] font-bold text-gray-100">{selectedSupplier.supplier_name}</h2>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium tracking-wide whitespace-nowrap ${
+                  selectedSupplier.category === 'source'
+                    ? 'bg-blue-950/60 text-blue-400 border border-blue-800/40'
+                    : 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40'
+                }`}>
+                  {selectedSupplier.category === 'source' ? 'SOURCE' : 'ALTERNATIVE'}
+                </span>
+              </div>
+
+              {/* Source URL */}
+              {selectedSupplier.source_url && (
+                <div className="flex items-center gap-2 text-[11px]">
+                  <span className="text-gray-500">Source URL:</span>
+                  <a
+                    href={selectedSupplier.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:underline flex items-center gap-1"
+                  >
+                    {selectedSupplier.source_url}
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              )}
+
+              {/* Price */}
+              <div className="text-[11px]">
+                <span className="text-gray-500">Price:</span>{' '}
+                <span className="font-mono text-emerald-400">
+                  {selectedSupplier.currency_code} {selectedSupplier.bidder_unit_price.toFixed(2)}
+                </span>{' '}
+                <span className="text-gray-500">per unit</span>
+              </div>
+
+              {/* Selling Type */}
+              {selectedSupplier.selling_unit === 'per_pack' && selectedSupplier.pack_size && (
+                <div className="text-[11px] text-gray-300">
+                  <Package className="w-3 h-3 inline-block mr-1 text-gray-500" />
+                  Sold per Pack — 1 pack = {selectedSupplier.pack_size} units
+                </div>
+              )}
+              {selectedSupplier.selling_unit === 'per_unit' && (
+                <div className="text-[11px] text-gray-300">
+                  <Package className="w-3 h-3 inline-block mr-1 text-gray-500" />
+                  Sold per Unit
+                </div>
+              )}
+
+              {/* Inventory */}
+              {selectedSupplier.available_qty !== null && (
+                <div className="text-[11px] text-gray-300">
+                  <span className="text-gray-500">Inventory:</span>{' '}
+                  <span className="text-yellow-500">{selectedSupplier.available_qty} available</span>
+                </div>
+              )}
+
+              {/* Reasoning for Match (only for alternatives) */}
+              {selectedSupplier.category === 'alternative' && (
+                <div>
+                  <h3 className="text-[11px] font-semibold text-gray-400 mb-1">Reasoning for Match</h3>
+                  {selectedSupplier.match_reasoning
+                    ? renderBulletPoints(selectedSupplier.match_reasoning)
+                    : <p className="text-[11px] text-gray-700 italic">No match reasoning provided</p>
+                  }
+                </div>
+              )}
+
+              {/* Bidder Description */}
+              <div>
+                <h3 className="text-[11px] font-semibold text-gray-400 mb-1">Bidder Description</h3>
+                {selectedSupplier.bidder_description
+                  ? renderBulletPoints(selectedSupplier.bidder_description)
+                  : <p className="text-[11px] text-gray-700 italic">No description provided</p>
+                }
+              </div>
+
+              {/* Logistics & Contact */}
+              <div>
+                <h3 className="text-[11px] font-semibold text-gray-400 mb-1">Logistics & Contact</h3>
+                <div className="space-y-1">
+                  <p className="text-[11px] text-gray-300">
+                    <span className="text-gray-500">Delivery Time:</span> {selectedSupplier.delivery_time || 'N/A'}
+                  </p>
+                  {selectedSupplier.contact_email && (
+                    <a href={`mailto:${selectedSupplier.contact_email}`} className="flex items-center gap-1 text-blue-400 hover:underline text-[11px]">
+                      <Mail className="w-3 h-3" /> {selectedSupplier.contact_email}
+                    </a>
+                  )}
+                  {selectedSupplier.contact_phone && (
+                    <a href={`tel:${selectedSupplier.contact_phone}`} className="flex items-center gap-1 text-blue-400 hover:underline text-[11px]">
+                      <Phone className="w-3 h-3" /> {selectedSupplier.contact_phone}
+                    </a>
+                  )}
+                  {!selectedSupplier.contact_email && !selectedSupplier.contact_phone && (
+                    <p className="text-[11px] text-gray-700 italic">No contact info available</p>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          ) : (
+            // Empty state when no row is selected
+            <div className="flex items-center justify-center h-full">
+              <p className="text-[12px] text-gray-700 select-none">
+                Select a supplier above to view its dossier
+              </p>
+            </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

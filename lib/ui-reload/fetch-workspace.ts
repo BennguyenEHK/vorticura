@@ -219,6 +219,7 @@ async function fetchPreviewByType(
             uom: item.uom,
           },
           currency_code: requiredCurrency,
+          agent_item_summary: item.agentItemSummary ?? null,  // AI 4-axis summary (null until enriched)
         })),
         rfq_id: rfqId,
       };
@@ -242,18 +243,33 @@ async function fetchPreviewByType(
           subject: search.subject,
           search_content: search.searchContent,
         },
-        items_source: (itemRows || []).map((item: Record<string, unknown>) => ({
-          item_id: item.itemId,
-          supplier_name: item.supplierName,
-          bidder_description: item.bidderDescription,
-          bidder_unit_price: item.bidderUnitPrice,
-          currency_code: item.currencyCode ?? 'USD',  // From supplier_item_status (per-supplier proposal)
-          delivery_time: item.deliveryTime,
-          contact_email: item.contactEmail,
-          contact_phone: item.contactPhone,
-          source_url: item.sourceUrl,
-          status: item.status,
-        })),
+        items_source: (itemRows || []).map((item: Record<string, unknown>) => {
+          // Alternatives are tagged by a `via_alt:` prefix the search pipeline
+          // writes into notes (supplier-search-actions.ts). That prefix is the
+          // only signal distinguishing a primary Source from an Alternative.
+          const notes = String(item.notes ?? '');
+          const category: 'source' | 'alternative' =
+            notes.trimStart().startsWith('via_alt') ? 'alternative' : 'source';
+          return {
+            item_id: item.itemId,
+            supplier_name: item.supplierName,
+            bidder_description: item.bidderDescription,
+            bidder_unit_price: Number(item.bidderUnitPrice ?? 0),
+            currency_code: item.currencyCode ?? 'USD',  // From supplier_item_status (per-supplier proposal)
+            delivery_time: item.deliveryTime,
+            contact_email: item.contactEmail,
+            contact_phone: item.contactPhone,
+            source_url: item.sourceUrl,
+            status: item.status,
+            // Redesign fields
+            category,
+            notes,
+            available_qty: item.availableQty == null ? null : Number(item.availableQty),
+            selling_unit: (item.sellingUnit as 'per_unit' | 'per_pack' | null) ?? null,
+            pack_size: item.packSize == null ? null : Number(item.packSize),
+            match_reasoning: (item.matchReasoning as string | null) ?? null,
+          };
+        }),
         rfq_id: rfqId,
       };
     } catch (err) {

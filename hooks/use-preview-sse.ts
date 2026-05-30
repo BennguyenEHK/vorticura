@@ -5,7 +5,7 @@
 import { useEffect, useRef } from 'react';
 import type { ProcessorResult, DataType } from '@/lib/utils/validator';
 import type { PreviewType } from '@/types/ui-reload';
-import type { DocumentData, QuotationDocumentData, EmailDocumentData, RfqAnalysisDocumentData, SupplierSearchDocumentData, ItemsOrderingDocumentData } from '@/types/preview';
+import type { DocumentData, QuotationDocumentData, EmailDocumentData, RfqAnalysisDocumentData, SupplierSearchDocumentData, ItemsOrderingDocumentData, AgentItemSummary } from '@/types/preview';
 
 interface UsePreviewSSEOptions {
   onDocumentReceived: (doc: DocumentData) => void;
@@ -198,6 +198,7 @@ export function transformResultToDocument(result: ProcessorResult): DocumentData
             qty: Number(req.qty) || 0,
             uom: (req.uom as string) || 'EA',
             currency_code: (item.currency_code as string) || 'USD',
+            agent_item_summary: (item.agent_item_summary as AgentItemSummary | null) ?? null,
           };
         }),
       };
@@ -214,18 +215,30 @@ export function transformResultToDocument(result: ProcessorResult): DocumentData
         rfq_id: (data.rfq_id as number) || null,  // needed for Accept → proceed pipeline
         subject: (suppliersSearch.subject as string) || 'Supplier Search Results',
         search_content: (suppliersSearch.search_content as string) || '',
-        items_source: rawItems.map((item) => ({
-          item_id: (item.item_id as number) || 0,
-          supplier_name: (item.supplier_name as string) || '',
-          bidder_description: (item.bidder_description as string) || '',
-          bidder_unit_price: Number(item.bidder_unit_price) || 0,
-          currency_code: (item.currency_code as string) || 'USD',
-          delivery_time: (item.delivery_time as string) || '',
-          contact_email: (item.contact_email as string) || '',
-          contact_phone: (item.contact_phone as string) || '',
-          source_url: (item.source_url as string) || '',
-          status: (item.status as string) || 'pending',
-        })),
+        items_source: rawItems.map((item) => {
+          const notes = (item.notes as string) || '';
+          const category: 'source' | 'alternative' =
+            notes.trimStart().startsWith('via_alt') ? 'alternative' : 'source';
+          return {
+            item_id: (item.item_id as number) || 0,
+            supplier_name: (item.supplier_name as string) || '',
+            bidder_description: (item.bidder_description as string) || '',
+            bidder_unit_price: Number(item.bidder_unit_price) || 0,
+            currency_code: (item.currency_code as string) || 'USD',
+            delivery_time: (item.delivery_time as string) || '',
+            contact_email: (item.contact_email as string) || '',
+            contact_phone: (item.contact_phone as string) || '',
+            source_url: (item.source_url as string) || '',
+            status: (item.status as string) || 'pending',
+            // Redesign fields — category derived from notes; the rest null until extraction populates them
+            category,
+            notes,
+            available_qty: item.available_qty == null ? null : Number(item.available_qty),
+            selling_unit: (item.selling_unit as 'per_unit' | 'per_pack' | null) ?? null,
+            pack_size: item.pack_size == null ? null : Number(item.pack_size),
+            match_reasoning: (item.match_reasoning as string | null) ?? null,
+          };
+        }),
       };
       return { type: 'supplier_search', data: searchData };
     }

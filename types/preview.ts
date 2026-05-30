@@ -97,6 +97,16 @@ export interface EmailDocumentData {
 // RFQ Analysis Document Data
 // ---------------------------------------------
 
+// AI-generated 4-axis functional context for an RFQ item (analysis detail panel).
+// Mirrors rfq_items.agent_item_summary (jsonb). Each axis is a bullet list.
+export interface AgentItemSummary {
+  identification: string[];   // exact item description; what this item is
+  classification: string[];   // standalone asset/product vs sub-component/spare part of a larger system
+  application: string[];      // what it is used for + where deployed
+  purpose: string[];          // core operational purpose
+  features: string[];         // technical specs / differentiators
+}
+
 export interface RfqAnalysisDocumentData {
   rfq_id: number | null;
   subject: string;
@@ -107,6 +117,7 @@ export interface RfqAnalysisDocumentData {
     qty: number;
     uom: string;
     currency_code: string;
+    agent_item_summary: AgentItemSummary | null;  // AI 4-axis summary; null when not yet enriched
   }>;
 }
 
@@ -119,7 +130,7 @@ export interface SupplierSearchDocumentData {
   rfq_id: number | null;       // required for proceed pipeline (Accept button)
   subject: string;
   search_content: string;
-  items_source: Array<{        // Supplier items for Items Source Summary display
+  items_source: Array<{        // Supplier rows for the source-tree + dossier panel
     item_id: number;
     supplier_name: string;
     bidder_description: string;
@@ -130,6 +141,13 @@ export interface SupplierSearchDocumentData {
     contact_phone: string;
     source_url: string;
     status: string;
+    // Redesign fields (nullable until extraction populates them)
+    category: 'source' | 'alternative';  // derived from the `via_alt:` notes prefix
+    notes: string;                        // raw notes (carries via_alt + stock prefix)
+    available_qty: number | null;         // stock as stated on page; null = unknown
+    selling_unit: 'per_unit' | 'per_pack' | null;
+    pack_size: number | null;             // units per pack when selling_unit='per_pack'
+    match_reasoning: string | null;       // why an alternative is a valid substitute (alt rows only)
   }>;
 }
 
