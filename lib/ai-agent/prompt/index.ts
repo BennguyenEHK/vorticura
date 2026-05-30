@@ -17,6 +17,11 @@ export {
 } from './search-suppliers';
 
 export {
+  ENRICH_ITEMS_PROMPT,
+  buildEnrichItemsUserMessage,
+} from './enrich-items';
+
+export {
   GENERATE_EMAIL_PROMPT,
   buildEmailUserMessage,
   buildRegenerateEmailUserMessage,

@@ -26,12 +26,19 @@ EXTRACTION RULES (how to fill each field from the chosen page):
 - contact_phone: literal phone (with country code if shown); "" if not present. Never invent.
 - available_qty: numeric stock count as stated on the page (e.g. "12 in stock" → 12). Use 0 ONLY when stock is genuinely not stated — do not guess. This drives a downstream filter, so accuracy matters: a wrong number is worse than 0.
 - alternative_source_url: if the page explicitly links to an alternative or related product (e.g. "See also: …", "Replacement model:", "Recommended substitute:") capture that href verbatim. Empty string if no alternative is offered. NEVER fabricate URLs.
+- selling_unit: how the product is sold — "per_unit" if priced/sold individually (each / piece), "per_pack" if sold in packs/boxes/cartons/sets. Empty string "" if the page does not state it.
+- pack_size: when selling_unit is "per_pack", the number of units in one pack (e.g. "box of 50" → 50). Use 0 when per_unit or not stated.
+- match_reasoning: compare the product to the ORIGINAL REQUIREMENT shown below. If the product is NOT the exact item requested but is a valid SUBSTITUTE, give 1-2 sentences on why it still satisfies the requirement (matching specs, compatible dimensions/material/rating). Leave "" when the product IS the exact item requested.
 - Never invent a field. If the page does not state something, leave it empty / 0 per the rules above.`;
 
 // --- Input shape for the RAG extraction step ---
 interface ExtractInput {
   item: { itemId: number; description: string; qty: number; uom: string };
   snippets: Array<{ title: string; url: string; snippet: string; content: string }>;
+  // The ORIGINAL RFQ requirement — drives match_reasoning. At depth 0 this equals
+  // item.description; in the alt-URL re-loop item.description is the alt page while
+  // originalDescription stays the real requirement so substitutes can be justified.
+  originalDescription?: string;
 }
 
 /**
@@ -40,7 +47,8 @@ interface ExtractInput {
  * raw page content per snippet to keep total input < ~4k chars.
  */
 export function buildExtractUserMessage(input: ExtractInput): string {
-  const { item, snippets } = input;
+  const { item, snippets, originalDescription } = input;
+  const original = originalDescription || item.description;
 
   // Cap raw_content per snippet — Tavily can return 5-10k chars per page; we
   // only need the first chunk to find price/contact info and stay under vLLM
@@ -56,7 +64,9 @@ export function buildExtractUserMessage(input: ExtractInput): string {
         .join('\n\n---\n\n')
     : '(no snippets returned)';
 
-  return `RFQ item to source:
+  return `ORIGINAL REQUIREMENT (for match_reasoning): ${original}
+
+RFQ item to source:
 - #${item.itemId}: ${item.description} | Qty: ${item.qty} ${item.uom}
 
 Search snippets (real results from Tavily):

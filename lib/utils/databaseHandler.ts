@@ -128,6 +128,9 @@ export function buildRfqItemsPayload(data: Record<string, unknown>, update = fal
 
   // currency_code moved to supplier_item_status — no longer written here
 
+  // AI 4-axis functional summary (jsonb) — written by the enrichment pass.
+  if (data.agent_item_summary != null) payload.agentItemSummary = data.agent_item_summary;
+
   return payload;
 }
 
@@ -304,6 +307,10 @@ export function buildSupplierItemStatusPayload(data: Record<string, unknown>, up
   if (data.available_qty != null) payload.availableQty = parseInt(String(data.available_qty), 10);
   if (data.source_tier != null) payload.sourceTier = parseInt(String(data.source_tier), 10);
   if (data.extraction_track != null) payload.extractionTrack = String(data.extraction_track);
+  // Dossier signals — only persist meaningful values (nullable columns)
+  if (data.selling_unit === 'per_unit' || data.selling_unit === 'per_pack') payload.sellingUnit = data.selling_unit;
+  if (data.pack_size != null && Number(data.pack_size) > 0) payload.packSize = parseInt(String(data.pack_size), 10);
+  if (data.match_reasoning != null && String(data.match_reasoning).trim() !== '') payload.matchReasoning = String(data.match_reasoning);
   if (data.responded_at != null) payload.respondedAt = data.responded_at;
 
   return payload;

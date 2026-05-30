@@ -77,6 +77,10 @@ interface ItemSourceRow {
   source_tier: number;
   // Stage 7 — 'deterministic' if microdata overrode LLM price; 'llm' otherwise
   extraction_track: string;
+  // Dossier signals — how the product is sold + why an alternative is a valid substitute
+  selling_unit: string;       // '' | 'per_unit' | 'per_pack'
+  pack_size: number;          // units per pack when per_pack; 0 otherwise
+  match_reasoning: string;    // populated for substitutes/alternatives; '' for exact matches
 }
 
 // ---------------------------------------------
@@ -186,6 +190,9 @@ async function extractSupplierForItem(
   budget: SearchBudget,       // Stage 11 — per-item circuit-breaker budget
   depth: number = 0,
   visitedUrls: Set<string> = new Set(),
+  // The ORIGINAL RFQ requirement, preserved across the alt-URL recursion so
+  // substitutes found at depth>0 can be justified against the real need.
+  originalDescription: string = item.description,
 ): Promise<ExtractResult> {
   // (1) Tier-walked Tavily search w/ Redis cache. Tier 3 is invoked INSIDE
   //     searchWeb when Tiers 1/2 fall short of the verified threshold.
@@ -236,6 +243,9 @@ async function extractSupplierForItem(
       available_qty: 0,                    // unknown — bypasses the stock filter
       source_tier: search.tier,
       extraction_track: 'deterministic',
+      selling_unit: '',                    // microdata carries no packaging info
+      pack_size: 0,
+      match_reasoning: '',                 // deterministic rows are exact product-page matches
     };
     return { rows: [deterministicRow], tavilyCalls: search.tavilyCalls, deadUrls };
   }
@@ -270,6 +280,7 @@ async function extractSupplierForItem(
       buildExtractUserMessage({
         item,
         snippets: liveSnippets,
+        originalDescription,
       }),
       600,                // tight cap — one supplier object is small (~200-400 tokens)
       SUPPLIER_SCHEMA,    // honored by local vLLM; ignored by HF (see ai-router.ts)
@@ -350,6 +361,12 @@ async function extractSupplierForItem(
     available_qty: extracted.available_qty,
     source_tier: search.tier,
     extraction_track: extractionTrack,
+    // Dossier signals from the LLM extraction
+    selling_unit: extracted.selling_unit,
+    pack_size: extracted.pack_size,
+    // match_reasoning only meaningful for substitutes (alt rows); the LLM returns
+    // '' for exact matches. Force '' on the primary (depth 0) row regardless.
+    match_reasoning: depth > 0 ? extracted.match_reasoning : '',
   };
 
   const rows: ItemSourceRow[] = [primaryRow];
@@ -387,6 +404,7 @@ async function extractSupplierForItem(
         budget,
         depth + 1,
         visitedUrls,
+        originalDescription,   // preserve the real requirement for match_reasoning
       );
 
       // Stage 14 — accumulate Tavily calls + dead-URL drops from the alt branch.

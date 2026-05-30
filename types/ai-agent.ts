@@ -77,6 +77,8 @@ export interface MergedAnalysisData {
       qty: number;
       uom: string;
     };
+    // AI 4-axis functional summary, attached by the enrichment pass before DB save.
+    agent_item_summary?: import('@/types/preview').AgentItemSummary | null;
   }>;
   required_currency: string;
   deadline_period: string | null;

@@ -27,6 +27,9 @@ export const SUPPLIER_SCHEMA = {
     // as their own DB columns (notes carries the human-readable summary).
     'available_qty',
     'alternative_source_url',
+    'selling_unit',
+    'pack_size',
+    'match_reasoning',
   ],
   properties: {
     // Supplier brand / company name (e.g. "Bao Vi Trading")
@@ -57,6 +60,13 @@ export const SUPPLIER_SCHEMA = {
     // a linked vendor. Empty string when no alternative is offered.
     // Drives the alt-URL re-loop (depth=1, visited-set guarded).
     alternative_source_url: { type: 'string' },
+    // How the product is sold: "per_unit" or "per_pack". Empty if not stated.
+    selling_unit: { type: 'string' },
+    // Units per pack when selling_unit="per_pack" (e.g. 50). 0 if per_unit/unknown.
+    pack_size: { type: 'number' },
+    // When the product is NOT the exact item requested but a valid substitute,
+    // 1-2 sentences on why it matches the original requirement. Empty for exact matches.
+    match_reasoning: { type: 'string' },
   },
 } as const;
 
@@ -74,6 +84,18 @@ export interface SupplierExtraction {
   contact_phone: string;
   available_qty: number;
   alternative_source_url: string;
+  selling_unit: '' | 'per_unit' | 'per_pack';
+  pack_size: number;
+  match_reasoning: string;
+}
+
+/** Coerce free-text packaging description into the controlled selling_unit values. */
+function normalizeSellingUnit(raw: string): '' | 'per_unit' | 'per_pack' {
+  const s = raw.toLowerCase();
+  if (!s) return '';
+  if (/pack|box|carton|case|bundle|set/.test(s)) return 'per_pack';
+  if (/unit|each|piece|pcs|\bea\b|individual/.test(s)) return 'per_unit';
+  return '';
 }
 
 // =============================================
@@ -161,5 +183,8 @@ export function normalizeSupplierExtraction(raw: unknown): SupplierExtraction {
     contact_phone:          pickString(m, ['contactphone', 'phone', 'telephone', 'tel', 'mobile']),
     available_qty:          pickNumber(m, ['availableqty', 'availablequantity', 'stock', 'quantityavailable', 'instock', 'qty']),
     alternative_source_url: pickString(m, ['alternativesourceurl', 'alternativeurl', 'alturl', 'alternatesourceurl', 'alternativelink']),
+    selling_unit:           normalizeSellingUnit(pickString(m, ['sellingunit', 'soldas', 'packaging', 'unittype', 'saleunit'])),
+    pack_size:              pickNumber(m, ['packsize', 'packqty', 'unitsperpack', 'perpack', 'packquantity']),
+    match_reasoning:        pickString(m, ['matchreasoning', 'reasoning', 'substitutereason', 'whymatch', 'matchjustification']),
   };
 }

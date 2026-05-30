@@ -6,9 +6,13 @@
 // Supports: analyze | reanalyze | handleRFQ (incoming_email routed)
 
 import { aiChatCompletion } from '@/lib/ai-agent/ai-router';
-import { ANALYZE_RFQ_PROMPT, buildAnalyzeUserMessage, buildReanalyzeUserMessage } from '@/lib/ai-agent/prompt';
+import {
+  ANALYZE_RFQ_PROMPT, buildAnalyzeUserMessage, buildReanalyzeUserMessage,
+  ENRICH_ITEMS_PROMPT, buildEnrichItemsUserMessage,
+} from '@/lib/ai-agent/prompt';
 import { modifyDatabase } from '@/lib/utils/databaseHandler';
 import { getData } from '@/lib/db/queries';
+import type { AgentItemSummary } from '@/types/preview';
 // Sidebar queue push — emits a QueuedRFQ upsert on the 'rfq-queue' SSE channel
 import { emitQueuedRFQs } from '@/lib/services/rfq-queue/queue-manager';
 import { extractAll, type ExtractionResult } from '@/lib/utils/rfq-extractor';
@@ -128,6 +132,23 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
       resolvedRfqId = existingId ?? rfq_id;
     }
 
+    // ── ENRICHMENT: AI 4-axis functional summary per item (dedicated pass) ──
+    // Non-blocking: a failure leaves agent_item_summary null and the UI shows a
+    // graceful placeholder. Attached BEFORE the DB save so summaries persist with
+    // the rfq_items insert AND appear in the live SSE preview.
+    let enrichedRfqItems = merged.rfq_items;
+    if (merged.rfq_items.length > 0) {
+      try {
+        const summaries = await enrichItemSummaries(merged.rfq_analysis.analysis_content || '', merged.rfq_items);
+        enrichedRfqItems = merged.rfq_items.map((it) => ({
+          ...it,
+          agent_item_summary: summaries.get(Number(it.item_id)) ?? null,
+        }));
+      } catch (err) {
+        console.warn('[Analysis] item enrichment failed (non-blocking):', err);
+      }
+    }
+
     // Build result — always report as rfq_analysis for downstream consumers
     const result: ProcessorResult = {
       success: true,
@@ -136,7 +157,7 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
       status: 'completed',
       session_id: '',
       processing_time_ms: Date.now() - startTime,
-      data: { ...merged, rfq_id: resolvedRfqId ?? null }, // include rfq_id for SSE preview panel
+      data: { ...merged, rfq_items: enrichedRfqItems, rfq_id: resolvedRfqId ?? null }, // include rfq_id for SSE preview panel
       timestamp,
     };
 
@@ -160,7 +181,7 @@ export async function processAnalysis(input: ProcessorInput): Promise<ProcessorR
         current_stage: isNewRfq ? 'report_analysis' : undefined,
         unread_count: isNewRfq ? 1 : undefined,
       },
-      rfq_items: merged.rfq_items,
+      rfq_items: enrichedRfqItems,
       customer_info: merged.customer_info,
     } as any;
 
@@ -348,6 +369,61 @@ async function callAIAnalysis(input: ProcessorInput, subject: string, analysisCo
 
   // Router picks HF or local per AI_MODE and falls back HF→local on remote failure
   return await aiChatCompletion<AnalysisData>(ANALYZE_RFQ_PROMPT, userMessage);
+}
+
+// ---------------------------------------------
+// Item Enrichment (dedicated AI pass → agent_item_summary)
+// ---------------------------------------------
+
+/** Coerce an arbitrary LLM value into a clean bullet-string array. */
+function toBulletArray(v: unknown): string[] {
+  if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean);
+  if (typeof v === 'string' && v.trim()) return [v.trim()];
+  return [];
+}
+
+/** Coerce a raw LLM item entry into the typed AgentItemSummary (never throws). */
+function normalizeAgentItemSummary(entry: Record<string, unknown>): AgentItemSummary {
+  return {
+    identification: toBulletArray(entry.identification),
+    classification: toBulletArray(entry.classification),
+    application: toBulletArray(entry.application),
+    purpose: toBulletArray(entry.purpose),
+    features: toBulletArray(entry.features),
+  };
+}
+
+/**
+ * One LLM call enriches ALL items with a 4-axis functional summary.
+ * Returns a Map keyed by item_id; items the model omitted simply won't be in it.
+ */
+async function enrichItemSummaries(
+  analysisContent: string,
+  items: MergedAnalysisData['rfq_items'],
+): Promise<Map<number, AgentItemSummary>> {
+  const result = new Map<number, AgentItemSummary>();
+  if (items.length === 0) return result;
+
+  const payload = items.map((it) => ({
+    item_id: Number(it.item_id),
+    description: it.company_requirement.company_description || '',
+    qty: Number(it.company_requirement.qty) || 0,
+    uom: it.company_requirement.uom || 'EA',
+  }));
+
+  const raw = await aiChatCompletion<{ items?: Array<Record<string, unknown>> }>(
+    ENRICH_ITEMS_PROMPT,
+    buildEnrichItemsUserMessage(analysisContent, payload),
+    1200,
+  );
+
+  const arr = Array.isArray(raw?.items) ? raw.items : [];
+  for (const entry of arr) {
+    const id = Number(entry.item_id);
+    if (!Number.isFinite(id)) continue;
+    result.set(id, normalizeAgentItemSummary(entry));
+  }
+  return result;
 }
 
 // ---------------------------------------------
