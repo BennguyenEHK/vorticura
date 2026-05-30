@@ -47,9 +47,44 @@ export interface ExtractedAnchors {
 const MAXIMO_ID_RE = /^\s*#?\s*\d{5,9}\s*[-:]\s*/;
 
 /**
+ * Internal engineering references that must be removed before anchor extraction.
+ * These are project/drawing/tag/order codes that have zero supplier-search value.
+ *
+ * Patterns stripped (in order, applied to a pre-normalized copy):
+ *   1. "Tag:" or "Tags:" followed by a comma-separated list of tag codes — up to
+ *      end-of-clause (semicolon, "in", or end of string).
+ *   2. "drawing <CODE>" — a drawing reference keyword followed by its code.
+ *   3. "order #<n>" or "order number <n>" — purchase/work-order numbers.
+ *   4. All-caps hyphenated project codes: ≥3 uppercase letters, hyphen, then
+ *      uppercase/digit continuation possibly including more hyphens and slashes
+ *      (e.g. "NULQ-SK-6111A/B", "CCP-2898").  Matches only when ALL segments
+ *      are uppercase/digit (no lowercase), to avoid clobbering real brands.
+ *
+ * All patterns are bounded — no catastrophic backtracking.
+ */
+const INTERNAL_REF_PATTERNS: RegExp[] = [
+  // "Tag: ACV1, ACV2" or "Tags: XYZ" (up to "in ", ";", or end of string)
+  /\bTags?\s*:\s*[A-Z0-9,/\s]{1,80}?(?=\s+in\b|\s*;|$)/gi,
+  // "drawing CCP-2898" or "drawing no. ABC-123"
+  /\bdrawing(?:\s+(?:no|number|#))?\s*[A-Z0-9][-A-Z0-9./]{1,20}\b/gi,
+  // "order #155107" / "order number 155107" / "CAPS order #155107"
+  /\b(?:[A-Z]+\s+)?order\s+(?:#|number\s*)?\d{4,12}\b/gi,
+  // Hyphenated all-caps project/tag codes: [A-Z]{3,}-[A-Z0-9][-A-Z0-9/]{0,20}
+  // e.g. "NULQ-SK-6111A/B", "CCP-2898"
+  // Negative lookahead avoids matching patterns that already have a digit in
+  // the left segment (those are likely genuine part numbers; the digit rule will
+  // handle keeping them).
+  /\b[A-Z]{3,}-[A-Z0-9][-A-Z0-9/]{0,20}\b/g,
+];
+
+/**
  * Part-number pattern. Word-boundary anchored to avoid catching mid-word
  * fragments. Allows letters then a separator (-, /, .) then alphanumeric.
  * Length capped at 16 chars total to avoid grabbing long URLs or codes.
+ *
+ * NOTE: matches are post-filtered to require AT LEAST ONE DIGIT. This alone
+ * removes all-letter codes like "NULQ-SK" that slip through the internal-ref
+ * stripper (e.g. when the code appears without a "Tag:" prefix).
  */
 const PART_NUMBER_RE = /\b[A-Z]{1,4}[-/.][A-Z0-9]{2,12}\b/g;
 
@@ -86,25 +121,45 @@ const STOPWORDS = new Set([
 
 /**
  * Brand-hint blacklist — Title-Case sequences that look like brand names
- * but are actually generic procurement nouns. Prevents "Valve Assembly" or
- * "Stainless Steel" from being misclassified as a brand.
+ * but are actually generic procurement nouns or product-category words.
+ * Prevents "Valve Assembly", "Pump", or "Stainless Steel" from being
+ * misclassified as a brand.
  */
 const BRAND_BLACKLIST = new Set([
+  // Structural procurement nouns
   'Item', 'Unit', 'Assembly', 'Kit', 'Set', 'Part', 'Number',
+  // Material descriptors
   'Stainless Steel', 'Carbon Steel', 'Cast Iron',
+  // Pressure / duty class adjectives
   'High Pressure', 'Low Pressure', 'Heavy Duty',
+  // Generic product-category nouns — should never be a brand anchor
+  'Valve', 'Pump', 'Motor', 'Sensor', 'Filter', 'Bearing', 'Gasket',
+  'Actuator', 'Controller', 'Switch', 'Relay', 'Gauge', 'Meter',
+  'Fitting', 'Flange', 'Coupling', 'Hose', 'Pipe', 'Tube',
+  'Check', 'Gate', 'Ball', 'Globe', 'Butterfly',
+  'Swing', 'Solenoid', 'Pressure', 'Temperature', 'Flow',
+  'Spec', 'Drawing', 'Order', 'Tag', 'Tags',
 ]);
 
 // ---------------------------------------------
 // Helpers
 // ---------------------------------------------
 
-/** Strip Maximo prefix, collapse whitespace, trim. Always run first. */
+/** Strip Maximo prefix, internal engineering references, collapse whitespace, trim. Always run first. */
 function normalize(input: string): string {
-  return input
-    .replace(MAXIMO_ID_RE, '')   // (1) drop Maximo ID prefix if present
-    .replace(/\s+/g, ' ')        // (2) collapse multi-space / newlines
-    .trim();                     // (3) drop edge whitespace
+  let s = input
+    .replace(MAXIMO_ID_RE, '');   // (1) drop Maximo ID prefix if present
+
+  // (2) Strip internal engineering references (project codes, drawing refs, etc.)
+  for (const re of INTERNAL_REF_PATTERNS) {
+    // Reset lastIndex — all patterns carry /g flag
+    re.lastIndex = 0;
+    s = s.replace(re, ' ');
+  }
+
+  return s
+    .replace(/\s+/g, ' ')        // (3) collapse multi-space / newlines
+    .trim();                     // (4) drop edge whitespace
 }
 
 /** Unique-preserving order. Small array sizes — O(n²) lookup is fine. */
@@ -156,7 +211,11 @@ export function extractAnchors(rawDescription: string): ExtractedAnchors {
   }
 
   // (1) Structured anchor extraction — order is independent; no shared state.
-  const partNumbers = matchAllUnique(cleaned, PART_NUMBER_RE);
+  // Digit-gate: keep only matches that contain at least one digit.
+  // This removes all-letter codes (e.g. "NULQ-SK") that survived the internal-ref
+  // stripper (e.g. when the code appears without a recognizable prefix keyword).
+  const partNumbers = matchAllUnique(cleaned, PART_NUMBER_RE)
+    .filter((pn) => /\d/.test(pn));
   const ratings = matchAllUnique(cleaned, RATING_RE);
   const certifications = matchAllUnique(cleaned, CERTIFICATION_RE);
   const dimensions = matchAllUnique(cleaned, DIMENSION_RE);

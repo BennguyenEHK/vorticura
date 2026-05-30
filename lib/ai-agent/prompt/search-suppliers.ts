@@ -11,7 +11,7 @@ export const EXTRACT_SUPPLIER_FROM_SNIPPETS_PROMPT = `You are a procurement extr
 SELECTION RULES (which snippet to pick):
 - Region priority: Vietnam (.vn) > Southeast Asia (Thailand/Malaysia/Indonesia/Philippines/Singapore) > rest of Asia > International — if multiple snippets qualify at the same tier, prefer the one whose content best matches the RFQ specs.
 - The chosen source_url MUST be a specific product, quote, or catalog page — NEVER a homepage, generic listing index, or social media profile.
-- If only homepages or irrelevant pages exist, return source_url="" and put "No product page found" in notes.
+- If only homepages, directory listings, PDFs, news articles, or "about/company/locations" pages exist, return source_url="" AND set ALL of the following to empty/zero: supplier_name="", contact_email="", contact_phone="", bidder_description="", compliance_deviation="", delivery_time="", bidder_unit_price=0, available_qty=0, selling_unit="", pack_size=0. Keep notes="No product page found". Do NOT extract a company name, phone, or description from a homepage/directory/PDF — those are not sourceable products.
 - One supplier per item. Do not merge multiple suppliers.
 
 EXTRACTION RULES (how to fill each field from the chosen page):

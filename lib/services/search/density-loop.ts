@@ -49,6 +49,17 @@ export interface MinimalRow {
   supplier_name: string;
 }
 
+/**
+ * A row only counts as a real supplier source if it has a non-empty source_url.
+ * Rows with an empty url are "No product page found" results (often hallucinated
+ * names/contacts from a homepage or directory listing) — they must never count
+ * toward MIN_SOURCES nor be persisted. This is the persist-gate guard shared with
+ * the orchestrator's URL filter.
+ */
+export function isUsableSourceRow(row: MinimalRow): boolean {
+  return typeof row.source_url === 'string' && row.source_url.trim() !== '';
+}
+
 /** One extractor pass result (mirrors the orchestrator's ExtractResult). */
 export interface DensityExtractResult<R> {
   rows: R[] | null;
@@ -114,11 +125,11 @@ export async function gatherSourcesForItem<R extends MinimalRow>(
     tavilyCalls += res.tavilyCalls;
     deadUrls += res.deadUrls;
 
-    // Dedup by source_url; rows with no URL keep a synthetic per-attempt key so
-    // multiple "no product page" markers don't collapse into one another.
-    let i = 0;
+    // Only real sources count: drop empty-url "no product page" rows entirely so
+    // they neither satisfy the floor nor stop the loop early. Dedup by source_url.
     for (const row of res.rows ?? []) {
-      const key = row.source_url || `__nourl__:${row.supplier_name}:${attempt}:${i++}`;
+      if (!isUsableSourceRow(row)) continue;
+      const key = row.source_url;
       if (!collected.has(key)) collected.set(key, row);
       if (collected.size >= TARGET_SOURCES) break; // bonus early-exit within an attempt
     }

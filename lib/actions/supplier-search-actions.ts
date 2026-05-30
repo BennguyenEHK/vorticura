@@ -38,6 +38,7 @@ import {
 import {
   gatherSourcesForItem,
   computeItemsBelowTarget,
+  isUsableSourceRow,
   MIN_SOURCES,
 } from '@/lib/services/search/density-loop';
 import { logSearchStage } from '@/lib/services/search/telemetry';
@@ -559,12 +560,15 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     // an array (possibly empty) — never null — so no null filter is needed.
     const beforeUrlGuards: ItemSourceRow[] = rawItemResults.flatMap((r) => r.result.rows);
 
-    // URL guard — drop homepages even if the LLM slipped past the prompt rule.
-    // We KEEP rows with empty source_url (those are explicit "no product page" markers).
+    // URL guard — a row only survives if it points at a REAL product page.
+    // Empty-source_url rows are "No product page found" results (often a
+    // hallucinated supplier name/contact lifted from a homepage or directory
+    // listing); we now DROP them instead of persisting them as markers — storing
+    // them only inflated the row count with junk. isUsableSourceRow rejects empty
+    // urls; isProductPage rejects homepages/PDFs/listings even if the LLM slipped.
     // NOTE: liveness (Stage 5) already ran per-item on the snippet URLs BEFORE
-    // extraction, so every chosen source_url here is already known-live — no
-    // second HEAD pass is needed (that was the spec-ordering bug we fixed).
-    const productPageItems = beforeUrlGuards.filter((r) => r.source_url === '' || isProductPage(r.source_url));
+    // extraction, so every chosen source_url here is already known-live.
+    const productPageItems = beforeUrlGuards.filter((r) => isUsableSourceRow(r) && isProductPage(r.source_url));
 
     // (4) Merge survivors and assign supplier_id deterministically: sort by
     //     item_id ASC, then enumerate. Rows from the same item_id are kept

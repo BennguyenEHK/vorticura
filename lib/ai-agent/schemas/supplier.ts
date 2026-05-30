@@ -170,7 +170,7 @@ function pickNumber(m: Map<string, unknown>, aliases: string[]): number {
  */
 export function normalizeSupplierExtraction(raw: unknown): SupplierExtraction {
   const m = indexByLooseKey(unwrapSupplier(raw));
-  return {
+  const result: SupplierExtraction = {
     supplier_name:          pickString(m, ['suppliername', 'supplier', 'name', 'company', 'companyname']),
     source_url:             pickString(m, ['sourceurl', 'url', 'link', 'href', 'producturl', 'productpage']),
     bidder_description:     pickString(m, ['bidderdescription', 'description', 'productdescription', 'desc']),
@@ -187,4 +187,29 @@ export function normalizeSupplierExtraction(raw: unknown): SupplierExtraction {
     pack_size:              pickNumber(m, ['packsize', 'packqty', 'unitsperpack', 'perpack', 'packquantity']),
     match_reasoning:        pickString(m, ['matchreasoning', 'reasoning', 'substitutereason', 'whymatch', 'matchjustification']),
   };
+
+  // Defense-in-depth sanitizer — mirrors the prompt's "no product page" rule.
+  // When source_url is explicitly present but empty the model had no real product
+  // page to extract from, so any company metadata it returned is a hallucination
+  // from a homepage/directory/PDF. Blank every hallucination-prone field to
+  // prevent junk rows. notes is preserved so the "No product page found" reason
+  // survives. We only fire when the key was actually supplied (not absent) so
+  // that isolated field-normalization tests without a source_url key are unaffected.
+  const sourceUrlKeyPresent = ['sourceurl', 'url', 'link', 'href', 'producturl', 'productpage'].some(
+    (alias) => m.has(alias),
+  );
+  if (sourceUrlKeyPresent && !result.source_url.trim()) {
+    result.supplier_name        = '';
+    result.contact_email        = '';
+    result.contact_phone        = '';
+    result.bidder_description   = '';
+    result.compliance_deviation = '';
+    result.delivery_time        = '';
+    result.bidder_unit_price    = 0;
+    result.available_qty        = 0;
+    result.selling_unit         = '';
+    result.pack_size            = 0;
+  }
+
+  return result;
 }

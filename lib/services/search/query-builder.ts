@@ -27,9 +27,15 @@ export interface QueryItem {
 // =============================================
 // Reused for every call; V8 compiles once at load. Order matters:
 // narrowest geolocation first, broadest last.
+//
+// Tier 1a uses a Vietnam-bias keyword phrase rather than a hard site:.vn lock.
+// This keeps the Vietnam-first preference (business is Vietnam-based) without
+// domain-restricting the primary query — obscure industrial parts are indexed
+// globally and a site: lock eliminates most relevant distributor pages.
+// Exported so tests can assert the softening invariant.
 
-const GEO_QUALIFIERS = [
-  'site:.vn',                                          // Tier 1a: Vietnam-specific
+export const GEO_QUALIFIERS = [
+  'Vietnam supplier',                                  // Tier 1a: Vietnam-bias (not domain-locked)
   'Vietnam OR Thailand OR Malaysia OR Indonesia',      // Tier 1b: Southeast Asia
   'Asia manufacturer',                                 // Tier 1c: Broader Asia
 ];

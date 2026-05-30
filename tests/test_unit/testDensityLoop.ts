@@ -2,6 +2,7 @@ import assert from 'assert';
 import {
   gatherSourcesForItem,
   computeItemsBelowTarget,
+  isUsableSourceRow,
   MIN_SOURCES,
   MAX_RETRIES,
   TARGET_SOURCES,
@@ -76,6 +77,24 @@ const row = (url: string, name = 'Vendor') => ({
   const res = await gatherSourcesForItem(baseItem, createBudget(), extract);
   assert.equal(res.rows.length, 0, 'all-null attempts yield zero sources without throwing');
   assert.equal(res.attempts, MAX_RETRIES, 'keeps retrying through MAX_RETRIES on empty results');
+}
+
+// --- Empty source_url rows are NOT usable → never counted toward the floor ---
+// This is the persist-gate fix: a "No product page found" hallucination has an
+// empty source_url and must not satisfy MIN_SOURCES or get collected at all.
+{
+  const extract: DensityExtractFn<ReturnType<typeof row>> = async () =>
+    ({ rows: [row(''), row('', 'Hallucinated Co')], tavilyCalls: 1, deadUrls: 0 });
+  const res = await gatherSourcesForItem(baseItem, createBudget(), extract);
+  assert.equal(res.rows.length, 0, 'empty source_url rows are dropped, never collected');
+  assert.equal(res.attempts, MAX_RETRIES, 'empty rows do not meet the floor → loops to MAX_RETRIES');
+}
+
+// --- isUsableSourceRow: only a real, non-empty source_url is usable ---
+{
+  assert.equal(isUsableSourceRow({ source_url: '', supplier_name: 'X' }), false, 'empty url → not usable');
+  assert.equal(isUsableSourceRow({ source_url: '   ', supplier_name: 'X' }), false, 'whitespace url → not usable');
+  assert.equal(isUsableSourceRow({ source_url: 'https://x.com/p/1', supplier_name: '' }), true, 'real url → usable even without a name');
 }
 
 // --- computeItemsBelowTarget: zero-row AND under-floor items are both flagged ---

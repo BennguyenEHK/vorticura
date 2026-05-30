@@ -20,7 +20,7 @@ import { buildTier1Queries, buildTier2Queries, type QueryItem } from './query-bu
 import { runAgenticTier3 } from './tier3-agent';
 import { tavilySearch, type TavilySnippet } from './tavily-client';
 import { getCachedSearch, setCachedSearch } from './cache';
-import { isLikelyProductPage } from './html-gate';
+import { isLikelyProductPage, hasProductSignals } from './html-gate';
 
 // ---------------------------------------------
 // Tier thresholds — verified product-page count
@@ -66,24 +66,63 @@ export type { QueryItem };
  * Defensive net behind the LLM prompt's "no homepage" rule — the model is
  * good at this but we never fully trust it.
  */
+// Document/asset extensions that are never product pages.
+const DOCUMENT_EXTENSIONS = new Set([
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx',
+  '.ppt', '.pptx', '.csv', '.zip', '.rar', '.txt',
+]);
+
 export function isProductPage(url: string): boolean {
   if (!url) return false;
   try {
     const u = new URL(url);
     // Reject bare domains / homepages — a "/" pathname is never a product page.
     if (u.pathname.length <= 1) return false;
+
+    const path = u.pathname.toLowerCase();
+
+    // Reject document/asset URLs by file extension.
+    const lastSegment = path.slice(path.lastIndexOf('/'));
+    const dotIdx = lastSegment.lastIndexOf('.');
+    if (dotIdx !== -1) {
+      const ext = lastSegment.slice(dotIdx);
+      if (DOCUMENT_EXTENSIONS.has(ext)) return false;
+    }
+
     // Reject non-product surfaces that DO carry a path but never represent a
     // single sourceable product (search results, taxonomy, editorial, account,
-    // checkout). Previously this guard was `pathname.length > 1` alone, which
+    // checkout, company/corporate info, directory listings, government gazettes).
+    // Previously this guard was `pathname.length > 1` alone, which
     // passed every one of these — the root cause of Tier 1's false-positive
     // "verified" count that suppressed the Tier 2/3 fallback.
-    const path = u.pathname.toLowerCase();
-    const NON_PRODUCT_SEGMENTS = [
+    //
+    // startsWith — segments that always appear at the path root:
+    const NON_PRODUCT_PREFIXES = [
       '/search', '/s/', '/category', '/categories', '/collections',
-      '/tag', '/tags', '/blog', '/news', '/about', '/contact',
+      '/tag', '/tags', '/blog', '/news', '/about', '/about-us', '/contact',
       '/login', '/signin', '/account', '/cart', '/checkout',
+      '/company', '/corporate', '/locations', '/gazette',
+      '/media', '/press', '/investor', '/careers',
+      '/products-search',
     ];
-    if (NON_PRODUCT_SEGMENTS.some((seg) => path.startsWith(seg))) return false;
+    if (NON_PRODUCT_PREFIXES.some((seg) => path.startsWith(seg))) return false;
+
+    // includes — segments that may appear after a locale prefix (e.g. /en/company/).
+    // These are wrapped in slashes to avoid false-positives on legitimate slugs
+    // (e.g. "/recruitment" is not caught by "/careers", "/media-valve" is not
+    // caught by "/media"). "/products-search" also checked here for mid-path form.
+    const NON_PRODUCT_INCLUDES = [
+      '/company/', '/corporate/', '/locations/', '/gazette/',
+      '/about/', '/about-us/', '/media/', '/press/', '/investor/', '/careers/',
+      '/products-search/',
+    ];
+    if (NON_PRODUCT_INCLUDES.some((sub) => path.includes(sub))) return false;
+
+    // Reject directory-listing shapes that contain these substrings anywhere
+    // in the path (e.g. alibaba.com/sk-suppliers.html, /suppliers/valves).
+    const NON_PRODUCT_SUBSTRINGS = ['-suppliers', '/suppliers'];
+    if (NON_PRODUCT_SUBSTRINGS.some((sub) => path.includes(sub))) return false;
+
     return true;
   } catch {
     return false;
@@ -137,13 +176,26 @@ async function runQueryAndDedup(
   for (const snippet of snippets) {
     // (a) URL structural guard — specific page, not homepage / search / taxonomy.
     if (!isProductPage(snippet.url)) continue;
-    // (b) HTML structural guard — when Tavily returned raw markup, require
-    //     product signals (schema.org/Product, og:type=product, itemprop=price)
-    //     before counting this as verified. When Tavily returned cleaned text
-    //     (no tags to inspect), the URL guard above stands alone rather than
-    //     rejecting a candidate we simply cannot structurally parse.
+    // (b) Content verification gate — a candidate is only counted as verified
+    //     when its content shows product signals. Two branches:
+    //
+    //   • Raw HTML (Tavily returned markup): require schema.org/OG/itemprop
+    //     signals via isLikelyProductPage. This branch was always correct but
+    //     fires rarely because Tavily strips tags before returning.
+    //
+    //   • Cleaned text (no '<' characters, the typical Tavily response): require
+    //     at least one plain-text product signal (currency near a number, or a
+    //     procurement keyword) via hasProductSignals. This replaces the old
+    //     "URL guard alone" posture that allowed trade yearbooks, company pages,
+    //     and government gazettes to pass because they have plausible paths but
+    //     carry no commerce content.
     const rawContent = snippet.content || '';
-    if (rawContent.includes('<') && !isLikelyProductPage(rawContent)) continue;
+    if (rawContent.includes('<')) {
+      if (!isLikelyProductPage(rawContent)) continue;
+    } else {
+      const snippetText = (snippet.snippet || '') + ' ' + rawContent;
+      if (!hasProductSignals(snippetText)) continue;
+    }
     // (c) Dedup by URL.
     if (acc.has(snippet.url)) continue;
     acc.set(snippet.url, snippet);
