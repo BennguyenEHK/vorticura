@@ -700,6 +700,61 @@ export const incomingEmails = pgTable('incoming_emails', {
 });
 
 // ============================================
+// 17. SUPPLIER_MEMORY TABLE — learned spec→supplier cache (search Tier-0)
+// ============================================
+// Persistent memoization of successful sourcing: a normalized RFQ spec
+// (spec_hash) maps to a previously-verified supplier/product page, so an
+// identical future item resolves WITHOUT a live web search or an LLM planning
+// call. Additive — the live search pipeline behaves exactly as before when this
+// table is empty or memory is disabled (SEARCH_MEMORY_ENABLED).
+//
+// The L1 near-match vector column (pgvector `vector(384)`) is intentionally NOT
+// declared here: it is provisioned manually (CREATE EXTENSION + ALTER TABLE; see
+// the ops SQL) so `drizzle-kit push` stays free of the pgvector dependency and
+// the L0 exact-match path works on any Postgres. Memory helpers read/write the
+// embedding via raw SQL only when SEARCH_MEMORY_EMBEDDINGS is enabled.
+export const supplierMemory = pgTable('supplier_memory', {
+  // Primary key
+  id: serial('id').primaryKey(),
+
+  // Tenant isolation — same convention as every other table.
+  companyId: integer('company_id').notNull().references(() => userCompany.companyId),
+  userId: integer('user_id'),  // renamed from client_id
+
+  // L0 exact-match key — short hash of the normalized ParsedSpec (spec-hash.ts).
+  specHash: varchar('spec_hash', { length: 40 }).notNull(),
+  // The normalized ParsedSpec that produced specHash (audit + re-hash on demand).
+  specJson: jsonb('spec_json').notNull().default({}),
+
+  // Cached sourcing result — mirrors the persisted supplier_item_status columns.
+  supplierName: varchar('supplier_name', { length: 255 }),
+  sourceUrl: text('source_url').notNull(),
+  bidderDescription: text('bidder_description'),
+  bidderUnitPrice: numeric('bidder_unit_price', { precision: 15, scale: 4 }),
+  currencyCode: varchar('currency_code', { length: 3 }),
+  deliveryTime: varchar('delivery_time', { length: 100 }),
+  availableQty: integer('available_qty'),
+  sellingUnit: varchar('selling_unit', { length: 12 }),
+  packSize: integer('pack_size'),
+
+  // Popularity + freshness signals (drive TTL/verify-on-stale + eviction).
+  hitCount: integer('hit_count').notNull().default(0),
+  lastVerifiedAt: timestamp('last_verified_at', { withTimezone: false }).defaultNow(),
+
+  // Timestamps
+  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false })
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+}, (table) => ({
+  // L0 dedup: one memory row per (tenant, spec, source). The same spec may map
+  // to several supplier sources; dedup is on the source URL.
+  uqMemoryKey: unique('uq_supplier_memory_key').on(table.companyId, table.specHash, table.sourceUrl),
+  // L0 lookup index: (tenant, spec_hash) is the hot read path.
+  idxSpecLookup: index('idx_supplier_memory_spec').on(table.companyId, table.specHash),
+}));
+
+// ============================================
 // TYPE EXPORTS
 // ============================================
 // Export inferred types for TypeScript usage
@@ -759,3 +814,6 @@ export type NewUiReload = typeof uiReload.$inferInsert;
 
 export type AiConversation = typeof aiConversations.$inferSelect;
 export type NewAiConversation = typeof aiConversations.$inferInsert;
+
+export type SupplierMemory = typeof supplierMemory.$inferSelect;
+export type NewSupplierMemory = typeof supplierMemory.$inferInsert;

@@ -27,9 +27,13 @@ export interface BudgetOptions {
   maxWallMs?: number;
 }
 
-// One primary extraction + a few alt-hops, comfortably bounded so a single
-// item can never monopolise the pod.
-const DEFAULT_MAX_LLM_CALLS = 6;
+// Fan-out-aware ceiling: cost is NOT the constraint (wall-clock is the real
+// leash via DEFAULT_MAX_WALL_MS). Raised from 6 → 12 to give FANOUT_WIDTH
+// rounds headroom — with width=3 and up to ~4 rounds of concurrent queries the
+// old ceiling of 6 would starve the parallel path before it could converge.
+// Wall-clock budget (40 s) terminates any runaway item long before 12 LLM
+// calls could accumulate at real HF latency (~5-7 s/call).
+const DEFAULT_MAX_LLM_CALLS = 12;
 // Sized for HF remote inference latency (~5-7s per LLM call): the deadline
 // must accommodate a multi-attempt density loop (maxLlmCalls extractions at
 // HF latency) while still bounding a runaway item. Starts AFTER query

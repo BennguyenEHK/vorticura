@@ -35,14 +35,27 @@ import {
   ALT_RELEVANCE_FLOOR,
   type SearchBudget,
 } from '@/lib/services/search/budget';
-// Stage 11+ — density-validation loop (the source-count floor) + telemetry
+// Stage 11+ — density-validation loop (the source-count floor) + telemetry.
+// Phase 1 (2026-05-31 spec): the orchestrator drives the SPECULATIVE FAN-OUT
+// variant (gatherSourcesForItemParallel) so an item's query attempts overlap
+// instead of serializing.
 import {
-  gatherSourcesForItem,
+  gatherSourcesForItemParallel,
   computeItemsBelowTarget,
   isUsableSourceRow,
   MIN_SOURCES,
 } from '@/lib/services/search/density-loop';
 import { logSearchStage } from '@/lib/services/search/telemetry';
+// Phase 1 — item router (L2 deterministic-direct vs L3 full-plan).
+import { classifyItem } from '@/lib/services/search/item-router';
+// Phase 2 — supplier memory (L0 exact-match learned cache).
+import {
+  lookupMemory,
+  rememberSupplier,
+  type MemoryScope,
+  type MemoryHit,
+} from '@/lib/services/search/supplier-memory';
+import type { ParsedSpec } from '@/lib/ai-agent/schemas/query-plan';
 // Deterministic microdata price extraction — used to override an LLM price of 0
 import { extractMicrodataPrice } from '@/lib/services/search/html-gate';
 
@@ -113,6 +126,41 @@ function buildSearchContent(rfqReference: string, rows: ItemSourceRow[], dropped
   });
   const drop = droppedCount > 0 ? `<br>Note: ${droppedCount} candidate URL(s) dropped (offline or homepage-only).` : '';
   return `Supplier search for RFQ ${rfqReference}:<br>${lines.join('<br>')}${drop}`;
+}
+
+// ---------------------------------------------
+// Memory → row adapter (Phase 2, L0 exact-match)
+// ---------------------------------------------
+
+/**
+ * Build an ItemSourceRow from a cached supplier-memory hit. A memory hit is a
+ * previously-verified sourcing result for the SAME normalized spec, so it skips
+ * the live search + extraction entirely. Provenance is tagged in notes and via
+ * extraction_track='memory'; supplier_id is assigned later in the global merge.
+ */
+function buildRowFromMemory(item: RfqItemInput, hit: MemoryHit): ItemSourceRow {
+  const stockPrefix = hit.available_qty > 0 ? `Stock: ${hit.available_qty} available. ` : '';
+  return {
+    item_id: item.itemId,
+    supplier_id: 0,                       // placeholder — assigned post-merge
+    supplier_name: hit.supplier_name,
+    source_url: hit.source_url,
+    status: 'pending',
+    delivery_time: hit.delivery_time,
+    bidder_description: hit.bidder_description,
+    bidder_unit_price: hit.bidder_unit_price,
+    currency_code: hit.currency_code || 'USD',
+    compliance_deviation: '',
+    notes: `${stockPrefix}(from memory)`.trim(),
+    contact_email: '',
+    contact_phone: '',
+    available_qty: hit.available_qty,
+    source_tier: 0,
+    extraction_track: 'memory',           // provenance — distinct from 'llm'/'deterministic'
+    selling_unit: hit.selling_unit,
+    pack_size: hit.pack_size,
+    match_reasoning: '',
+  };
 }
 
 // ---------------------------------------------
@@ -486,6 +534,9 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     // Cap per-item concurrency so 30 items don't fire 30 parallel Tavily/vLLM calls
     const limit = pLimit(RAG_CONCURRENCY);
 
+    // Tenant scope for the supplier-memory layer (L0 exact-match cache).
+    const scope: MemoryScope = { companyId: workspace.company_id, userId: workspace.user_id };
+
     // (3) Per-item DENSITY LOOP with one budget per item (Stage 11+).
     //     planQueries() generates up to 8 LLM-ranked queries + a parsed spec.
     //     gatherSourcesForItem walks the query list and re-extracts until the
@@ -503,22 +554,63 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
         };
         const searchText = buildSearchText(row);
         return limit(async () => {
-          // planQueries returns BOTH the parsed spec (for scoring) and the
-          // ranked query list (for the density loop's search attempts).
-          const { parsed, queries } = await planQueries(searchText);
+          // (3a) ROUTE — decide effort tier BEFORE paying the ~5-7s planner cost.
+          //      Tier 1 (L2 deterministic-direct): text already model-specific →
+          //      one composed query, skip the planner. Tier 3 (L3): full plan.
+          const route = classifyItem(searchText);
+
+          let parsed: ParsedSpec = {};
+          let queries: string[];
+
+          if (route.tier === 1) {
+            queries = route.directQuery ? [route.directQuery] : [];
+          } else {
+            // L3 — LLM parses spec + emits ranked queries (narrow→broad).
+            const plan = await planQueries(searchText);
+            parsed = plan.parsed;
+            queries = plan.queries;
+
+            // (3b) L0 MEMORY — exact-match short-circuit (Phase 2). Keyed on the
+            //      parsed spec, so it runs post-plan; a fresh hit skips the entire
+            //      density loop (Tavily searches + extraction LLM calls).
+            const hits = await lookupMemory(parsed, scope);
+            if (hits && hits.length) {
+              const memRows = hits.map((h) => buildRowFromMemory(baseItem, h));
+              logSearchStage('density-check', {
+                item_id: baseItem.itemId,
+                attempt: 0,
+                query: '(memory)',
+                have: memRows.length,
+                need: MIN_SOURCES,
+                source: 'memory',
+              });
+              // budget is unused on the memory path; create one so downstream
+              // telemetry aggregation (llm_calls/exhausted) stays uniform.
+              return {
+                result: { rows: memRows, tavilyCalls: 0, deadUrls: 0, attempts: 0 },
+                budget: createBudget(),
+                itemId: baseItem.itemId,
+                parsed,
+                fromMemory: true,
+              };
+            }
+          }
+
           // Stage 11 — start the wall-clock budget AFTER planning + queue wait, not before,
           // so the ~5-7s HF query-planning call (which isn't an extraction call) doesn't eat
           // the deadline before the first retry.
           const budget = createBudget();
-          // Fallback: an empty LLM query plan must not silently skip the item — search the raw text once.
+          // Fallback: an empty query plan must not silently skip the item — search the raw text once.
           const effectiveQueries = queries.length ? queries : [searchText].filter((q) => q.trim());
-          const result = await gatherSourcesForItem<ItemSourceRow>(
+          // Phase 1 — speculative fan-out: overlap up to FANOUT_WIDTH query
+          // attempts per round instead of serializing them.
+          const result = await gatherSourcesForItemParallel<ItemSourceRow>(
             baseItem,
             effectiveQueries,
             budget,
             (query, b) => extractSupplierForItem(query, baseItem, b, 0, new Set<string>(), baseItem.description, parsed),
           );
-          return { result, budget, itemId: baseItem.itemId };
+          return { result, budget, itemId: baseItem.itemId, parsed, fromMemory: false };
         });
       }),
     );
@@ -535,6 +627,40 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     // urls; isProductPage rejects homepages/PDFs/listings even if the LLM slipped.
     // searchOneQuery already filters to verified product pages before extraction.
     const productPageItems = beforeUrlGuards.filter((r) => isUsableSourceRow(r) && isProductPage(r.source_url));
+
+    // (3c) MEMORIZE (Phase 2) — persist verified sourcings so an identical spec
+    //      resolves at Tier-0 next time. Skip rows that CAME from memory (no
+    //      re-write churn) and rows whose item carried no parsed spec (Tier-1 /
+    //      empty plan → rememberSupplier no-ops on an empty spec_hash anyway).
+    //      Fail-safe: rememberSupplier never throws, so a memory-write outage
+    //      cannot affect the search result.
+    const parsedByItem = new Map<number, ParsedSpec>();
+    const memoryItemIds = new Set<number>();
+    for (const r of rawItemResults) {
+      parsedByItem.set(r.itemId, r.parsed);
+      if (r.fromMemory) memoryItemIds.add(r.itemId);
+    }
+    await Promise.all(
+      productPageItems
+        .filter((row) => !memoryItemIds.has(row.item_id))
+        .map((row) =>
+          rememberSupplier(
+            parsedByItem.get(row.item_id) ?? {},
+            {
+              supplier_name: row.supplier_name,
+              source_url: row.source_url,
+              bidder_description: row.bidder_description,
+              bidder_unit_price: row.bidder_unit_price,
+              currency_code: row.currency_code,
+              delivery_time: row.delivery_time,
+              available_qty: row.available_qty,
+              selling_unit: row.selling_unit,
+              pack_size: row.pack_size,
+            },
+            scope,
+          ),
+        ),
+    );
 
     // (4) Merge survivors and assign supplier_id deterministically: sort by
     //     item_id ASC, then enumerate. Rows from the same item_id are kept

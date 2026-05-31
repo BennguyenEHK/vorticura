@@ -1,10 +1,12 @@
 import assert from 'assert';
 import {
   gatherSourcesForItem,
+  gatherSourcesForItemParallel,
   computeItemsBelowTarget,
   isUsableSourceRow,
   MIN_SOURCES,
   TARGET_SOURCES,
+  FANOUT_WIDTH,
   type DensityExtractFn,
 } from '@/lib/services/search/density-loop';
 import { createBudget } from '@/lib/services/search/budget';
@@ -110,6 +112,86 @@ const Q = (n: number): string[] => Array.from({ length: n }, (_, i) => `query ${
   ];
   const below = computeItemsBelowTarget(allIds, finalItems, MIN_SOURCES);
   assert.deepEqual(below.sort(), [2, 3], 'below-target = under floor (2) AND zero-row (3); item 1 excluded');
+}
+
+// =============================================
+// gatherSourcesForItemParallel — speculative fan-out variant
+// =============================================
+// These tests exercise the parallel path using the same fake extract pattern
+// as the sequential tests above. The extract fn is injected so the tests
+// never touch real LLM/Tavily/DB resources.
+
+// --- (a) Reaches MIN_SOURCES and stops launching further rounds ---
+// Each extract call returns one unique source. With FANOUT_WIDTH queries per
+// round the parallel path should reach MIN_SOURCES within the first round
+// (assuming FANOUT_WIDTH >= MIN_SOURCES), OR within at most ceil(MIN_SOURCES /
+// FANOUT_WIDTH) rounds — in either case fewer round-trips than a sequential
+// loop that would fire one query per attempt.
+{
+  let calls = 0;
+  const extract: DensityExtractFn<ReturnType<typeof row>> = async () => {
+    // Each call returns a distinct URL so the collected map grows on every call.
+    const callNum = ++calls;
+    return { rows: [row(`https://p.com/item/${callNum}`)], tavilyCalls: 1, deadUrls: 0 };
+  };
+  // Provide more queries than needed so the stopping logic must cut it short.
+  const res = await gatherSourcesForItemParallel(baseItem, Q(12), createBudget(), extract);
+  assert.ok(res.rows.length >= MIN_SOURCES, 'parallel: reaches at least MIN_SOURCES distinct sources');
+  // The parallel path fires FANOUT_WIDTH queries at once; it must stop after the
+  // first round where collected.size >= MIN_SOURCES (not keep going for all 12).
+  // Attempts (queryIndex) should not exceed the queries consumed by the first
+  // round that crosses the floor. With width=3 and MIN_SOURCES=3 that is <= 3.
+  assert.ok(
+    res.attempts <= Math.ceil(MIN_SOURCES / Math.max(FANOUT_WIDTH, 1)) * FANOUT_WIDTH,
+    'parallel: stops launching new rounds once MIN_SOURCES met — fewer queries than sequential would use',
+  );
+}
+
+// --- (b) Dedupes identical source_url across concurrent results in one round ---
+// All extractions in a round return the same URL. After deduplication the
+// collected map should have exactly 1 entry regardless of how many concurrent
+// extractions ran in the round.
+{
+  const extract: DensityExtractFn<ReturnType<typeof row>> = async () =>
+    ({ rows: [row('https://dup.com/same')], tavilyCalls: 1, deadUrls: 0 });
+  // Use enough queries to fill multiple rounds but all return the same URL.
+  const res = await gatherSourcesForItemParallel(baseItem, Q(6), createBudget(), extract);
+  assert.equal(res.rows.length, 1, 'parallel: dedupes identical source_url across concurrent results');
+  // All 6 queries are launched (never reaches MIN_SOURCES with 1 unique URL).
+  assert.equal(res.attempts, 6, 'parallel: exhausts query list when floor never met after dedup');
+}
+
+// --- (c) Respects budget exhaustion — loop does not start when budget is spent ---
+{
+  let calls = 0;
+  const extract: DensityExtractFn<ReturnType<typeof row>> = async () => {
+    calls += 1;
+    return { rows: [row(`https://x.com/b/${calls}`)], tavilyCalls: 1, deadUrls: 0 };
+  };
+  const spent = createBudget({ maxLlmCalls: 0 }); // isExhausted() true immediately
+  const res = await gatherSourcesForItemParallel(baseItem, Q(4), spent, extract);
+  assert.equal(calls, 0, 'parallel: exhausted budget short-circuits — no extractor calls');
+  assert.equal(res.rows.length, 0, 'parallel: no rows gathered when budget spent up front');
+  assert.equal(res.attempts, 0, 'parallel: attempts is 0 when budget already exhausted');
+}
+
+// --- (d) Merges the overshooting final round without dropping rows ---
+// The last round may fire FANOUT_WIDTH queries even though the floor is crossed
+// mid-round (Promise.all completes all concurrent calls). Those extra rows must
+// still be merged, not discarded. We simulate this by giving only one query
+// (so there is only one round of width 1) that returns more than MIN_SOURCES
+// rows — all should be collected up to TARGET_SOURCES.
+{
+  const manyRows = Array.from({ length: 8 }, (_, i) => row(`https://over.com/p/${i}`));
+  const extract: DensityExtractFn<ReturnType<typeof row>> = async () =>
+    ({ rows: manyRows, tavilyCalls: 1, deadUrls: 0 });
+  const res = await gatherSourcesForItemParallel(baseItem, Q(1), createBudget(), extract);
+  // Rows collected are capped at TARGET_SOURCES (inner cap still applies).
+  assert.equal(
+    res.rows.length, TARGET_SOURCES,
+    'parallel: final-round rows merged and capped at TARGET_SOURCES, not discarded',
+  );
+  assert.equal(res.attempts, 1, 'parallel: single-query round consumed exactly one query');
 }
 
 console.log('✓ testDensityLoop passed');

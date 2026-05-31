@@ -20,13 +20,21 @@ import { isExhausted, type SearchBudget } from './budget';
 import { logSearchStage } from './telemetry';
 
 // ---------------------------------------------
-// Tuning — source-count floor / ceiling / retry cap
+// Tuning — source-count floor / ceiling / retry cap / fan-out width
 // ---------------------------------------------
 
 /** Floor: keep retrying until an item has at least this many distinct sources. */
 export const MIN_SOURCES = 3;
 /** Inner cap: stop accumulating within a single attempt once this many gathered. */
 export const TARGET_SOURCES = 5;
+/**
+ * How many queries to fire concurrently in each round of the parallel fan-out
+ * loop. Default 3 — env-overridable via SEARCH_FANOUT_WIDTH. Tavily rate-limit
+ * safety is unchanged: the global tavilyLimit in search/index.ts already
+ * serialises live web round-trips under the free-tier ceiling; fan-out only
+ * overlaps the *waiting*, not the rate.
+ */
+export const FANOUT_WIDTH = Number(process.env.SEARCH_FANOUT_WIDTH ?? 3);
 
 // ---------------------------------------------
 // Types — minimal shapes so this module avoids the actions/db import graph
@@ -143,6 +151,107 @@ export async function gatherSourcesForItem<R extends MinimalRow>(
   }
 
   return { rows: [...collected.values()], tavilyCalls, deadUrls, attempts: attempt };
+}
+
+// ---------------------------------------------
+// Parallel (speculative fan-out) variant
+// ---------------------------------------------
+
+/**
+ * Parallel counterpart of gatherSourcesForItem.
+ *
+ * Walks the query list in ROUNDS of up to FANOUT_WIDTH queries, firing each
+ * round concurrently via Promise.all on the injected `extract`. After every
+ * round the survivors are deduped into `collected` by source_url (first
+ * occurrence wins; rows failing isUsableSourceRow are skipped). Accumulates
+ * tavilyCalls and deadUrls across all rounds.
+ *
+ * Stopping rules (checked BEFORE launching a new round):
+ *   1. collected.size >= MIN_SOURCES — floor met, no more rounds needed.
+ *   2. isExhausted(budget) — circuit-breaker tripped.
+ *   3. Query list consumed — nothing left to fire.
+ * Results from an overshooting final round are always merged — no waste.
+ *
+ * Telemetry: emits the same 'query-gen' + 'density-check' events as the
+ * sequential loop, extended with a `round` field (0-based) so concurrent
+ * attempts remain attributable in structured logs.
+ */
+export async function gatherSourcesForItemParallel<R extends MinimalRow>(
+  item: DensityItem,
+  queries: string[],
+  budget: SearchBudget,
+  extract: DensityExtractFn<R>,
+): Promise<GatherResult<R>> {
+  const collected = new Map<string, R>();
+  let tavilyCalls = 0;
+  let deadUrls = 0;
+  let queryIndex = 0; // next query to consume from the list
+  let round = 0;
+
+  while (
+    collected.size < MIN_SOURCES &&  // floor not yet met
+    !isExhausted(budget) &&          // circuit breaker
+    queryIndex < queries.length      // queries remain
+  ) {
+    // Slice the next batch — up to FANOUT_WIDTH queries.
+    const batchEnd = Math.min(queryIndex + FANOUT_WIDTH, queries.length);
+    const batch = queries.slice(queryIndex, batchEnd);
+
+    // Emit query-gen telemetry for each query in the batch before firing.
+    for (let bi = 0; bi < batch.length; bi++) {
+      logSearchStage('query-gen', {
+        item_id: item.itemId,
+        attempt: queryIndex + bi,
+        query: batch[bi],
+        qty: item.qty,
+        uom: item.uom,
+        round,
+      });
+    }
+
+    // Fire all queries in this round concurrently.
+    const results = await Promise.all(batch.map((q) => extract(q, budget)));
+
+    // Merge results from all concurrent extractions in this round. Tavily/dead
+    // counts are accumulated for EVERY result (the work already ran), but once
+    // the TARGET_SOURCES inner cap is hit we stop merging further rows.
+    for (const res of results) {
+      tavilyCalls += res.tavilyCalls;
+      deadUrls += res.deadUrls;
+      if (collected.size >= TARGET_SOURCES) continue; // cap reached — keep counting, stop merging
+      for (const row of res.rows ?? []) {
+        if (!isUsableSourceRow(row)) continue;
+        const key = row.source_url;
+        if (!collected.has(key)) collected.set(key, row);
+        if (collected.size >= TARGET_SOURCES) break; // inner cap
+      }
+    }
+
+    queryIndex = batchEnd;
+
+    // Emit density-check telemetry once per round (after merging the batch).
+    logSearchStage('density-check', {
+      item_id: item.itemId,
+      attempt: queryIndex - 1, // last attempt index in this round
+      query: batch[batch.length - 1],
+      have: collected.size,
+      need: MIN_SOURCES,
+      budgetLeft: budget.maxLlmCalls - budget.llmCallsUsed,
+      exhausted: budget.exhausted,
+      msLeft: Math.max(0, budget.deadline - Date.now()),
+      tripped: budget.exhausted ? (budget.llmCallsUsed >= budget.maxLlmCalls ? 'calls' : 'wall') : null,
+      round,
+    });
+
+    round++;
+  }
+
+  return {
+    rows: [...collected.values()],
+    tavilyCalls,
+    deadUrls,
+    attempts: queryIndex, // total queries actually launched
+  };
 }
 
 // ---------------------------------------------
