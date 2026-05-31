@@ -3,46 +3,41 @@ import { isProductPage } from '@/lib/services/search/index';
 import { hasProductSignals } from '@/lib/services/search/html-gate';
 
 // =============================================
-// Product-page guard regression tests
+// Persist-gate URL guard regression tests
 // =============================================
-// Exercises the URL-structural gate (isProductPage) and the plain-text
-// content signal helper (hasProductSignals) that backs the cleaned-text
-// branch of runQueryAndDedup's structural verification.
-//
-// Each assertion documents a URL / text that was incorrectly accepted (or
-// incorrectly rejected) in production and the expected correct outcome.
+// isProductPage is now the lightweight PERSIST-time guard (candidate relevance
+// filtering moved to the weighted scorer — see testProductPageScorer.ts). It
+// only defends against a hallucinated source_url: empty, bare homepage, or an
+// obvious editorial/account surface. PDFs, distributor listings and ugly-slug
+// product pages now PASS — the scorer already vetted them upstream.
 
-// ----- isProductPage: should be FALSE -----
+// ----- isProductPage: should be FALSE (structural junk) -----
 
-// PDF document linked as a product URL
+// Bare homepage / root path
 assert.strictEqual(
-  isProductPage('https://x.gov.vn/files/report.pdf'),
+  isProductPage('https://acme-valves.com/'),
   false,
-  'PDF files must not pass as product pages',
+  'bare homepage must not pass as product page',
 );
 
-// Company/locations page
+// Company/locations page (editorial surface)
 assert.strictEqual(
   isProductPage('https://freudenberg.com/en/company/locations/freudenberg-in-southeast-asia'),
   false,
   'company sub-path must not pass as product page',
 );
 
-// Alibaba supplier-listing page
+// Blog / editorial
 assert.strictEqual(
-  isProductPage('https://www.alibaba.com/sk-suppliers.html'),
+  isProductPage('https://valveworld.com/blog/valve-maintenance'),
   false,
-  '"-suppliers" path must not pass as product page',
+  'blog path must not pass as product page',
 );
 
-// Made-in-china directory-listing
-assert.strictEqual(
-  isProductPage('https://www.made-in-china.com/products-search/hot-china-products/Valves.html'),
-  false,
-  '"products-search" path must not pass as product page',
-);
+// Empty url
+assert.strictEqual(isProductPage(''), false, 'empty url is not a product page');
 
-// ----- isProductPage: should be TRUE -----
+// ----- isProductPage: should be TRUE (kept for persistence) -----
 
 // Genuine product detail page
 assert.strictEqual(
@@ -51,15 +46,34 @@ assert.strictEqual(
   'specific product path must pass as product page',
 );
 
-// ----- hasProductSignals: should be TRUE -----
+// PDF datasheet — now KEPT (was previously rejected by the binary gate)
+assert.strictEqual(
+  isProductPage('https://supplier.com/datasheets/kf941.pdf'),
+  true,
+  'PDF datasheets must pass — relevance is decided by the scorer',
+);
+
+// Distributor listing — now KEPT (valid supplier source per the KF941 example)
+assert.strictEqual(
+  isProductPage('https://www.alibaba.com/sk-suppliers.html'),
+  true,
+  'distributor/-suppliers listings must pass — scorer ranks them',
+);
+
+// Ugly-slug product page with no /product/ segment
+assert.strictEqual(
+  isProductPage('https://company.com/kf941.html'),
+  true,
+  'ugly-slug product page must pass (URL-pattern filtering alone would fail it)',
+);
+
+// ----- hasProductSignals (still exported helper) -----
 
 assert.strictEqual(
   hasProductSignals('Ball valve 2" 150#, price $42.50, in stock, MOQ 10'),
   true,
   'text with price and procurement keywords must return true',
 );
-
-// ----- hasProductSignals: should be FALSE -----
 
 assert.strictEqual(
   hasProductSignals(

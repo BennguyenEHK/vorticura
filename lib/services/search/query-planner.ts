@@ -9,20 +9,24 @@
 
 import { aiChatCompletion } from '@/lib/ai-agent/ai-router';
 import { PLAN_QUERIES_PROMPT, buildPlanUserMessage } from '@/lib/ai-agent/prompt/plan-queries';
-import { QUERY_PLAN_SCHEMA, normalizeQueryPlan } from '@/lib/ai-agent/schemas/query-plan';
+import { QUERY_PLAN_SCHEMA, normalizeQueryPlan, type QueryPlan } from '@/lib/ai-agent/schemas/query-plan';
 
 /**
- * Generate a ranked list of web search queries for a procurement item description.
- * Uses the LLM to parse the item text into structured spec fields, then derives
- * up to 8 queries ordered narrow→broad.
+ * Plan the supplier search for one procurement item: the LLM parses the item
+ * text into structured spec fields (model/size/class/material/…) and emits a
+ * ranked list of up to 8 web search queries ordered narrow→broad.
+ *
+ * Returns BOTH halves of the plan:
+ *   - `parsed`  feeds the product-page scorer's exact-model + spec-density layers.
+ *   - `queries` drives the density loop's search attempts.
  *
  * @param searchText  Free-text item description from the RFQ.
- * @returns           Ranked query strings (up to 8); empty array on error or blank input.
+ * @returns           A QueryPlan; `{ parsed:{}, queries:[] }` on error or blank input.
  */
-export async function planQueries(searchText: string): Promise<string[]> {
+export async function planQueries(searchText: string): Promise<QueryPlan> {
   // Guard: empty / whitespace input — nothing to plan
   if (!searchText || !searchText.trim()) {
-    return [];
+    return { parsed: {}, queries: [] };
   }
 
   try {
@@ -43,12 +47,12 @@ export async function planQueries(searchText: string): Promise<string[]> {
       `[query-planner] spec=${specFields.length ? specFields.join(',') : 'none'} queries=${plan.queries.length}`,
     );
 
-    return plan.queries;
+    return plan;
   } catch (err) {
     console.warn(
       '[query-planner] LLM query planning failed:',
       err instanceof Error ? err.message : err,
     );
-    return [];
+    return { parsed: {}, queries: [] };
   }
 }

@@ -3,11 +3,11 @@
 // =============================================
 // Internal server module (called by data-processor, NOT a server action).
 // Flow: ProcessorInput → fetch rfq_items → sort by item_id ASC →
-//       per-item (LLM-planned ranked queries → single-query Tavily search →
-//       Track A microdata OR Track B LLM extract → stock filter → alt-URL re-loop) →
-//       URL guards → deterministic supplier_id → save → result.
-// Track A (Stage 7) runs BEFORE the LLM so pages with complete structured
-// pricing never cost an LLM call.
+//       per-item (LLM-planned ranked queries + parsed spec → single-query Tavily
+//       search scored by the product-page classifier → LLM extract → stock filter
+//       → alt-URL re-loop) → URL guards → deterministic supplier_id → save → result.
+// Every page is extracted by the LLM; a deterministic microdata price override
+// fills in a price only when the LLM returns 0 (page-stated price wins otherwise).
 //
 // Both action_types route through the same RAG flow:
 //   - 'search'   : initial supplier discovery for an RFQ
@@ -22,7 +22,7 @@ import {
 import { getData } from '@/lib/db/queries';
 import { modifyDatabase, type WriteFailure } from '@/lib/utils/databaseHandler';
 import { aiChatCompletion } from '@/lib/ai-agent/ai-router';
-import { searchOneQuery, isProductPage } from '@/lib/services/search';
+import { searchOneQuery, isProductPage, type ScorerSpec } from '@/lib/services/search';
 import { planQueries } from '@/lib/services/search/query-planner';
 import { SUPPLIER_SCHEMA, normalizeSupplierExtraction, type SupplierExtraction } from '@/lib/ai-agent/schemas/supplier';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
@@ -43,9 +43,8 @@ import {
   MIN_SOURCES,
 } from '@/lib/services/search/density-loop';
 import { logSearchStage } from '@/lib/services/search/telemetry';
-// Stage 7 — deterministic microdata price extraction (Track A short-circuit)
+// Deterministic microdata price extraction — used to override an LLM price of 0
 import { extractMicrodataPrice } from '@/lib/services/search/html-gate';
-import { buildDeterministicSupplier } from '@/lib/services/search/track-a';
 
 
 // ---------------------------------------------
@@ -159,6 +158,9 @@ interface ExtractResult {
  *
  * Stage 14: Returns { rows, tavilyCalls } so the orchestrator can accumulate
  * search_telemetry across all items without shared mutable state.
+ *
+ * `spec` is the parsed RFQ specification (from planQueries) threaded into the
+ * product-page scorer so candidate ranking uses exact-model + spec-density signals.
  */
 async function extractSupplierForItem(
   query: string,
@@ -169,10 +171,13 @@ async function extractSupplierForItem(
   // The ORIGINAL RFQ requirement, preserved across the alt-URL recursion so
   // substitutes found at depth>0 can be justified against the real need.
   originalDescription: string = item.description,
+  // Parsed spec for the product-page scorer (exact-model + spec-density layers).
+  spec: ScorerSpec = {},
 ): Promise<ExtractResult> {
-  // (1) Single-query Tavily search (cache-first). The query is LLM-planned
-  //     upstream by planQueries() — no tier walk or query mutation here.
-  const search = await searchOneQuery(query);
+  // (1) Single-query Tavily search (cache-first), scored + ranked by the
+  //     product-page classifier. The query is LLM-planned upstream by
+  //     planQueries() — no tier walk or query mutation here.
+  const search = await searchOneQuery(query, spec);
 
   // Stage 2 — Raw Search Execution telemetry: query → verified-page payload shape.
   logSearchStage('raw-search', {
@@ -191,60 +196,16 @@ async function extractSupplierForItem(
     return { rows: null, tavilyCalls: search.tavilyCalls, deadUrls: 0 };
   }
 
-  // Liveness gate removed — searchOneQuery already filters to verified product
-  // pages; HEAD-checking adds latency without improving precision in this flow.
+  // searchOneQuery already scored, filtered and ranked candidates to relevant
+  // product pages; no separate liveness/HEAD check (adds latency without
+  // improving precision in this flow).
   const liveSnippets = search.snippets;
   const deadUrls = 0;
 
-  // Stage 7 — Track A (deterministic): if a live product page exposes COMPLETE
-  // price+currency microdata, build the supplier row from structured ground
-  // truth and SKIP the LLM entirely (free + instant). No budget is consumed —
-  // this is what keeps llm_calls below item-count when pages are well-marked.
-  // available_qty=0 ("unknown") bypasses the stock filter; microdata carries no
-  // alternative link so the alt-URL re-loop does not apply to Track A rows.
-  const deterministic = buildDeterministicSupplier(liveSnippets, isProductPage);
-  if (deterministic) {
-    console.log(
-      `[supplier-search] item=${item.itemId} depth=${depth} track=A deterministic ${deterministic.currency_code} ${deterministic.bidder_unit_price} (LLM skipped)`,
-    );
-    const deterministicRow: ItemSourceRow = {
-      item_id: item.itemId,
-      supplier_id: 0,                      // placeholder — assigned post-merge
-      supplier_name: deterministic.supplier_name,
-      source_url: deterministic.source_url,
-      status: 'pending',                   // schema constant — never AI-derived
-      delivery_time: '',                   // not in microdata
-      bidder_description: deterministic.bidder_description,
-      bidder_unit_price: deterministic.bidder_unit_price,
-      currency_code: deterministic.currency_code,
-      compliance_deviation: '',
-      notes: depth > 0 ? 'via_alt: ' : '',
-      contact_email: '',
-      contact_phone: '',
-      available_qty: 0,                    // unknown — bypasses the stock filter
-      source_tier: 0,                      // tiers removed; 0 = n/a
-      extraction_track: 'deterministic',
-      selling_unit: '',                    // microdata carries no packaging info
-      pack_size: 0,
-      match_reasoning: '',                 // deterministic rows are exact product-page matches
-    };
-    // Stage 7 — Extraction telemetry (Track A, no LLM consumed).
-    logSearchStage('extract', {
-      item_id: item.itemId, depth, track: 'A-deterministic',
-      liveSnippets: liveSnippets.length,
-      source_url: deterministicRow.source_url,
-      bidder_unit_price: deterministicRow.bidder_unit_price,
-      currency_code: deterministicRow.currency_code,
-      rowsEmitted: 1,
-    });
-    return { rows: [deterministicRow], tavilyCalls: search.tavilyCalls, deadUrls };
-  }
-
-  // Stage 8 — Track B (LLM extract): only reached when Track A couldn't fully
-  // parse any live page. Stage 11 circuit-breaker: reserve one LLM call against
-  // the budget BEFORE invoking the model. consumeLlmCall() returns false when
-  // the ceiling is already crossed. Degrade to null at depth 0 or return what
-  // we have deeper.
+  // LLM extraction. Stage 11 circuit-breaker: reserve one LLM call against the
+  // budget BEFORE invoking the model. consumeLlmCall() returns false when the
+  // ceiling is already crossed. Degrade to null at depth 0 or return what we
+  // have deeper.
   if (!consumeLlmCall(budget)) {
     console.warn(
       `[supplier-search] item=${item.itemId} depth=${depth} budget exhausted — skipping LLM extraction`,
@@ -253,9 +214,9 @@ async function extractSupplierForItem(
     return { rows: null, tavilyCalls: search.tavilyCalls, deadUrls };
   }
 
-  // (2) Extraction via ai-router — local mode enforces SUPPLIER_SCHEMA with
-  //     vLLM guided_json; remote mode sends prompt-only to HF (no schema
-  //     enforcement) and falls back to local-with-schema if HF errors.
+  // Extraction via ai-router — local mode enforces SUPPLIER_SCHEMA with
+  // vLLM guided_json; remote mode sends prompt-only to HF (no schema
+  // enforcement) and falls back to local-with-schema if HF errors.
   const llmStart = Date.now();
   let extracted: SupplierExtraction;
   try {
@@ -361,10 +322,10 @@ async function extractSupplierForItem(
 
   const rows: ItemSourceRow[] = [primaryRow];
 
-  // Stage 8 — Extraction telemetry (Track B; extractionTrack notes microdata override).
+  // Extraction telemetry (extractionTrack notes when a microdata price override fired).
   logSearchStage('extract', {
     item_id: item.itemId, depth,
-    track: extractionTrack === 'deterministic' ? 'B-llm+microdata' : 'B-llm',
+    track: extractionTrack === 'deterministic' ? 'llm+microdata' : 'llm',
     liveSnippets: liveSnippets.length,
     source_url: primaryRow.source_url,
     bidder_unit_price: primaryRow.bidder_unit_price,
@@ -412,6 +373,7 @@ async function extractSupplierForItem(
         depth + 1,
         visitedUrls,
         originalDescription,   // preserve the real requirement for match_reasoning
+        spec,                  // same parsed spec drives scoring on the alt page
       );
 
       // Stage 14 — accumulate Tavily calls + dead-URL drops from the alt branch.
@@ -525,7 +487,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     const limit = pLimit(RAG_CONCURRENCY);
 
     // (3) Per-item DENSITY LOOP with one budget per item (Stage 11+).
-    //     planQueries() generates up to 8 LLM-ranked queries for the item.
+    //     planQueries() generates up to 8 LLM-ranked queries + a parsed spec.
     //     gatherSourcesForItem walks the query list and re-extracts until the
     //     item reaches MIN_SOURCES distinct sources OR the query list / budget
     //     ceiling stops it. Each extractor call issues one Tavily query.
@@ -542,12 +504,14 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
         };
         const searchText = buildSearchText(row);
         return limit(async () => {
-          const queries = await planQueries(searchText);
+          // planQueries returns BOTH the parsed spec (for scoring) and the
+          // ranked query list (for the density loop's search attempts).
+          const { parsed, queries } = await planQueries(searchText);
           const result = await gatherSourcesForItem<ItemSourceRow>(
             baseItem,
             queries,
             budget,
-            (query, b) => extractSupplierForItem(query, baseItem, b, 0, new Set<string>(), baseItem.description),
+            (query, b) => extractSupplierForItem(query, baseItem, b, 0, new Set<string>(), baseItem.description, parsed),
           );
           return { result, budget, itemId: baseItem.itemId };
         });

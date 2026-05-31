@@ -11,7 +11,10 @@
 import pLimit from 'p-limit';
 import { tavilySearch, type TavilySnippet } from './tavily-client';
 import { getCachedSearch, setCachedSearch } from './cache';
-import { isLikelyProductPage, hasProductSignals } from './html-gate';
+import { scoreProductPage, type ScorerSpec } from './product-page-scorer';
+
+// Re-export ScorerSpec so the orchestrator can import it alongside searchOneQuery.
+export type { ScorerSpec };
 
 // ---------------------------------------------
 // Global Tavily concurrency cap
@@ -50,22 +53,36 @@ export interface SearchResult {
 }
 
 // ---------------------------------------------
-// URL guard — shared with the orchestrator
+// Persist-gate URL guard — shared with the orchestrator
 // ---------------------------------------------
-// Lives here so the search layer and orchestrator apply the same guard when
-// evaluating source_url. Single definition = no drift.
+// Candidate filtering at SEARCH time is now done by the weighted scorer
+// (product-page-scorer.ts), which keeps ugly-slug product pages, PDFs and
+// distributor listings that the old binary reject-list wrongly dropped.
+//
+// This function survives only as the lightweight PERSIST-time guard: after the
+// LLM has extracted a row, it defends against a hallucinated source_url (empty
+// string or a bare homepage). It deliberately stays loose — anything that
+// already passed the scorer should pass here too.
+
+// Editorial / account / transactional surfaces that are never a product source,
+// even if the LLM emits them. Kept intentionally small (scorer is the real gate).
+const HARD_JUNK_PREFIXES = [
+  '/search', '/blog', '/news', '/about', '/about-us', '/contact',
+  '/login', '/signin', '/account', '/cart', '/checkout',
+  '/company', '/corporate', '/careers', '/press', '/investor', '/gazette',
+];
+const HARD_JUNK_INCLUDES = [
+  '/company/', '/corporate/', '/about/', '/about-us/',
+  '/careers/', '/press/', '/investor/', '/gazette/', '/locations/',
+];
 
 /**
- * True only when the URL points at a specific page (not a bare domain).
- * Defensive net behind the LLM prompt's "no homepage" rule — the model is
- * good at this but we never fully trust it.
+ * True when the URL is structurally usable as a persisted product source:
+ * a non-empty, parseable URL with a real path that isn't a bare homepage or an
+ * obvious editorial/account surface. PDFs, distributor listings and ugly-slug
+ * product pages (e.g. /kf941.html, /pid=12984) all pass — the scorer already
+ * vetted relevance upstream.
  */
-// Document/asset extensions that are never product pages.
-const DOCUMENT_EXTENSIONS = new Set([
-  '.pdf', '.doc', '.docx', '.xls', '.xlsx',
-  '.ppt', '.pptx', '.csv', '.zip', '.rar', '.txt',
-]);
-
 export function isProductPage(url: string): boolean {
   if (!url) return false;
   try {
@@ -74,45 +91,8 @@ export function isProductPage(url: string): boolean {
     if (u.pathname.length <= 1) return false;
 
     const path = u.pathname.toLowerCase();
-
-    // Reject document/asset URLs by file extension.
-    const lastSegment = path.slice(path.lastIndexOf('/'));
-    const dotIdx = lastSegment.lastIndexOf('.');
-    if (dotIdx !== -1) {
-      const ext = lastSegment.slice(dotIdx);
-      if (DOCUMENT_EXTENSIONS.has(ext)) return false;
-    }
-
-    // Reject non-product surfaces that DO carry a path but never represent a
-    // single sourceable product (search results, taxonomy, editorial, account,
-    // checkout, company/corporate info, directory listings, government gazettes).
-    //
-    // startsWith — segments that always appear at the path root:
-    const NON_PRODUCT_PREFIXES = [
-      '/search', '/s/', '/category', '/categories', '/collections',
-      '/tag', '/tags', '/blog', '/news', '/about', '/about-us', '/contact',
-      '/login', '/signin', '/account', '/cart', '/checkout',
-      '/company', '/corporate', '/locations', '/gazette',
-      '/media', '/press', '/investor', '/careers',
-      '/products-search',
-    ];
-    if (NON_PRODUCT_PREFIXES.some((seg) => path.startsWith(seg))) return false;
-
-    // includes — segments that may appear after a locale prefix (e.g. /en/company/).
-    // These are wrapped in slashes to avoid false-positives on legitimate slugs
-    // (e.g. "/recruitment" is not caught by "/careers", "/media-valve" is not
-    // caught by "/media"). "/products-search" also checked here for mid-path form.
-    const NON_PRODUCT_INCLUDES = [
-      '/company/', '/corporate/', '/locations/', '/gazette/',
-      '/about/', '/about-us/', '/media/', '/press/', '/investor/', '/careers/',
-      '/products-search/',
-    ];
-    if (NON_PRODUCT_INCLUDES.some((sub) => path.includes(sub))) return false;
-
-    // Reject directory-listing shapes that contain these substrings anywhere
-    // in the path (e.g. alibaba.com/sk-suppliers.html, /suppliers/valves).
-    const NON_PRODUCT_SUBSTRINGS = ['-suppliers', '/suppliers'];
-    if (NON_PRODUCT_SUBSTRINGS.some((sub) => path.includes(sub))) return false;
+    if (HARD_JUNK_PREFIXES.some((seg) => path.startsWith(seg))) return false;
+    if (HARD_JUNK_INCLUDES.some((sub) => path.includes(sub))) return false;
 
     return true;
   } catch {
@@ -125,8 +105,14 @@ export function isProductPage(url: string): boolean {
 // ---------------------------------------------
 
 /**
- * Execute one search query (cache-first), filter results to verified product
- * pages, and return deduplicated snippets.
+ * Execute one search query (cache-first), score each result with the weighted
+ * product-page classifier, drop everything below KEEP_THRESHOLD, dedup by URL,
+ * and return the survivors ranked best-first.
+ *
+ * @param query  Composed search string (LLM-planned upstream).
+ * @param spec   Parsed RFQ specification (model/size/class/…) used by the scorer
+ *               for exact-model + spec-density signals. Optional — an empty spec
+ *               still scores via URL/keyword/schema signals.
  *
  * Cache hit  → tavilyCalls = 0.
  * Cache miss → tavilyCalls = 1 (even if the Tavily call throws).
@@ -134,7 +120,7 @@ export function isProductPage(url: string): boolean {
  * Never throws — a Tavily error returns an empty snippets array so the caller
  * can decide how to handle missing results.
  */
-export async function searchOneQuery(query: string): Promise<SearchResult> {
+export async function searchOneQuery(query: string, spec: ScorerSpec = {}): Promise<SearchResult> {
   // (1) Cache-first lookup.
   let snippets = await getCachedSearch(query);
   let tavilyCalls = 0;
@@ -155,35 +141,30 @@ export async function searchOneQuery(query: string): Promise<SearchResult> {
     await setCachedSearch(query, snippets);
   }
 
-  // (2) Relevance gate + dedup.
-  // acc is keyed by URL so duplicates are collapsed automatically.
-  const acc = new Map<string, TavilySnippet>();
+  // (2) Weighted relevance scoring + dedup.
+  // Each candidate is scored across URL pattern / content keywords / exact-model
+  // / spec density / schema.org / trusted-domain signals; only those at or above
+  // KEEP_THRESHOLD survive. acc is keyed by URL so duplicates collapse, keeping
+  // the highest-scoring occurrence.
+  const acc = new Map<string, { snippet: TavilySnippet; score: number }>();
 
   for (const snippet of snippets) {
-    // (a) URL structural guard — specific page, not homepage / search / taxonomy.
-    if (!isProductPage(snippet.url)) continue;
+    if (!snippet.url) continue;
 
-    // (b) Content verification gate — a candidate is only counted as verified
-    //     when its content shows product signals. Two branches:
-    //
-    //   • Raw HTML (Tavily returned markup): require schema.org/OG/itemprop
-    //     signals via isLikelyProductPage.
-    //
-    //   • Cleaned text (no '<' characters, the typical Tavily response): require
-    //     at least one plain-text product signal (currency near a number, or a
-    //     procurement keyword) via hasProductSignals.
-    const rawContent = snippet.content || '';
-    if (rawContent.includes('<')) {
-      if (!isLikelyProductPage(rawContent)) continue;
-    } else {
-      const snippetText = (snippet.snippet || '') + ' ' + rawContent;
-      if (!hasProductSignals(snippetText)) continue;
+    const { score, kept } = scoreProductPage(snippet, spec);
+    if (!kept) continue;
+
+    const existing = acc.get(snippet.url);
+    if (!existing || score > existing.score) {
+      acc.set(snippet.url, { snippet, score });
     }
-
-    // (c) Dedup by URL.
-    if (acc.has(snippet.url)) continue;
-    acc.set(snippet.url, snippet);
   }
 
-  return { snippets: Array.from(acc.values()), tavilyCalls };
+  // (3) Rank best-first so the strongest product pages lead — this front-loads
+  //     the LLM extractor's context and the density loop's TARGET_SOURCES cap.
+  const ranked = Array.from(acc.values())
+    .sort((a, b) => b.score - a.score)
+    .map((e) => e.snippet);
+
+  return { snippets: ranked, tavilyCalls };
 }
