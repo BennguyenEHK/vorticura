@@ -495,7 +495,6 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     //     alt-URL match_reasoning/relevance compares against the real need.
     const rawItemResults = await Promise.all(
       itemRows.map((row) => {
-        const budget = createBudget();
         const baseItem = {
           itemId: Number(row.itemId),
           description: String(row.companyDescription || ''),
@@ -507,9 +506,15 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
           // planQueries returns BOTH the parsed spec (for scoring) and the
           // ranked query list (for the density loop's search attempts).
           const { parsed, queries } = await planQueries(searchText);
+          // Stage 11 — start the wall-clock budget AFTER planning + queue wait, not before,
+          // so the ~5-7s HF query-planning call (which isn't an extraction call) doesn't eat
+          // the deadline before the first retry.
+          const budget = createBudget();
+          // Fallback: an empty LLM query plan must not silently skip the item — search the raw text once.
+          const effectiveQueries = queries.length ? queries : [searchText].filter((q) => q.trim());
           const result = await gatherSourcesForItem<ItemSourceRow>(
             baseItem,
-            queries,
+            effectiveQueries,
             budget,
             (query, b) => extractSupplierForItem(query, baseItem, b, 0, new Set<string>(), baseItem.description, parsed),
           );

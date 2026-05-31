@@ -30,9 +30,12 @@ export interface BudgetOptions {
 // One primary extraction + a few alt-hops, comfortably bounded so a single
 // item can never monopolise the pod.
 const DEFAULT_MAX_LLM_CALLS = 6;
-// Stay well under the Vercel 60s function timeout with headroom for the
-// surrounding pipeline (URL guards, DB writes).
-const DEFAULT_MAX_WALL_MS = 20_000;
+// Sized for HF remote inference latency (~5-7s per LLM call): the deadline
+// must accommodate a multi-attempt density loop (maxLlmCalls extractions at
+// HF latency) while still bounding a runaway item. Starts AFTER query
+// planning (see processSupplierSearch), so this is the search+extract budget
+// only. Comfortably under the serverless function timeout.
+const DEFAULT_MAX_WALL_MS = 40_000;
 
 /** Create a fresh budget for one RFQ item. Call once at the top of the item. */
 export function createBudget(opts: BudgetOptions = {}): SearchBudget {

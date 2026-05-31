@@ -12,6 +12,20 @@ import { PLAN_QUERIES_PROMPT, buildPlanUserMessage } from '@/lib/ai-agent/prompt
 import { QUERY_PLAN_SCHEMA, normalizeQueryPlan, type QueryPlan } from '@/lib/ai-agent/schemas/query-plan';
 
 /**
+ * A "bare code" query is a single standalone part/model number with no
+ * qualifying words (no manufacturer, no product type). For obscure industrial
+ * codes these collide with unrelated products, so they are the WEAKEST query
+ * and must be tried LAST — never first, where the per-item budget can't afford
+ * to waste an attempt on noise.
+ */
+function isBareCodeQuery(q: string): boolean {
+  const cleaned = q.replace(/["']/g, '').trim();
+  if (!cleaned) return false;
+  // exactly one whitespace-delimited token, and that token is just code chars
+  return !/\s/.test(cleaned) && /^[A-Za-z0-9][A-Za-z0-9./-]*$/.test(cleaned);
+}
+
+/**
  * Plan the supplier search for one procurement item: the LLM parses the item
  * text into structured spec fields (model/size/class/material/…) and emits a
  * ranked list of up to 8 web search queries ordered narrow→broad.
@@ -38,6 +52,14 @@ export async function planQueries(searchText: string): Promise<QueryPlan> {
     );
 
     const plan = normalizeQueryPlan(raw);
+
+    // Deterministic re-rank: qualified (manufacturer/type-bearing) queries first,
+    // bare standalone codes last. Stable within each group to preserve the LLM's
+    // intra-group ranking. Spends the budget-limited first attempts on disambiguated
+    // queries instead of noisy bare part numbers.
+    const qualified = plan.queries.filter((q) => !isBareCodeQuery(q));
+    const bare = plan.queries.filter((q) => isBareCodeQuery(q));
+    plan.queries = [...qualified, ...bare];
 
     // Log parsed-spec presence + query count in the repo's '[module] ...' style
     const specFields = Object.keys(plan.parsed).filter(

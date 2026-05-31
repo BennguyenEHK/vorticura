@@ -134,6 +134,9 @@ export async function gatherSourcesForItem<R extends MinimalRow>(
       need: MIN_SOURCES,
       budgetLeft: budget.maxLlmCalls - budget.llmCallsUsed,
       exhausted: budget.exhausted,
+      // Surface BOTH ceilings: budgetLeft is the LLM-call leash; msLeft + tripped reveal when the wall-clock (not the call count) is the real limiter.
+      msLeft: Math.max(0, budget.deadline - Date.now()),
+      tripped: budget.exhausted ? (budget.llmCallsUsed >= budget.maxLlmCalls ? 'calls' : 'wall') : null,
     });
 
     attempt++;
