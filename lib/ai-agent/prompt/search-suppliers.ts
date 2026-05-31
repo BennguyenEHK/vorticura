@@ -29,6 +29,7 @@ EXTRACTION RULES (how to fill each field from the chosen page):
 - selling_unit: how the product is sold — "per_unit" if priced/sold individually (each / piece), "per_pack" if sold in packs/boxes/cartons/sets. Empty string "" if the page does not state it.
 - pack_size: when selling_unit is "per_pack", the number of units in one pack (e.g. "box of 50" → 50). Use 0 when per_unit or not stated.
 - match_reasoning: compare the product to the ORIGINAL REQUIREMENT shown below. If the product is NOT the exact item requested but is a valid SUBSTITUTE, give 1-2 sentences on why it still satisfies the requirement (matching specs, compatible dimensions/material/rating). Leave "" when the product IS the exact item requested.
+- requires_quote: set true when the page sells the item but states NO public price and instead asks buyers to "request a quote", "contact for price", "request a quotation", or similar (bidder_unit_price will be 0 in that case). Set false when a real price is shown.
 - Never invent a field. If the page does not state something, leave it empty / 0 per the rules above.`;
 
 // --- Input shape for the RAG extraction step ---

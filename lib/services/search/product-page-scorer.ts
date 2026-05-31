@@ -51,12 +51,30 @@ export interface ScorableSnippet {
   content?: string;
 }
 
+/**
+ * Which supplier-relevant fields the page appears to contain. Cheap, content-only
+ * presence signals (NOT scored) — they drive the manual extractor so it doesn't
+ * hunt for a field the page never mentions (fewer false positives, cheaper).
+ * Redesign 2026-05-31.
+ */
+export interface DetectedFieldMap {
+  has_price: boolean;
+  has_currency: boolean;
+  has_contact_email: boolean;
+  has_contact_phone: boolean;
+  has_stock: boolean;
+  has_delivery: boolean;
+  has_quote_request: boolean;
+}
+
 /** Scoring outcome: numeric score, keep decision, and the signals that fired. */
 export interface ScoreResult {
   score: number;
   kept: boolean;
   /** Human-readable signal tags that contributed — for telemetry/debugging. */
   signals: string[];
+  /** Supplier-relevant fields the page appears to contain (drives manual extraction). */
+  detected: DetectedFieldMap;
 }
 
 // ---------------------------------------------
@@ -132,6 +150,57 @@ function norm(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
+// ---------------------------------------------
+// Detected-field signals (Redesign 2026-05-31)
+// ---------------------------------------------
+// Cheap content presence checks — NOT scored. They tell the manual extractor
+// which fields are worth hunting for. Bounded module-scope regexes, no `g` flag.
+const DET_PRICE = /(?:USD|EUR|GBP|VND|SGD|MYR|THB|IDR|CNY|JPY|AUD|[$€£¥])\s*[\d,]+(?:\.\d+)?|[\d,]+(?:\.\d+)?\s*(?:USD|EUR|GBP|VND|SGD|MYR|THB|IDR|CNY|JPY|AUD)/i;
+const DET_CURRENCY = /(?:USD|EUR|GBP|VND|SGD|MYR|THB|IDR|CNY|JPY|AUD|[$€£¥])/i;
+const DET_EMAIL = /[a-z0-9._%+-]{1,64}@[a-z0-9.-]{1,253}\.[a-z]{2,24}/i;
+const DET_PHONE = /(?:tel|phone|call|hotline|\+?\d)[\s:]*\+?\d[\d\s().-]{6,18}\d/i;
+const DET_STOCK = /\bin\s+stock\b|\bavailable\b|\bstock\s*[:=]/i;
+const DET_DELIVERY = /\blead\s*time\b|\bdelivery\b|\bships?\s+in\b|\b\d+\s*(?:day|days|week|weeks|month|months)\b/i;
+const DET_QUOTE = /request\s+a?\s*quote|request\s+for\s+quotation|get\s+a\s+quote|contact\s+for\s+price|price\s+on\s+request|\brfq\b/i;
+
+/** All-false detected map for early-return paths (no URL / unparseable). */
+const EMPTY_DETECTED: DetectedFieldMap = {
+  has_price: false, has_currency: false, has_contact_email: false,
+  has_contact_phone: false, has_stock: false, has_delivery: false,
+  has_quote_request: false,
+};
+
+/** Cheap presence scan over the page's lowercased text → detected-field map. */
+function detectFields(text: string): DetectedFieldMap {
+  return {
+    has_price: DET_PRICE.test(text),
+    has_currency: DET_CURRENCY.test(text),
+    has_contact_email: DET_EMAIL.test(text),
+    has_contact_phone: DET_PHONE.test(text),
+    has_stock: DET_STOCK.test(text),
+    has_delivery: DET_DELIVERY.test(text),
+    has_quote_request: DET_QUOTE.test(text),
+  };
+}
+
+export type PageType = 'product' | 'tech_spec';
+
+/**
+ * Classify a candidate page: 'tech_spec' for PDF / datasheet / catalog documents,
+ * 'product' otherwise. Deterministic, never throws — the downstream extractor
+ * treats tech-spec pages as supporting spec evidence rather than buyable offers.
+ */
+export function classifyPage(snippet: ScorableSnippet): PageType {
+  const url = (snippet.url || '').toLowerCase();
+  if (/\.pdf(?:[?#]|$)/i.test(url)) return 'tech_spec';
+  // Datasheet / catalog signal in the URL path OR the page text → tech-spec doc.
+  const docSignal = /datasheet|data\s+sheet|catalogue|catalog|spec\s*sheet/i;
+  if (docSignal.test(url)) return 'tech_spec';
+  const content = `${snippet.title || ''} ${snippet.content || snippet.snippet || ''}`.toLowerCase();
+  if (docSignal.test(content)) return 'tech_spec';
+  return 'product';
+}
+
 /**
  * Score a single Tavily snippet against the RFQ spec. Higher = more likely a
  * real, relevant product page. `kept` is true when score >= KEEP_THRESHOLD.
@@ -144,7 +213,7 @@ export function scoreProductPage(snippet: ScorableSnippet, spec: ScorerSpec = {}
   let score = 0;
 
   const url = snippet.url || '';
-  if (!url) return { score: 0, kept: false, signals };
+  if (!url) return { score: 0, kept: false, signals, detected: EMPTY_DETECTED };
 
   let path: string;
   let host: string;
@@ -153,7 +222,7 @@ export function scoreProductPage(snippet: ScorableSnippet, spec: ScorerSpec = {}
     path = u.pathname.toLowerCase();
     host = u.hostname.replace(/^www\./i, '').toLowerCase();
   } catch {
-    return { score: 0, kept: false, signals };
+    return { score: 0, kept: false, signals, detected: EMPTY_DETECTED };
   }
 
   const rawContent = snippet.content || '';
@@ -236,5 +305,5 @@ export function scoreProductPage(snippet: ScorableSnippet, spec: ScorerSpec = {}
     signals.push('domain:trusted');
   }
 
-  return { score, kept: score >= KEEP_THRESHOLD, signals };
+  return { score, kept: score >= KEEP_THRESHOLD, signals, detected: detectFields(lower) };
 }

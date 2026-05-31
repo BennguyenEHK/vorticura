@@ -30,6 +30,7 @@ export const SUPPLIER_SCHEMA = {
     'selling_unit',
     'pack_size',
     'match_reasoning',
+    'requires_quote',
   ],
   properties: {
     // Supplier brand / company name (e.g. "Bao Vi Trading")
@@ -67,6 +68,9 @@ export const SUPPLIER_SCHEMA = {
     // When the product is NOT the exact item requested but a valid substitute,
     // 1-2 sentences on why it matches the original requirement. Empty for exact matches.
     match_reasoning: { type: 'string' },
+    // true when the page sells the item but states NO public price and asks buyers
+    // to request a quote / contact for price.
+    requires_quote: { type: 'boolean' },
   },
 } as const;
 
@@ -87,6 +91,7 @@ export interface SupplierExtraction {
   selling_unit: '' | 'per_unit' | 'per_pack';
   pack_size: number;
   match_reasoning: string;
+  requires_quote: boolean;
 }
 
 /** Coerce free-text packaging description into the controlled selling_unit values. */
@@ -163,6 +168,19 @@ function pickNumber(m: Map<string, unknown>, aliases: string[]): number {
   return 0;
 }
 
+function pickBool(m: Map<string, unknown>, aliases: string[]): boolean {
+  for (const a of aliases) {
+    const v = m.get(a);
+    if (typeof v === 'boolean') return v;
+    if (typeof v === 'string') {
+      const s = v.trim().toLowerCase();
+      if (s === 'true' || s === 'yes' || s === '1') return true;
+      if (s === 'false' || s === 'no' || s === '0') return false;
+    }
+  }
+  return false;
+}
+
 /**
  * Coerce an arbitrary parsed-JSON value into a guaranteed-valid SupplierExtraction.
  * Never throws — unknown/missing fields fall back to safe defaults (empty string,
@@ -186,6 +204,7 @@ export function normalizeSupplierExtraction(raw: unknown): SupplierExtraction {
     selling_unit:           normalizeSellingUnit(pickString(m, ['sellingunit', 'soldas', 'packaging', 'unittype', 'saleunit'])),
     pack_size:              pickNumber(m, ['packsize', 'packqty', 'unitsperpack', 'perpack', 'packquantity']),
     match_reasoning:        pickString(m, ['matchreasoning', 'reasoning', 'substitutereason', 'whymatch', 'matchjustification']),
+    requires_quote:         pickBool(m, ['requiresquote', 'requirequote', 'quoteonly', 'contactforprice', 'priceonrequest']),
   };
 
   // Defense-in-depth sanitizer — mirrors the prompt's "no product page" rule.
@@ -209,6 +228,7 @@ export function normalizeSupplierExtraction(raw: unknown): SupplierExtraction {
     result.available_qty        = 0;
     result.selling_unit         = '';
     result.pack_size            = 0;
+    result.requires_quote       = false;
   }
 
   return result;

@@ -23,16 +23,15 @@ import { getData } from '@/lib/db/queries';
 import { modifyDatabase, type WriteFailure } from '@/lib/utils/databaseHandler';
 import { aiChatCompletion } from '@/lib/ai-agent/ai-router';
 import { searchOneQuery, isProductPage, type ScorerSpec } from '@/lib/services/search';
+import { manualExtract } from '@/lib/services/search/manual-extract';
 import { planQueries } from '@/lib/services/search/query-planner';
 import { SUPPLIER_SCHEMA, normalizeSupplierExtraction, type SupplierExtraction } from '@/lib/ai-agent/schemas/supplier';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
-// Stage 11 — budget circuit-breaker + Stage 10 — alt-URL relevance floor
+// Budget circuit-breaker — the per-item resource leash (LLM calls + wall-clock).
 import {
   createBudget,
   consumeLlmCall,
   isExhausted,
-  lexicalRelevance,
-  ALT_RELEVANCE_FLOOR,
   type SearchBudget,
 } from '@/lib/services/search/budget';
 // Stage 11+ — density-validation loop (the source-count floor) + telemetry.
@@ -46,9 +45,7 @@ import {
   MIN_SOURCES,
 } from '@/lib/services/search/density-loop';
 import { logSearchStage } from '@/lib/services/search/telemetry';
-// Phase 1 — item router (L2 deterministic-direct vs L3 full-plan).
-import { classifyItem } from '@/lib/services/search/item-router';
-// Phase 2 — supplier memory (L0 exact-match learned cache).
+// Phase 2 — supplier memory (L0 exact-match learned cache; gated off by default).
 import {
   lookupMemory,
   rememberSupplier,
@@ -68,11 +65,19 @@ import { extractMicrodataPrice } from '@/lib/services/search/html-gate';
 const RAG_CONCURRENCY = 8;
 
 /**
- * Maximum re-loop depth for alternative_source_url follow-ups. depth=1 means
- * "primary supplier may have ONE alt; the alt has no alts of its own." Beyond
- * this and we'd burn budget chasing cross-linked supplier graphs.
+ * Top-K kept candidates to hybrid-extract per query. One Tavily search yields
+ * many ranked product pages; extracting the strongest K turns a single search
+ * into several supplier sources (the redesign's "≥3 sources" engine), while the
+ * per-item budget + density TARGET_SOURCES cap bound the LLM spend.
  */
-const ALT_URL_MAX_DEPTH = 1;
+const MAX_PAGES_PER_QUERY = 5;
+
+/**
+ * Bounded substitute/broaden rounds: when an item is still below the source
+ * floor after its planned queries, re-plan with a broaden hint at most this many
+ * times before accepting best-effort. Keeps cost bounded (decision: bounded retries).
+ */
+const MAX_REPLAN_ROUNDS = 2;
 
 // ---------------------------------------------
 // DB row shape (mirrors items_source columns)
@@ -102,6 +107,10 @@ interface ItemSourceRow {
   selling_unit: string;       // '' | 'per_unit' | 'per_pack'
   pack_size: number;          // units per pack when per_pack; 0 otherwise
   match_reasoning: string;    // populated for substitutes/alternatives; '' for exact matches
+  // Redesign (2026-05-31) — multi-page hybrid extraction signals
+  requires_quote: boolean;    // page sells item but needs a manual quote request (no public price)
+  page_type: string;          // 'product' | 'tech_spec'
+  extraction_confidence: string; // 'manual' | 'manual+llm' | 'llm' (+ '+microdata')
 }
 
 // ---------------------------------------------
@@ -160,6 +169,9 @@ function buildRowFromMemory(item: RfqItemInput, hit: MemoryHit): ItemSourceRow {
     selling_unit: hit.selling_unit,
     pack_size: hit.pack_size,
     match_reasoning: '',
+    requires_quote: false,
+    page_type: 'product',
+    extraction_confidence: 'memory',
   };
 }
 
@@ -213,244 +225,155 @@ interface ExtractResult {
 async function extractSupplierForItem(
   query: string,
   item: RfqItemInput,
-  budget: SearchBudget,       // Stage 11 — per-item circuit-breaker budget
-  depth: number = 0,
-  visitedUrls: Set<string> = new Set(),
-  // The ORIGINAL RFQ requirement, preserved across the alt-URL recursion so
-  // substitutes found at depth>0 can be justified against the real need.
+  budget: SearchBudget,            // per-item circuit-breaker budget
+  // The ORIGINAL RFQ requirement — drives substitute match_reasoning.
   originalDescription: string = item.description,
   // Parsed spec for the product-page scorer (exact-model + spec-density layers).
   spec: ScorerSpec = {},
+  // Substitute round: when true, surface the LLM's match_reasoning (why a
+  // non-exact product still fulfils the requirement). '' for exact matches.
+  isSubstitute: boolean = false,
 ): Promise<ExtractResult> {
-  // (1) Single-query Tavily search (cache-first), scored + ranked by the
-  //     product-page classifier. The query is LLM-planned upstream by
-  //     planQueries() — no tier walk or query mutation here.
-  const search = await searchOneQuery(query, spec);
+  // (1) One Tavily search → classify → eliminate → score → ranked candidates,
+  //     each carrying its detected-field map + page classification.
+  const search = await searchOneQuery(query, spec, item.qty);
 
-  // Stage 2 — Raw Search Execution telemetry: query → verified-page payload shape.
   logSearchStage('raw-search', {
     item_id: item.itemId,
-    depth,
     query,
-    snippets: search.snippets.length,
+    snippets: search.candidates.length,
     tavilyCalls: search.tavilyCalls,
-    sampleUrls: search.snippets.map((s) => s.url),
+    sampleUrls: search.candidates.map((c) => c.snippet.url),
   });
 
-  if (search.snippets.length === 0) {
-    console.warn(`[supplier-search] item=${item.itemId} depth=${depth} no snippets for query`);
-    // Stage 14 — return tavilyCalls even on early-out so the orchestrator
-    // accumulates the quota this item spent before deciding there was nothing.
+  if (search.candidates.length === 0) {
+    console.warn(`[supplier-search] item=${item.itemId} no candidates for query`);
     return { rows: null, tavilyCalls: search.tavilyCalls, deadUrls: 0 };
   }
 
-  // searchOneQuery already scored, filtered and ranked candidates to relevant
-  // product pages; no separate liveness/HEAD check (adds latency without
-  // improving precision in this flow).
-  const liveSnippets = search.snippets;
-  const deadUrls = 0;
+  // (2) HYBRID EXTRACT each kept page (top-K, ranked best-first). Each page that
+  //     yields a usable supplier becomes its OWN source row — so a single Tavily
+  //     search can satisfy the MIN_SOURCES floor on its own.
+  const pages = search.candidates.slice(0, MAX_PAGES_PER_QUERY);
+  const rows: ItemSourceRow[] = [];
 
-  // LLM extraction. Stage 11 circuit-breaker: reserve one LLM call against the
-  // budget BEFORE invoking the model. consumeLlmCall() returns false when the
-  // ceiling is already crossed. Degrade to null at depth 0 or return what we
-  // have deeper.
-  if (!consumeLlmCall(budget)) {
-    console.warn(
-      `[supplier-search] item=${item.itemId} depth=${depth} budget exhausted — skipping LLM extraction`,
-    );
-    // depth > 0 means we're in an alt-URL recursion — no primary row to return.
-    return { rows: null, tavilyCalls: search.tavilyCalls, deadUrls };
-  }
+  for (const cand of pages) {
+    // Budget is the hard leash — stop opening new pages once it's spent.
+    if (isExhausted(budget)) break;
 
-  // Extraction via ai-router — local mode enforces SUPPLIER_SCHEMA with
-  // vLLM guided_json; remote mode sends prompt-only to HF (no schema
-  // enforcement) and falls back to local-with-schema if HF errors.
-  const llmStart = Date.now();
-  let extracted: SupplierExtraction;
-  try {
-    // Provider-agnostic extraction: local vLLM enforces SUPPLIER_SCHEMA via
-    // guided_json, but the HF remote path is schema-less, so we ALWAYS run the
-    // raw response through normalizeSupplierExtraction(). This coerces wrapped /
-    // aliased / missing fields into the typed shape and is the fix for the
-    // "returned=0 dropped=9" wipeout — previously an undefined source_url failed
-    // the URL guard and an undefined available_qty bypassed the stock filter.
-    const rawExtracted = await aiChatCompletion<unknown>(
-      EXTRACT_SUPPLIER_FROM_SNIPPETS_PROMPT,
-      buildExtractUserMessage({
-        item,
-        snippets: liveSnippets,
-        originalDescription,
-      }),
-      600,                // tight cap — one supplier object is small (~200-400 tokens)
-      SUPPLIER_SCHEMA,    // honored by local vLLM; ignored by HF (see ai-router.ts)
-    );
-    extracted = normalizeSupplierExtraction(rawExtracted);
-  } catch (err) {
-    console.warn(`[supplier-search] item=${item.itemId} depth=${depth} llm error:`, err instanceof Error ? err.message : err);
-    return { rows: null, tavilyCalls: search.tavilyCalls, deadUrls };
-  }
-  console.log(`[ai-server] item=${item.itemId} depth=${depth} extract latency=${Date.now() - llmStart}ms`);
+    const content = cand.snippet.content || cand.snippet.snippet || '';
 
-  // (3) Stock Protection Rule — guard against suppliers who can't fulfill.
-  //     Required buffer is item.qty + 5. available_qty === 0 = "not stated" and
-  //     bypasses the filter (we don't have grounds to drop unknowns).
-  if (extracted.available_qty > 0 && extracted.available_qty < item.qty + 5) {
-    console.log(`[supplier-search] item=${item.itemId} depth=${depth} stock=${extracted.available_qty} below qty+5=${item.qty + 5}, dropping`);
-    return { rows: null, tavilyCalls: search.tavilyCalls, deadUrls };
-  }
+    // (2a) MANUAL extract + verify-against-content. Regex pulls price/currency/
+    //      contact/qty/delivery; each value must re-appear in content or it is
+    //      discarded into `missing` for the LLM to recover.
+    const manual = manualExtract(content, cand.detected);
+    const manualUsed = Object.values(manual.confidence).some((c) => c > 0);
 
-  // Stage 7 — Deterministic microdata price override.
-  // Decision rule: if microdata returns a price AND the LLM produced 0 (i.e.,
-  // nothing useful was found on the page), we trust the structured ground truth
-  // instead. We only override when LLM found nothing so we never clobber a
-  // page-specific quote the LLM correctly read. The snippet whose URL matches
-  // the extracted source_url is the most relevant candidate; fall back to the
-  // first snippet that yields a result if no exact URL match exists.
-  let resolvedPrice = extracted.bidder_unit_price;
-  let resolvedCurrency = extracted.currency_code || 'USD';
-  let extractionTrack: string = 'llm';
-
-  if (extracted.bidder_unit_price === 0) {
-    // Prefer the snippet whose URL matches the LLM's chosen source_url.
-    const matchingSnippet = liveSnippets.find((s) => s.url === extracted.source_url);
-    const candidateSnippets = matchingSnippet
-      ? [matchingSnippet, ...liveSnippets.filter((s) => s.url !== extracted.source_url)]
-      : liveSnippets;
-
-    for (const snippet of candidateSnippets) {
-      const microdata = extractMicrodataPrice(snippet.content || '');
-      if (microdata) {
-        // Microdata is structured ground truth — use it as the price.
-        resolvedPrice = microdata.value;
-        if (microdata.currency) {
-          resolvedCurrency = microdata.currency;
-        }
-        extractionTrack = 'deterministic';
-        console.log(
-          `[supplier-search] item=${item.itemId} depth=${depth} microdata price override: ${resolvedCurrency} ${resolvedPrice} (llm had 0)`,
+    // (2b) LLM GAP-FILL — supplier_name + description are never regex-extracted,
+    //      so the LLM still runs (budget-gated) but grounded by the SINGLE
+    //      pre-filtered page. consumeLlmCall reserves the call BEFORE the model;
+    //      a spent budget skips the LLM and the page degrades to manual-only.
+    let llm: SupplierExtraction | null = null;
+    if (consumeLlmCall(budget)) {
+      const llmStart = Date.now();
+      try {
+        const raw = await aiChatCompletion<unknown>(
+          EXTRACT_SUPPLIER_FROM_SNIPPETS_PROMPT,
+          buildExtractUserMessage({ item, snippets: [cand.snippet], originalDescription }),
+          600,
+          SUPPLIER_SCHEMA,
         );
-        break;
+        llm = normalizeSupplierExtraction(raw);
+      } catch (err) {
+        console.warn(`[supplier-search] item=${item.itemId} llm gap-fill error:`, err instanceof Error ? err.message : err);
+        llm = null;
+      }
+      console.log(`[ai-server] item=${item.itemId} gap-fill latency=${Date.now() - llmStart}ms`);
+    }
+
+    // (2c) MERGE — manual-verified fields win; the LLM fills the rest. Fields the
+    //      regex layer can't do (name/description/compliance/notes/packaging/
+    //      reasoning) always come from the LLM.
+    const f = manual.fields;
+    const supplier_name = llm?.supplier_name ?? '';
+    const bidder_description = llm?.bidder_description ?? '';
+    // A page with no name or description is not a usable supplier source.
+    if (!supplier_name.trim() || !bidder_description.trim()) continue;
+
+    let price = f.bidder_unit_price > 0 ? f.bidder_unit_price : (llm?.bidder_unit_price ?? 0);
+    let currency = f.currency_code || llm?.currency_code || 'USD';
+    const delivery_time = f.delivery_time || llm?.delivery_time || '';
+    const contact_email = f.contact_email || llm?.contact_email || '';
+    const contact_phone = f.contact_phone || llm?.contact_phone || '';
+    const available_qty = f.available_qty > 0 ? f.available_qty : (llm?.available_qty ?? 0);
+
+    // (2d) Deterministic microdata price override when price is still 0.
+    let track = manualUsed ? (llm ? 'manual+llm' : 'manual') : 'llm';
+    if (price === 0) {
+      const micro = extractMicrodataPrice(content);
+      if (micro) {
+        price = micro.value;
+        if (micro.currency) currency = micro.currency;
+        track = `${track}+microdata`;
       }
     }
-  }
 
-  // (4) Build the primary supplier row. notes carries both the LLM-authored
-  //     content and a structured stock summary prefix (for UI display);
-  //     when this is an alt-loop row, prepend the via_alt provenance tag.
-  const stockPrefix = extracted.available_qty > 0
-    ? `Stock: ${extracted.available_qty} available. `
-    : '';
-  const altTag = depth > 0 ? `via_alt: ` : '';
-
-  const primaryRow: ItemSourceRow = {
-    item_id: item.itemId,
-    supplier_id: 0,                      // placeholder — assigned post-merge
-    supplier_name: extracted.supplier_name,
-    source_url: extracted.source_url,
-    status: 'pending',                   // schema constant — never AI-derived
-    delivery_time: extracted.delivery_time,
-    bidder_description: extracted.bidder_description,
-    bidder_unit_price: resolvedPrice,    // Stage 7 — microdata or LLM
-    currency_code: resolvedCurrency,     // Stage 7 — microdata or LLM
-    compliance_deviation: extracted.compliance_deviation,
-    notes: `${altTag}${stockPrefix}${extracted.notes}`.trim(),
-    contact_email: extracted.contact_email,
-    contact_phone: extracted.contact_phone,
-    // Stage 7 — provenance fields persisted to items_source
-    available_qty: extracted.available_qty,
-    source_tier: 0,                      // tiers removed; 0 = n/a
-    extraction_track: extractionTrack,
-    // Dossier signals from the LLM extraction
-    selling_unit: extracted.selling_unit,
-    pack_size: extracted.pack_size,
-    // match_reasoning only meaningful for substitutes (alt rows); the LLM returns
-    // '' for exact matches. Force '' on the primary (depth 0) row regardless.
-    match_reasoning: depth > 0 ? extracted.match_reasoning : '',
-  };
-
-  const rows: ItemSourceRow[] = [primaryRow];
-
-  // Extraction telemetry (extractionTrack notes when a microdata price override fired).
-  logSearchStage('extract', {
-    item_id: item.itemId, depth,
-    track: extractionTrack === 'deterministic' ? 'llm+microdata' : 'llm',
-    liveSnippets: liveSnippets.length,
-    source_url: primaryRow.source_url,
-    bidder_unit_price: primaryRow.bidder_unit_price,
-    currency_code: primaryRow.currency_code,
-    available_qty: primaryRow.available_qty,
-    selling_unit: primaryRow.selling_unit,
-    pack_size: primaryRow.pack_size,
-    rowsEmitted: 1,
-  });
-
-  // Running Tavily call + dead-URL counts for this recursion branch.
-  let totalTavilyCalls = search.tavilyCalls;
-  let totalDeadUrls = deadUrls;
-
-  // (5) Alt-URL re-loop — depth-capped + visited-set guarded.
-  //     The alternative_source_url is an EXPLICIT link the supplier offered;
-  //     we feed it directly as the search query for one searchOneQuery call.
-  //     Reuses all infra.
-  //
-  //     Stage 11 — also skip the alt-URL follow if the budget is already spent:
-  //     preserve the primary row but don't burn more quota on an alt.
-  if (
-    depth < ALT_URL_MAX_DEPTH &&
-    extracted.alternative_source_url &&
-    !visitedUrls.has(extracted.alternative_source_url) &&
-    !isExhausted(budget)  // Stage 11 — budget guard on the alt-URL hop
-  ) {
-    // Mark both the current source and the alternative as visited BEFORE
-    // recursing — defends against A→B→A loops between cross-linked vendors.
-    if (extracted.source_url) visitedUrls.add(extracted.source_url);
-    visitedUrls.add(extracted.alternative_source_url);
-
-    // An alt-URL follow-up failure must NEVER drop the primary row we already
-    // hold — isolate the recursion so a thrown error degrades to "no alt found".
-    try {
-      // Stage 11 — thread the SAME budget object into the recursive call so
-      // LLM calls from alt hops count against this item's ceiling too.
-      // Stage 14 — collect tavilyCalls from the alt recursion.
-      // The alternative URL becomes the search query at depth+1 (the new
-      // single-query flow uses the URL as the exact query string).
-      const altResult = await extractSupplierForItem(
-        extracted.alternative_source_url,
-        { ...item, description: extracted.alternative_source_url },
-        budget,
-        depth + 1,
-        visitedUrls,
-        originalDescription,   // preserve the real requirement for match_reasoning
-        spec,                  // same parsed spec drives scoring on the alt page
-      );
-
-      // Stage 14 — accumulate Tavily calls + dead-URL drops from the alt branch.
-      totalTavilyCalls += altResult.tavilyCalls;
-      totalDeadUrls += altResult.deadUrls;
-
-      if (altResult.rows) {
-        // Stage 10 — Relevance floor: only keep alt rows whose extracted
-        // description still resembles the RFQ item (Jaccard ≥ ALT_RELEVANCE_FLOOR).
-        // This prevents the alt-URL loop from drifting into off-spec products
-        // that merely satisfy the source count but wouldn't fulfill the actual need.
-        for (const altRow of altResult.rows) {
-          const relevance = lexicalRelevance(item.description, altRow.bidder_description);
-          if (relevance >= ALT_RELEVANCE_FLOOR) {
-            rows.push(altRow);
-          } else {
-            console.log(
-              `[supplier-search] item=${item.itemId} alt row dropped (relevance=${relevance.toFixed(3)} < floor=${ALT_RELEVANCE_FLOOR}): "${altRow.bidder_description.slice(0, 60)}"`,
-            );
-          }
-        }
-      }
-    } catch (err) {
-      console.warn(`[supplier-search] item=${item.itemId} alt-loop error (primary kept):`, err instanceof Error ? err.message : err);
+    // (2e) Stock Protection — drop suppliers that can't fulfil. 0 = unknown = bypass.
+    if (available_qty > 0 && available_qty < item.qty + 5) {
+      console.log(`[supplier-search] item=${item.itemId} stock=${available_qty} below qty+5, dropping page`);
+      continue;
     }
+
+    // (2f) requires_quote — page sells the item but has no public price and asks
+    //      buyers to request a quote (LLM flag OR price-absent + quote-intent signal).
+    const requiresQuote = (llm?.requires_quote ?? false) || (price === 0 && cand.detected.has_quote_request);
+
+    const stockPrefix = available_qty > 0 ? `Stock: ${available_qty} available. ` : '';
+    const notes = `${stockPrefix}${llm?.notes ?? ''}`.trim();
+
+    rows.push({
+      item_id: item.itemId,
+      supplier_id: 0,                          // placeholder — assigned post-merge
+      supplier_name,
+      // source_url is the REAL candidate URL — never the LLM's (avoids hallucinated URLs).
+      source_url: cand.snippet.url,
+      status: 'pending',                       // schema constant — never AI-derived
+      delivery_time,
+      bidder_description,
+      bidder_unit_price: price,
+      currency_code: currency,
+      compliance_deviation: llm?.compliance_deviation ?? '',
+      notes,
+      contact_email,
+      contact_phone,
+      available_qty,
+      source_tier: 0,                          // tiers removed; 0 = n/a
+      extraction_track: track,
+      selling_unit: llm?.selling_unit ?? '',
+      pack_size: llm?.pack_size ?? 0,
+      // match_reasoning surfaces only on substitute rounds; '' for exact matches.
+      match_reasoning: isSubstitute ? (llm?.match_reasoning ?? '') : '',
+      requires_quote: requiresQuote,
+      page_type: cand.pageType,
+      extraction_confidence: track,
+    });
+
+    logSearchStage('extract', {
+      item_id: item.itemId,
+      track,
+      source_url: cand.snippet.url,
+      bidder_unit_price: price,
+      currency_code: currency,
+      available_qty,
+      requires_quote: requiresQuote,
+      page_type: cand.pageType,
+    });
+
+    // Inner cap — one query never needs to mint more than the top-K sources.
+    if (rows.length >= MAX_PAGES_PER_QUERY) break;
   }
 
-  // Stage 14 — return row array + total Tavily calls and dead-URL drops for this item.
-  return { rows, tavilyCalls: totalTavilyCalls, deadUrls: totalDeadUrls };
+  return { rows: rows.length ? rows : null, tavilyCalls: search.tavilyCalls, deadUrls: 0 };
 }
 
 // ---------------------------------------------
@@ -554,63 +477,94 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
         };
         const searchText = buildSearchText(row);
         return limit(async () => {
-          // (3a) ROUTE — decide effort tier BEFORE paying the ~5-7s planner cost.
-          //      Tier 1 (L2 deterministic-direct): text already model-specific →
-          //      one composed query, skip the planner. Tier 3 (L3): full plan.
-          const route = classifyItem(searchText);
+          // (3a) PLAN — LLM-only query planning (no deterministic-direct tier).
+          //      The LLM parses the item spec + emits up to 8 ranked queries
+          //      (narrow→broad). 'LLM only, no other tiers' (decision 2026-05-31).
+          const plan = await planQueries(searchText);
+          const parsed: ParsedSpec = plan.parsed;
+          const queries: string[] = plan.queries;
 
-          let parsed: ParsedSpec = {};
-          let queries: string[];
-
-          if (route.tier === 1) {
-            queries = route.directQuery ? [route.directQuery] : [];
-          } else {
-            // L3 — LLM parses spec + emits ranked queries (narrow→broad).
-            const plan = await planQueries(searchText);
-            parsed = plan.parsed;
-            queries = plan.queries;
-
-            // (3b) L0 MEMORY — exact-match short-circuit (Phase 2). Keyed on the
-            //      parsed spec, so it runs post-plan; a fresh hit skips the entire
-            //      density loop (Tavily searches + extraction LLM calls).
-            const hits = await lookupMemory(parsed, scope);
-            if (hits && hits.length) {
-              const memRows = hits.map((h) => buildRowFromMemory(baseItem, h));
-              logSearchStage('density-check', {
-                item_id: baseItem.itemId,
-                attempt: 0,
-                query: '(memory)',
-                have: memRows.length,
-                need: MIN_SOURCES,
-                source: 'memory',
-              });
-              // budget is unused on the memory path; create one so downstream
-              // telemetry aggregation (llm_calls/exhausted) stays uniform.
-              return {
-                result: { rows: memRows, tavilyCalls: 0, deadUrls: 0, attempts: 0 },
-                budget: createBudget(),
-                itemId: baseItem.itemId,
-                parsed,
-                fromMemory: true,
-              };
-            }
+          // (3b) L0 MEMORY — exact-match short-circuit. Disabled by default
+          //      (SEARCH_MEMORY_ENABLED); lookupMemory no-ops + returns null when
+          //      off, so the live pipeline always runs unless explicitly enabled.
+          const hits = await lookupMemory(parsed, scope);
+          if (hits && hits.length) {
+            const memRows = hits.map((h) => buildRowFromMemory(baseItem, h));
+            logSearchStage('density-check', {
+              item_id: baseItem.itemId,
+              attempt: 0,
+              query: '(memory)',
+              have: memRows.length,
+              need: MIN_SOURCES,
+              source: 'memory',
+            });
+            return {
+              result: { rows: memRows, tavilyCalls: 0, deadUrls: 0, attempts: 0 },
+              budget: createBudget(),
+              itemId: baseItem.itemId,
+              parsed,
+              fromMemory: true,
+            };
           }
 
-          // Stage 11 — start the wall-clock budget AFTER planning + queue wait, not before,
-          // so the ~5-7s HF query-planning call (which isn't an extraction call) doesn't eat
-          // the deadline before the first retry.
+          // Start the wall-clock budget AFTER planning + queue wait, so the
+          // ~5-7s query-planning call doesn't eat the deadline before extraction.
           const budget = createBudget();
           // Fallback: an empty query plan must not silently skip the item — search the raw text once.
           const effectiveQueries = queries.length ? queries : [searchText].filter((q) => q.trim());
-          // Phase 1 — speculative fan-out: overlap up to FANOUT_WIDTH query
-          // attempts per round instead of serializing them.
+          // Speculative fan-out: overlap up to FANOUT_WIDTH query attempts per round.
+          // Each attempt HYBRID-extracts the top-K kept pages, so one search can
+          // mint several distinct sources toward the MIN_SOURCES floor.
           const result = await gatherSourcesForItemParallel<ItemSourceRow>(
             baseItem,
             effectiveQueries,
             budget,
-            (query, b) => extractSupplierForItem(query, baseItem, b, 0, new Set<string>(), baseItem.description, parsed),
+            (q, b) => extractSupplierForItem(q, baseItem, b, baseItem.description, parsed, false),
           );
-          return { result, budget, itemId: baseItem.itemId, parsed, fromMemory: false };
+
+          // (3c) ALT OUTER LOOP — bounded substitute discovery. If the item is
+          //      still below the source floor, re-plan BROADENED queries and
+          //      harvest substitutes through the SAME filter→score→extract path
+          //      (decisions: alternatives loop back through the full gate;
+          //      bounded retries). Substitute rows carry match_reasoning.
+          const collected = new Map<string, ItemSourceRow>();
+          for (const r of result.rows) collected.set(r.source_url, r);
+
+          let replanRound = 0;
+          while (
+            collected.size < MIN_SOURCES &&
+            !isExhausted(budget) &&
+            replanRound < MAX_REPLAN_ROUNDS
+          ) {
+            replanRound++;
+            const broadenText = `${searchText} alternative equivalent substitute compatible replacement`;
+            const replan = await planQueries(broadenText);
+            const replanQueries = replan.queries.length ? replan.queries : [broadenText];
+            const altResult = await gatherSourcesForItemParallel<ItemSourceRow>(
+              baseItem,
+              replanQueries,
+              budget,
+              (q, b) => extractSupplierForItem(q, baseItem, b, baseItem.description, replan.parsed ?? parsed, true),
+            );
+            for (const r of altResult.rows) {
+              if (!collected.has(r.source_url)) collected.set(r.source_url, r);
+            }
+            result.tavilyCalls += altResult.tavilyCalls;
+            result.deadUrls += altResult.deadUrls;
+            result.attempts += altResult.attempts;
+            logSearchStage('density-check', {
+              item_id: baseItem.itemId,
+              attempt: result.attempts,
+              query: '(substitute-replan)',
+              have: collected.size,
+              need: MIN_SOURCES,
+              round: replanRound,
+              source: 'substitute',
+            });
+          }
+
+          const mergedResult = { ...result, rows: [...collected.values()] };
+          return { result: mergedResult, budget, itemId: baseItem.itemId, parsed, fromMemory: false };
         });
       }),
     );

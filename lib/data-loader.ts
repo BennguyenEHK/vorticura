@@ -207,6 +207,8 @@ async function loadSupplierSearchResearchInput(
     notes: item.notes ?? '',                               // Supplier notes
     contact_email: item.contactEmail ?? '',                // Supplier contact email
     contact_phone: item.contactPhone ?? '',                // Supplier contact phone
+    requires_quote: item.requiresQuote ?? false,           // Page needs a manual quote request
+    page_type: item.pageType ?? 'product',                 // 'product' | 'tech_spec'
   }));
 
   return {

@@ -11,10 +11,17 @@
 import pLimit from 'p-limit';
 import { tavilySearch, type TavilySnippet } from './tavily-client';
 import { getCachedSearch, setCachedSearch } from './cache';
-import { scoreProductPage, type ScorerSpec } from './product-page-scorer';
+import {
+  scoreProductPage,
+  classifyPage,
+  type ScorerSpec,
+  type DetectedFieldMap,
+  type PageType,
+} from './product-page-scorer';
+import { eliminatePage } from './eliminate';
 
 // Re-export ScorerSpec so the orchestrator can import it alongside searchOneQuery.
-export type { ScorerSpec };
+export type { ScorerSpec, DetectedFieldMap, PageType };
 
 // ---------------------------------------------
 // Global Tavily concurrency cap
@@ -45,9 +52,23 @@ export interface QueryItem {
 // SearchResult — return type for searchOneQuery
 // ---------------------------------------------
 
+/**
+ * One survivor candidate: the snippet plus the per-page signals the redesigned
+ * extractor needs — its relevance score, the detected-field map (drives manual
+ * extraction), and its page classification (product vs tech-spec).
+ */
+export interface ScoredCandidate {
+  snippet: TavilySnippet;
+  score: number;
+  detected: DetectedFieldMap;
+  pageType: PageType;
+}
+
 export interface SearchResult {
-  /** Verified, deduplicated product-page snippets. */
+  /** Verified, deduplicated product-page snippets (ranked best-first). */
   snippets: TavilySnippet[];
+  /** Same survivors as `snippets`, enriched with per-page detected-map + pageType. */
+  candidates: ScoredCandidate[];
   /** Number of live Tavily API calls made (0 = cache hit, 1 = cache miss). */
   tavilyCalls: number;
 }
@@ -109,18 +130,26 @@ export function isProductPage(url: string): boolean {
  * product-page classifier, drop everything below KEEP_THRESHOLD, dedup by URL,
  * and return the survivors ranked best-first.
  *
- * @param query  Composed search string (LLM-planned upstream).
- * @param spec   Parsed RFQ specification (model/size/class/…) used by the scorer
- *               for exact-model + spec-density signals. Optional — an empty spec
- *               still scores via URL/keyword/schema signals.
+ * @param query        Composed search string (LLM-planned upstream).
+ * @param spec         Parsed RFQ specification (model/size/class/…) used by the
+ *                     scorer for exact-model + spec-density signals. Optional.
+ * @param requiredQty  The RFQ item's required quantity — drives the pre-extraction
+ *                     elimination of pages whose stated stock can't fulfil it.
+ *
+ * Pipeline per candidate: classify (2a) → eliminate (2b) → score (2c). Survivors
+ * carry their detected-field map + page classification for the hybrid extractor.
  *
  * Cache hit  → tavilyCalls = 0.
  * Cache miss → tavilyCalls = 1 (even if the Tavily call throws).
  *
- * Never throws — a Tavily error returns an empty snippets array so the caller
- * can decide how to handle missing results.
+ * Never throws — a Tavily error returns an empty result so the caller can decide
+ * how to handle missing results.
  */
-export async function searchOneQuery(query: string, spec: ScorerSpec = {}): Promise<SearchResult> {
+export async function searchOneQuery(
+  query: string,
+  spec: ScorerSpec = {},
+  requiredQty: number = 0,
+): Promise<SearchResult> {
   // (1) Cache-first lookup.
   let snippets = await getCachedSearch(query);
   let tavilyCalls = 0;
@@ -135,36 +164,45 @@ export async function searchOneQuery(query: string, spec: ScorerSpec = {}): Prom
         `[search] tavily error for "${query.slice(0, 60)}":`,
         err instanceof Error ? err.message : err,
       );
-      return { snippets: [], tavilyCalls: 1 };
+      return { snippets: [], candidates: [], tavilyCalls: 1 };
     }
     // Cache even empty arrays — saves Tavily quota on known-bad queries.
     await setCachedSearch(query, snippets);
   }
 
-  // (2) Weighted relevance scoring + dedup.
-  // Each candidate is scored across URL pattern / content keywords / exact-model
-  // / spec density / schema.org / trusted-domain signals; only those at or above
-  // KEEP_THRESHOLD survive. acc is keyed by URL so duplicates collapse, keeping
-  // the highest-scoring occurrence.
-  const acc = new Map<string, { snippet: TavilySnippet; score: number }>();
+  // (2) Classify → eliminate → score → dedup. acc is keyed by URL so duplicates
+  // collapse, keeping the highest-scoring occurrence.
+  const acc = new Map<string, ScoredCandidate>();
 
   for (const snippet of snippets) {
     if (!snippet.url) continue;
 
-    const { score, kept } = scoreProductPage(snippet, spec);
+    // 2a CLASSIFY — product page vs tech-spec document.
+    const pageType = classifyPage(snippet);
+
+    // 2b ELIMINATE — drop out-of-stock / can't-fulfil-qty / non-product pages
+    //    BEFORE the expensive scoring + extraction. Unknown always bypasses.
+    const elim = eliminatePage(
+      { url: snippet.url, title: snippet.title, content: snippet.content || snippet.snippet || '' },
+      requiredQty,
+    );
+    if (elim.eliminated) continue;
+
+    // 2c SCORE — weighted relevance; keep only at/above KEEP_THRESHOLD. The
+    //    scorer also emits the detected-field map the hybrid extractor consumes.
+    const { score, kept, detected } = scoreProductPage(snippet, spec);
     if (!kept) continue;
 
     const existing = acc.get(snippet.url);
     if (!existing || score > existing.score) {
-      acc.set(snippet.url, { snippet, score });
+      acc.set(snippet.url, { snippet, score, detected, pageType });
     }
   }
 
   // (3) Rank best-first so the strongest product pages lead — this front-loads
-  //     the LLM extractor's context and the density loop's TARGET_SOURCES cap.
-  const ranked = Array.from(acc.values())
-    .sort((a, b) => b.score - a.score)
-    .map((e) => e.snippet);
+  //     the hybrid extractor and the density loop's TARGET_SOURCES cap.
+  const candidates = Array.from(acc.values()).sort((a, b) => b.score - a.score);
+  const ranked = candidates.map((c) => c.snippet);
 
-  return { snippets: ranked, tavilyCalls };
+  return { snippets: ranked, candidates, tavilyCalls };
 }

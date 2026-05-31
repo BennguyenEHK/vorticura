@@ -16,6 +16,7 @@ import {
   numeric,
   date,
   bigint,
+  boolean,
   inet,
   jsonb,
   primaryKey,
@@ -484,6 +485,11 @@ export const supplierItemStatus = pgTable('supplier_item_status', {
   sellingUnit: varchar('selling_unit', { length: 12 }),        // 'per_unit' | 'per_pack' | NULL=unknown
   packSize: integer('pack_size'),                              // units per pack when selling_unit='per_pack'
   matchReasoning: text('match_reasoning'),                     // why an ALTERNATIVE is a valid substitute (alt rows only)
+
+  // Redesign (2026-05-31) — multi-page hybrid extraction signals (additive, nullable)
+  requiresQuote: boolean('requires_quote').default(false),     // page sells item but needs a manual quote request (no public price)
+  pageType: varchar('page_type', { length: 12 }).default('product'), // 'product' | 'tech_spec'
+  extractionConfidence: varchar('extraction_confidence', { length: 16 }), // 'manual' | 'manual+llm' | 'llm' | ''
 
   // Supplier contact information
   contactEmail: varchar('contact_email', { length: 255 }),  // Supplier's contact email

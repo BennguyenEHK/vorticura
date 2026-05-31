@@ -311,6 +311,10 @@ export function buildSupplierItemStatusPayload(data: Record<string, unknown>, up
   if (data.selling_unit === 'per_unit' || data.selling_unit === 'per_pack') payload.sellingUnit = data.selling_unit;
   if (data.pack_size != null && Number(data.pack_size) > 0) payload.packSize = parseInt(String(data.pack_size), 10);
   if (data.match_reasoning != null && String(data.match_reasoning).trim() !== '') payload.matchReasoning = String(data.match_reasoning);
+  // Redesign (2026-05-31) — multi-page hybrid extraction signals
+  if (data.requires_quote != null) payload.requiresQuote = data.requires_quote === true || String(data.requires_quote).toLowerCase() === 'true';
+  if (data.page_type != null) payload.pageType = clampStr(data.page_type, 12);
+  if (data.extraction_confidence != null) payload.extractionConfidence = clampStr(data.extraction_confidence, 16);
   if (data.responded_at != null) payload.respondedAt = data.responded_at;
 
   return payload;

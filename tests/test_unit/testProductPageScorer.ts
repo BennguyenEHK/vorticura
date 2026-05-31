@@ -1,8 +1,10 @@
 import assert from 'assert';
 import {
   scoreProductPage,
+  classifyPage,
   KEEP_THRESHOLD,
   type ScorerSpec,
+  type ScorableSnippet,
 } from '@/lib/services/search/product-page-scorer';
 import type { TavilySnippet } from '@/lib/services/search/tavily-client';
 
@@ -165,6 +167,127 @@ assert.equal(
   );
   assert.ok(r.signals.includes('url:directory'), 'directory signal still fires');
   assert.ok(r.kept, 'exact model match pulls a directory listing back above threshold');
+}
+
+// ---------------------------------------------------------------------------
+// Detected field map — commerce/procurement signals
+// ---------------------------------------------------------------------------
+
+// has_price: simple digit pattern
+{
+  const r = scoreProductPage(snippet({ url: 'https://shop.com/x', content: 'Price: $99.99 per unit' }));
+  assert.ok(r.detected.has_price, 'has_price fires on numeric pattern');
+}
+
+// has_currency: currency symbol or ISO code near number
+{
+  const r = scoreProductPage(snippet({ url: 'https://shop.com/x', content: 'USD 150 per valve' }));
+  assert.ok(r.detected.has_currency, 'has_currency fires on ISO code near number');
+}
+
+{
+  const r = scoreProductPage(snippet({ url: 'https://shop.com/x', content: 'Price €50 - Premium' }));
+  assert.ok(r.detected.has_currency, 'has_currency fires on currency symbol near number');
+}
+
+// has_contact_email: email pattern
+{
+  const r = scoreProductPage(snippet({ url: 'https://shop.com/x', content: 'sales@supplier.com' }));
+  assert.ok(r.detected.has_contact_email, 'has_contact_email fires on valid email');
+}
+
+// has_contact_phone: phone pattern
+{
+  const r = scoreProductPage(snippet({ url: 'https://shop.com/x', content: 'Call +1-234-567-8900' }));
+  assert.ok(r.detected.has_contact_phone, 'has_contact_phone fires on phone pattern');
+}
+
+// has_stock: in stock / available / stock: keywords
+{
+  const r = scoreProductPage(snippet({ url: 'https://shop.com/x', content: 'Currently in stock' }));
+  assert.ok(r.detected.has_stock, 'has_stock fires on "in stock"');
+}
+
+{
+  const r = scoreProductPage(snippet({ url: 'https://shop.com/x', content: 'Available for immediate shipment' }));
+  assert.ok(r.detected.has_stock, 'has_stock fires on "available"');
+}
+
+// has_delivery: lead time / delivery / ships in / weeks keywords
+{
+  const r = scoreProductPage(snippet({ url: 'https://shop.com/x', content: 'Lead time: 4-6 weeks' }));
+  assert.ok(r.detected.has_delivery, 'has_delivery fires on "lead time"');
+}
+
+{
+  const r = scoreProductPage(snippet({ url: 'https://shop.com/x', content: 'Ships in 2-3 business days' }));
+  assert.ok(r.detected.has_delivery, 'has_delivery fires on "ships in"');
+}
+
+// has_quote_request: request quote / get quote / contact for price / RFQ keywords
+{
+  const r = scoreProductPage(snippet({ url: 'https://shop.com/x', content: 'Click here to request a quote' }));
+  assert.ok(r.detected.has_quote_request, 'has_quote_request fires on "request a quote"');
+}
+
+{
+  const r = scoreProductPage(snippet({ url: 'https://shop.com/x', content: 'Contact for price / RFQ support' }));
+  assert.ok(r.detected.has_quote_request, 'has_quote_request fires on "contact for price" or "rfq"');
+}
+
+// All flags false on a generic page
+{
+  const r = scoreProductPage(snippet({ url: 'https://blog.com/how-to', content: 'This is a blog post about valves' }));
+  assert.equal(r.detected.has_price, false, 'has_price is false when no price present');
+  assert.equal(r.detected.has_currency, false, 'has_currency is false when no currency present');
+  assert.equal(r.detected.has_quote_request, false, 'has_quote_request is false when no quote keyword present');
+}
+
+// ---------------------------------------------------------------------------
+// Page classifier — product vs tech_spec
+// ---------------------------------------------------------------------------
+
+// PDF URL → tech_spec
+{
+  const page: ScorableSnippet = { url: 'https://supplier.com/docs/valve-spec.pdf' };
+  assert.equal(classifyPage(page), 'tech_spec', 'pdf url is classified as tech_spec');
+}
+
+// Normal product URL → product
+{
+  const page: ScorableSnippet = { url: 'https://shop.com/products/gate-valve-kf941' };
+  assert.equal(classifyPage(page), 'product', 'product url is classified as product');
+}
+
+// Datasheet keyword in URL → tech_spec
+{
+  const page: ScorableSnippet = { url: 'https://supplier.com/datasheet-valve.html' };
+  assert.equal(classifyPage(page), 'tech_spec', 'url with datasheet keyword is tech_spec');
+}
+
+// Catalog keyword in URL → tech_spec
+{
+  const page: ScorableSnippet = { url: 'https://supplier.com/catalog-2024.html' };
+  assert.equal(classifyPage(page), 'tech_spec', 'url with catalog keyword is tech_spec');
+}
+
+// Datasheet keyword in content → tech_spec
+{
+  const page: ScorableSnippet = {
+    url: 'https://supplier.com/gate-valve',
+    content: 'Product Datasheet: specifications and dimensions',
+  };
+  assert.equal(classifyPage(page), 'tech_spec', 'content with datasheet keyword is tech_spec');
+}
+
+// Neutral page → product
+{
+  const page: ScorableSnippet = {
+    url: 'https://shop.com/item/valve',
+    title: 'Gate Valve',
+    content: 'High quality industrial valve',
+  };
+  assert.equal(classifyPage(page), 'product', 'neutral page is classified as product');
 }
 
 console.log('✓ testProductPageScorer passed');
