@@ -108,6 +108,10 @@ interface ItemSourceRow {
   requires_quote: boolean;    // page sells item but needs a manual quote request (no public price)
   page_type: string;          // 'product' | 'tech_spec'
   extraction_confidence: string; // 'manual' | 'manual+llm' | 'llm' (+ '+microdata')
+  // Item-level identification (from rfq_items.agent_item_summary.identification) —
+  // same for every supplier row of an item; surfaced in the panel's parent item row.
+  // Attached at the final merge step, not persisted (not mapped by databaseHandler).
+  item_identification?: string[];
 }
 
 // ---------------------------------------------
@@ -615,9 +619,23 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     //     extractor's rows[] return) because Array.sort() is stable in ES2019+.
     const merged = [...productPageItems];
     merged.sort((a, b) => a.item_id - b.item_id);
+
+    // Build itemId → identification[] from rfq_items.agent_item_summary so the live
+    // SSE result carries it too (the reload path reads it separately in fetch-workspace).
+    // Defensive: agentItemSummary is jsonb and may be null / partially shaped.
+    const identByItem = new Map<number, string[]>();
+    for (const row of itemRows) {
+      const summary = row.agentItemSummary as { identification?: unknown } | null;
+      const ident = summary && Array.isArray(summary.identification)
+        ? (summary.identification as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim() !== '')
+        : [];
+      if (ident.length) identByItem.set(Number(row.itemId), ident);
+    }
+
     const finalItems: ItemSourceRow[] = merged.map((row, idx) => ({
       ...row,
       supplier_id: idx + 1,
+      item_identification: identByItem.get(row.item_id) ?? [],  // surfaced in the panel parent row
     }));
 
     // deadUrls is 0 per-item (liveness gate removed); aggregate and add the

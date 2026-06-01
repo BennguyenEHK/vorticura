@@ -241,10 +241,12 @@ export function transformResultToDocument(result: ProcessorResult): DocumentData
             // Multi-page hybrid extraction signals (carried straight from the search result)
             page_type: (item.page_type as 'product' | 'tech_spec' | null) ?? null,
             requires_quote: item.requires_quote === true,
-            // item_identification is sourced from rfq_items on reload (fetch-workspace);
-            // the live result is per-supplier and doesn't carry it, so it's null here
-            // and the panel falls back to "Item N".
-            item_identification: null,
+            // item_identification is attached to each row by supplier-search-actions
+            // (from rfq_items.agent_item_summary) so it shows in the live result too;
+            // the reload path re-derives it in fetch-workspace.
+            item_identification: Array.isArray(item.item_identification)
+              ? (item.item_identification as string[])
+              : null,
           };
         }),
       };

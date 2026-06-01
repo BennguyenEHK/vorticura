@@ -241,12 +241,14 @@ export function SupplierSearchDocument({ data }: SupplierSearchDocumentProps) {
                       ? <ChevronDown className="w-3.5 h-3.5" />
                       : <ChevronRight className="w-3.5 h-3.5" />}
                   </div>
-                  {/* Item name + ID + identification */}
-                  <div className="flex items-center gap-2 min-w-0 pr-2">
-                    <span className="text-[12px] font-medium text-gray-100 truncate shrink-0">Item {itemId}</span>
+                  {/* Item name + ID + identification — "Item N (X suppliers) : <identification>" */}
+                  <div className="flex items-center gap-1.5 min-w-0 pr-2">
+                    <span className="text-[12px] font-medium text-gray-100 shrink-0">Item {itemId}</span>
                     <span className="text-[10px] text-gray-600 shrink-0">({suppliersForItem.length} suppliers)</span>
                     {identificationText && (
-                      <span className="text-[10px] text-gray-500 truncate">{identificationText}</span>
+                      <span className="text-[11px] text-gray-400 truncate" title={identificationText}>
+                        : {identificationText}
+                      </span>
                     )}
                   </div>
                   {/* Empty cells for price and delivery in the item header */}
