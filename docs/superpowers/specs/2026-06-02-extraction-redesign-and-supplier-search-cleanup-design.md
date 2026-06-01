@@ -65,16 +65,23 @@ Ordering principle: **deterministic + cheap + canonical first; probabilistic + e
 ### 3.1 Layer 0 — URL liveness pre-gate
 - One `fetch(url, { method: 'GET', redirect: 'follow', signal: AbortSignal.timeout(8_000) })`
   per candidate, run inside the existing per-item budget/concurrency caps.
-- Keep only `response.ok` (200–299). Non-200 / network error / timeout → drop the
-  candidate, increment `deadUrls`.
-- **The fetched body (`html`) is retained and passed to Layer 2** — no second fetch.
-- Best-effort: a fetch that is blocked (403/503/captcha) on a big retailer drops *that
-  raw-HTML enhancement* but the candidate still proceeds on Tavily `raw_content`
-  (Layers 1 + 3), because Tavily content is server-rendered and bot-proof.
-  - **Decision:** because protected retailers (Amazon/Grainger) 403 a bare fetch, a
-    non-200 from the liveness fetch does **not** by itself eliminate a candidate that
-    Tavily already returned `raw_content` for. Liveness elimination applies to
-    candidates whose only content source is the direct fetch. (See §3.7 fall-through.)
+- **Status handling distinguishes *dead* from *blocked*** (this is the key nuance — a
+  403 on Amazon is bot-protection, not a missing page; the product still exists):
+
+  | Status | Meaning | Action |
+  |--------|---------|--------|
+  | 200–299 | live | keep candidate; **retain `html` for Layer 2** |
+  | 404 / 410 | gone (truly dead) | **DROP candidate**, `deadUrls++` — never persist a broken link |
+  | 403 / 429 / 503 | blocked / rate-limited (not dead) | keep candidate, **skip the HTML enhancement**; proceed on Tavily `raw_content` (Layers 1 + 3) |
+  | timeout / network error | unknown | keep candidate, skip HTML enhancement (soft-fail, best-effort) |
+
+- **Rationale:** the user's "only take 200, eliminate 403/404" intent is honored for
+  *dead* pages (404/410 dropped) without discarding bot-protected big retailers whose
+  Tavily `raw_content` is already in hand (Tavily content is server-rendered and
+  bot-proof). Persisting a 404 would hand the user a broken source link; a 403 page is
+  still a valid source we extracted real content from.
+- **The fetched body (`html`) is retained and passed to Layer 2 only on 2xx** — no
+  second fetch.
 
 ### 3.2 Tavily change — markdown → text
 - `tavily-client.ts`: request raw content as **text** rather than markdown so regex sees
@@ -126,8 +133,8 @@ After Layers 1–3, when `price` is still unknown:
 ### 3.7 Fall-through summary
 ```
 candidate
-  └─ Layer 0 liveness ── non-200 & no Tavily raw_content ──► DROP (deadUrls++)
-        │ 200 (html kept)            │ non-200 but Tavily raw_content exists
+  └─ Layer 0 liveness ── 404 / 410 (dead) ──► DROP (deadUrls++)
+        │ 2xx (html kept)            │ 403/429/503/timeout (blocked, html skipped)
         ▼                            ▼
   Layer 1 (raw_content regex) ───────┘
         │ price found ─────────────────────────────► use it
