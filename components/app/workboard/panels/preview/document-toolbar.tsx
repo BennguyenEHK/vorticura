@@ -4,7 +4,7 @@
 
 'use client';
 
-import { Edit, Save, Undo2, Redo2, Download, History } from 'lucide-react';
+import { Edit, Save, Undo2, Redo2, Download, History, GitBranch } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface DocumentToolbarProps {
@@ -19,6 +19,8 @@ interface DocumentToolbarProps {
   onDownload: () => void;
   onToggleHistory?: () => void;
   isHistoryOpen?: boolean;
+  onToggleWorkflowHistory?: () => void; // New prop for workflow history
+  isWorkflowHistoryOpen?: boolean;      // New prop for workflow history state
   isSaving?: boolean;
 }
 
@@ -34,6 +36,8 @@ export function DocumentToolbar({
   onDownload,
   onToggleHistory,
   isHistoryOpen = false,
+  onToggleWorkflowHistory,
+  isWorkflowHistoryOpen = false,
   isSaving = false,
 }: DocumentToolbarProps) {
   return (
@@ -95,9 +99,22 @@ export function DocumentToolbar({
           size="icon"
           className="h-7 w-7"
           onClick={onToggleHistory}
-          title={isHistoryOpen ? 'Close history' : 'View history'}
+          title={isHistoryOpen ? 'Close document history' : 'View document history'}
         >
           <History className="w-3.5 h-3.5" />
+        </Button>
+      )}
+
+      {/* Workflow History toggle */}
+      {onToggleWorkflowHistory && (
+        <Button
+          variant={isWorkflowHistoryOpen ? 'default' : 'ghost'}
+          size="icon"
+          className="h-7 w-7"
+          onClick={onToggleWorkflowHistory}
+          title={isWorkflowHistoryOpen ? 'Close workflow history' : 'View workflow history'}
+        >
+          <GitBranch className="w-3.5 h-3.5" />
         </Button>
       )}
     </div>

@@ -27,7 +27,44 @@ if (!process.env.DATABASE_URL) {
  * Automatically handles connection pooling via Neon's infrastructure
  */
 neonConfig.webSocketConstructor = ws;  // Required for Node.js
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+/**
+ * Build a resilient Neon WebSocket pool.
+ *
+ * Root cause of "Connection terminated unexpectedly": Neon's serverless proxy
+ * closes idle WebSocket connections after a few minutes. A plain pool keeps the
+ * now-dead client and hands it to the next query, which then fails. We:
+ *  - reap idle clients BEFORE Neon does (idleTimeoutMillis),
+ *  - fail fast on a dead socket instead of hanging (connectionTimeoutMillis),
+ *  - recycle long-lived connections (maxUses),
+ *  - attach an 'error' handler so an idle-client drop is logged and the client
+ *    is evicted (otherwise it surfaces as an unhandled rejection on the next await).
+ */
+function createPool(): Pool {
+  const newPool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    max: 10,                          // cap concurrent connections (Neon free-tier friendly)
+    idleTimeoutMillis: 30_000,        // close idle clients before Neon's proxy kills them
+    connectionTimeoutMillis: 10_000,  // fail fast rather than hang on a dead socket
+    maxUses: 7_500,                   // recycle a connection after N uses (avoids stale long-lived sockets)
+  });
+
+  // Without this handler, an idle client that Neon closes emits an 'error' that
+  // becomes an unhandled rejection. We log and let the pool evict it — the next
+  // query transparently opens a fresh connection.
+  newPool.on('error', (err: Error) => {
+    console.error('[db] idle pool client error (recovered):', err.message);
+  });
+
+  return newPool;
+}
+
+// Reuse a single pool across Next.js dev hot-reloads. Without this, every reload
+// spawns a new pool and leaks the previous one's live WebSocket connections —
+// itself a source of connection churn and termination errors.
+const globalForDb = globalThis as unknown as { __qfPool?: Pool };
+const pool = globalForDb.__qfPool ?? createPool();
+if (process.env.NODE_ENV !== 'production') globalForDb.__qfPool = pool;
 
 /**
  * Drizzle ORM database client instance

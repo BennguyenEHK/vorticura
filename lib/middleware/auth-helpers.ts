@@ -13,7 +13,7 @@ if (!rawJwtSecret && process.env.NODE_ENV === 'production') {
   throw new Error('JWT_SECRET environment variable is required in production');
 }
 if (!rawJwtSecret && process.env.NODE_ENV !== 'production') {
-  // eslint-disable-next-line no-console
+   
   console.warn('⚠️ Using development fallback JWT_SECRET. Do NOT use this in production.');
 }
 const JWT_SECRET = new TextEncoder().encode(rawJwtSecret || 'quoteflow-ai-secret-key-change-in-production');

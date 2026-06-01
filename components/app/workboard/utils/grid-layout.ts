@@ -377,7 +377,7 @@ export function compactAndFill(
 
     // Calculate new position and width
     const maxWidth = item.maxW ?? cols;
-    let newX = item.x - emptyLeft;        // Shift left to fill gap
+    const newX = item.x - emptyLeft;        // Shift left to fill gap
     let newW = item.w + emptyLeft + emptyRight;  // Expand both directions
     newW = Math.min(newW, maxWidth);      // Respect maxW
 
@@ -444,7 +444,7 @@ export function compactAndFillVertical(
 
     // Calculate new position and height
     const maxHeight = item.maxH ?? Infinity; // No default max height limit
-    let newY = item.y - emptyAbove;           // Shift up to fill gap
+    const newY = item.y - emptyAbove;           // Shift up to fill gap
     let newH = item.h + emptyAbove + emptyBelow; // Expand both directions
     newH = Math.min(newH, maxHeight);         // Respect maxH if set
 

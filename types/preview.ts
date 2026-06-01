@@ -144,10 +144,17 @@ export interface SupplierSearchDocumentData {
     // Redesign fields (nullable until extraction populates them)
     category: 'source' | 'alternative';  // derived from the `via_alt:` notes prefix
     notes: string;                        // raw notes (carries via_alt + stock prefix)
+    compliance_deviation: string;         // "Meets all specs" / spec deviation — dossier "Spec Compliance"
     available_qty: number | null;         // stock as stated on page; null = unknown
     selling_unit: 'per_unit' | 'per_pack' | null;
     pack_size: number | null;             // units per pack when selling_unit='per_pack'
     match_reasoning: string | null;       // why an alternative is a valid substitute (alt rows only)
+    // Multi-page hybrid extraction signals (drive child-row badge + QUOTE REQUIRED rendering)
+    page_type: 'product' | 'tech_spec' | null; // page classification shown beside supplier name
+    requires_quote: boolean;              // true → page sells item but has no public price (show "QUOTE REQUIRED")
+    // Item-level identification (from rfq_items.agent_item_summary.identification) —
+    // same for every supplier row of an item; rendered in the parent item row.
+    item_identification: string[] | null;
   }>;
 }
 

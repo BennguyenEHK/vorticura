@@ -233,10 +233,18 @@ export function transformResultToDocument(result: ProcessorResult): DocumentData
             // Redesign fields — category derived from notes; the rest null until extraction populates them
             category,
             notes,
+            compliance_deviation: (item.compliance_deviation as string) || '',
             available_qty: item.available_qty == null ? null : Number(item.available_qty),
             selling_unit: (item.selling_unit as 'per_unit' | 'per_pack' | null) ?? null,
             pack_size: item.pack_size == null ? null : Number(item.pack_size),
             match_reasoning: (item.match_reasoning as string | null) ?? null,
+            // Multi-page hybrid extraction signals (carried straight from the search result)
+            page_type: (item.page_type as 'product' | 'tech_spec' | null) ?? null,
+            requires_quote: item.requires_quote === true,
+            // item_identification is sourced from rfq_items on reload (fetch-workspace);
+            // the live result is per-supplier and doesn't carry it, so it's null here
+            // and the panel falls back to "Item N".
+            item_identification: null,
           };
         }),
       };

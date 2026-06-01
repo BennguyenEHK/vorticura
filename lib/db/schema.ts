@@ -477,8 +477,9 @@ export const supplierItemStatus = pgTable('supplier_item_status', {
   // Provenance / extraction signals (Stage 7/10/11 of the search pipeline).
   // Nullable + additive — populated by supplier-search, ignored by other flows.
   availableQty: integer('available_qty'),                      // stock as stated on page; NULL = unknown
-  sourceTier: integer('source_tier'),                          // 1|2|3 search tier that produced this row
-  extractionTrack: varchar('extraction_track', { length: 12 }), // 'deterministic' | 'llm'
+  // NOTE: source_tier + extraction_track dropped (2026-06-01) — source_tier was
+  // always 0 (tiers removed) and extraction_track exactly duplicated
+  // extraction_confidence. extraction_confidence below is the single provenance column.
 
   // Supplier dossier signals (additive — populated by supplier-search, rendered
   // in the redesigned supplier panel). All nullable.

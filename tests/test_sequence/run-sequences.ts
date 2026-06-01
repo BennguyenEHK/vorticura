@@ -519,8 +519,10 @@ async function runTests(): Promise<void> {
 
       // --- Capture auto-generated IDs for subsequent tests ---
 
-      // After test 1: capture rfq_id from rfq_analysis
-      if (i === 0) {
+      // --- Capture auto-generated IDs for subsequent tests ---
+
+      // Capture rfq_id after the first RFQ analysis insert
+      if (!ctx.rfqId && tc.data_type === 'rfq_analysis') {
         const rows = await getData('rfqAnalysis', { rfqReference: 'RFQ-TEST-2026-HVAC' }, workspace);
         if (rows.length > 0) {
           ctx.rfqId = (rows[0] as Record<string, unknown>).rfqId as number;
@@ -528,8 +530,8 @@ async function runTests(): Promise<void> {
         }
       }
 
-      // After test 3: capture search_id from supplier_search
-      if (i === 2) {
+      // Capture search_id after supplier search insert
+      if (!ctx.searchId && tc.data_type === 'supplier_search') {
         const rows = await getData('supplierSearch', { rfqReference: 'RFQ-TEST-2026-HVAC' }, workspace);
         if (rows.length > 0) {
           ctx.searchId = (rows[0] as Record<string, unknown>).searchId as number;
@@ -537,8 +539,8 @@ async function runTests(): Promise<void> {
         }
       }
 
-      // After test 7: capture quotation_id from quotations
-      if (i === 6) {
+      // Capture quotation_id after quotation generation
+      if (!ctx.quotationId && tc.data_type === 'quotation') {
         const rows = await getData('quotations', { rfqReference: 'RFQ-TEST-2026-HVAC' }, workspace);
         if (rows.length > 0) {
           ctx.quotationId = (rows[0] as Record<string, unknown>).quotationId as number;

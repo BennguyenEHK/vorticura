@@ -232,12 +232,27 @@ async function fetchPreviewByType(
   // Suppliers search preview: fetch supplier_search + supplier items in parallel
   if (previewType === 'suppliers_search') {
     try {
-      const [searchRows, itemRows] = await Promise.all([
+      const [searchRows, itemRows, rfqItemRows] = await Promise.all([
         getData('supplierSearch', { rfqId }, workspace),
         getData('supplierItemStatus', { rfqId }, workspace),
+        // rfq_items carries agent_item_summary — we surface its `identification`
+        // axis in the parent item row of the supplier-search panel.
+        getData('rfqItems', { rfqId }, workspace),
       ]);
       const search = searchRows[0];
       if (!search) return null;
+
+      // Build itemId → identification[] map from rfq_items.agent_item_summary.
+      // Defensive: agentItemSummary is jsonb and may be null / partially shaped.
+      const identificationByItem = new Map<number, string[]>();
+      for (const ri of (rfqItemRows || []) as Array<Record<string, unknown>>) {
+        const summary = ri.agentItemSummary as { identification?: unknown } | null;
+        const ident = summary && Array.isArray(summary.identification)
+          ? (summary.identification as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim() !== '')
+          : [];
+        if (ident.length) identificationByItem.set(Number(ri.itemId), ident);
+      }
+
       return {
         suppliers_search: {
           subject: search.subject,
@@ -264,10 +279,16 @@ async function fetchPreviewByType(
             // Redesign fields
             category,
             notes,
+            compliance_deviation: String(item.complianceDeviation ?? ''),
             available_qty: item.availableQty == null ? null : Number(item.availableQty),
             selling_unit: (item.sellingUnit as 'per_unit' | 'per_pack' | null) ?? null,
             pack_size: item.packSize == null ? null : Number(item.packSize),
             match_reasoning: (item.matchReasoning as string | null) ?? null,
+            // Multi-page hybrid extraction signals
+            page_type: (item.pageType as 'product' | 'tech_spec' | null) ?? null,
+            requires_quote: item.requiresQuote === true,
+            // Item-level identification (shared across all supplier rows of an item)
+            item_identification: identificationByItem.get(Number(item.itemId)) ?? null,
           };
         }),
         rfq_id: rfqId,

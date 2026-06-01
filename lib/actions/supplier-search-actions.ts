@@ -99,10 +99,7 @@ interface ItemSourceRow {
   contact_phone: string;
   // Stage 7 — quantity in stock at time of extraction (0 = not stated by LLM)
   available_qty: number;
-  // Stage 7 — which search tier (1|2|3) produced the snippets this row was built from
-  source_tier: number;
-  // Stage 7 — 'deterministic' if microdata overrode LLM price; 'llm' otherwise
-  extraction_track: string;
+  // source_tier + extraction_track dropped (2026-06-01); provenance is extraction_confidence.
   // Dossier signals — how the product is sold + why an alternative is a valid substitute
   selling_unit: string;       // '' | 'per_unit' | 'per_pack'
   pack_size: number;          // units per pack when per_pack; 0 otherwise
@@ -145,7 +142,7 @@ function buildSearchContent(rfqReference: string, rows: ItemSourceRow[], dropped
  * Build an ItemSourceRow from a cached supplier-memory hit. A memory hit is a
  * previously-verified sourcing result for the SAME normalized spec, so it skips
  * the live search + extraction entirely. Provenance is tagged in notes and via
- * extraction_track='memory'; supplier_id is assigned later in the global merge.
+ * extraction_confidence='memory'; supplier_id is assigned later in the global merge.
  */
 function buildRowFromMemory(item: RfqItemInput, hit: MemoryHit): ItemSourceRow {
   const stockPrefix = hit.available_qty > 0 ? `Stock: ${hit.available_qty} available. ` : '';
@@ -164,8 +161,6 @@ function buildRowFromMemory(item: RfqItemInput, hit: MemoryHit): ItemSourceRow {
     contact_email: '',
     contact_phone: '',
     available_qty: hit.available_qty,
-    source_tier: 0,
-    extraction_track: 'memory',           // provenance — distinct from 'llm'/'deterministic'
     selling_unit: hit.selling_unit,
     pack_size: hit.pack_size,
     match_reasoning: '',
@@ -347,8 +342,6 @@ async function extractSupplierForItem(
       contact_email,
       contact_phone,
       available_qty,
-      source_tier: 0,                          // tiers removed; 0 = n/a
-      extraction_track: track,
       selling_unit: llm?.selling_unit ?? '',
       pack_size: llm?.pack_size ?? 0,
       // match_reasoning surfaces only on substitute rounds; '' for exact matches.

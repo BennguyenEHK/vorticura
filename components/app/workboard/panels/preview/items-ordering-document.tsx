@@ -180,7 +180,7 @@ export function ItemsOrderingDocument({ data }: ItemsOrderingDocumentProps) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       action_type: 'send' as any,
       rfq_id: data.rfq_id,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       email: {
         recipient_email: selectedSupplier.contact_email,
         subject: `RE: Item Inquiry - ${selectedItem?.item_name ?? ''}`,

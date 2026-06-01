@@ -26,6 +26,7 @@ import {
   ItemsOrderingDocument,
   DocumentToolbar,
   WorkboardHistory,
+  WorkflowHistory, // New import
   BlankDocument,
 } from './preview';
 
@@ -97,6 +98,7 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
 
   // History panel state
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isWorkflowHistoryOpen, setIsWorkflowHistoryOpen] = useState(false); // New state for workflow history
   const [snapshots, setSnapshots] = useState<WorkboardSnapshotRecord[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
@@ -197,8 +199,8 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
   const handleToggleHistory = useCallback(async () => {
     const opening = !isHistoryOpen;
     setIsHistoryOpen(opening);
-
     if (opening) {
+      setIsWorkflowHistoryOpen(false); // Close workflow history when document history opens
       setIsHistoryLoading(true);
       try {
         // Extract rfq_id from active document (any type may carry it)
@@ -218,6 +220,15 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
       }
     }
   }, [isHistoryOpen, state.activeDocument]);
+
+  // Toggle workflow history panel
+  const handleToggleWorkflowHistory = useCallback(() => {
+    const opening = !isWorkflowHistoryOpen;
+    setIsWorkflowHistoryOpen(opening);
+    if (opening) {
+      setIsHistoryOpen(false); // Close document history when workflow history opens
+    }
+  }, [isWorkflowHistoryOpen]);
 
   // Revert to a specific snapshot — PREVIEW-ONLY, by design.
   // Snapshots are an audit/time-travel record, not a state-machine rollback. We do not
@@ -475,6 +486,8 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
           onDownload={handleDownload}
           onToggleHistory={handleToggleHistory}
           isHistoryOpen={isHistoryOpen}
+          onToggleWorkflowHistory={handleToggleWorkflowHistory} // New prop
+          isWorkflowHistoryOpen={isWorkflowHistoryOpen}         // New prop
           isSaving={isSaving}
         />
       </div>
@@ -487,6 +500,18 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
           <WorkboardHistory
             snapshots={snapshots}
             onRevert={handleRevert}
+            isLoading={isHistoryLoading}
+          />
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* WORKFLOW HISTORY PANEL (collapsible)                          */}
+      {/* ============================================================ */}
+      {isWorkflowHistoryOpen && (
+        <div className="border-b border-border bg-muted/30">
+          <WorkflowHistory
+            snapshots={snapshots}
             isLoading={isHistoryLoading}
           />
         </div>

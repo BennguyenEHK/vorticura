@@ -31,7 +31,7 @@ class WorkspaceConfig {
     }
 
     if (envMode && !allowedModes.includes(envMode as WorkspaceMode)) {
-      // eslint-disable-next-line no-console
+       
       console.warn(`Invalid WORKSPACE_MODE value: ${envMode}. Falling back to default.`);
     }
 

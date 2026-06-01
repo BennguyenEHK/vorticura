@@ -18,6 +18,67 @@ interface SelectedKey { itemId: number; category: 'source' | 'alternative'; idx:
 
 const COLS = '24px 1fr 100px 100px'; // For upper panel: Chevron, Supplier Name/Item ID, Price, Delivery Time
 
+// Strip leading "via_alt[:<token>]" prefix from notes (up to first whitespace).
+// Mirrors the category-detection rule (trimStart + startsWith('via_alt')) used in
+// fetch-workspace.ts / use-preview-sse.ts so detection and stripping stay in sync —
+// tolerates an optional colon and leading whitespace.
+function stripViaAltPrefix(notes: string): string {
+  const trimmed = notes.trimStart();
+  if (!trimmed.startsWith('via_alt')) return notes;
+  const spaceIdx = trimmed.indexOf(' ');
+  if (spaceIdx === -1) return ''; // entire string is the prefix token
+  return trimmed.slice(spaceIdx + 1).trim();
+}
+
+// Render a small page_type pill badge
+function PageTypeBadge({ pageType }: { pageType: 'product' | 'tech_spec' | null }) {
+  if (!pageType) return null;
+  if (pageType === 'product') {
+    return (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide shrink-0 bg-blue-950/70 text-blue-400 border border-blue-800/40">
+        Product
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide shrink-0 bg-violet-950/70 text-violet-400 border border-violet-800/40">
+      Tech Spec
+    </span>
+  );
+}
+
+// Render the price cell content (upper panel)
+function PriceCell({
+  bidder_unit_price,
+  currency_code,
+  requires_quote,
+}: {
+  bidder_unit_price: number;
+  currency_code: string;
+  requires_quote: boolean;
+}) {
+  if (requires_quote) {
+    return <span className="text-amber-400 text-[10px]">QUOTE REQUIRED</span>;
+  }
+  if (bidder_unit_price > 0) {
+    return <span className="text-emerald-400">{currency_code} {bidder_unit_price.toFixed(2)}</span>;
+  }
+  return <span className="text-gray-700">—</span>;
+}
+
+// Render the delivery cell content (upper panel)
+function DeliveryCell({
+  delivery_time,
+  requires_quote,
+}: {
+  delivery_time: string;
+  requires_quote: boolean;
+}) {
+  if (delivery_time) return <>{delivery_time}</>;
+  if (requires_quote) return <span className="text-amber-400 text-[10px]">QUOTE REQUIRED</span>;
+  return <>—</>;
+}
+
 export function SupplierSearchDocument({ data }: SupplierSearchDocumentProps) {
   // Split percentage: upper panel height (clamped 25–75)
   const [splitPct, setSplitPct] = useState(60);
@@ -156,6 +217,12 @@ export function SupplierSearchDocument({ data }: SupplierSearchDocumentProps) {
             const sources = suppliersForItem.filter(s => s.category === 'source');
             const alternatives = suppliersForItem.filter(s => s.category === 'alternative');
 
+            // Item identification — same for all rows in this group, read from first supplier
+            const itemIdentification = suppliersForItem[0]?.item_identification;
+            const identificationText = itemIdentification && itemIdentification.length > 0
+              ? itemIdentification.join(' · ')
+              : null;
+
             return (
               <div key={itemId} className="border-b border-[#131a27] last:border-0">
 
@@ -174,10 +241,13 @@ export function SupplierSearchDocument({ data }: SupplierSearchDocumentProps) {
                       ? <ChevronDown className="w-3.5 h-3.5" />
                       : <ChevronRight className="w-3.5 h-3.5" />}
                   </div>
-                  {/* Item name + ID */}
+                  {/* Item name + ID + identification */}
                   <div className="flex items-center gap-2 min-w-0 pr-2">
-                    <span className="text-[12px] font-medium text-gray-100 truncate">Item {itemId}</span>
+                    <span className="text-[12px] font-medium text-gray-100 truncate shrink-0">Item {itemId}</span>
                     <span className="text-[10px] text-gray-600 shrink-0">({suppliersForItem.length} suppliers)</span>
+                    {identificationText && (
+                      <span className="text-[10px] text-gray-500 truncate">{identificationText}</span>
+                    )}
                   </div>
                   {/* Empty cells for price and delivery in the item header */}
                   <div/><div/>
@@ -208,13 +278,23 @@ export function SupplierSearchDocument({ data }: SupplierSearchDocumentProps) {
                           }}
                         >
                           <div/> {/* Empty for chevron column */}
-                          <div className="text-[11px] text-gray-400 truncate pr-2">{supplier.supplier_name}</div>
-                          <div className="text-right pr-2 font-mono text-[11px]">
-                            {supplier.bidder_unit_price !== null
-                              ? <span className="text-emerald-400">{supplier.currency_code} {supplier.bidder_unit_price.toFixed(2)}</span>
-                              : <span className="text-gray-700">—</span>}
+                          <div className="flex items-center gap-1.5 min-w-0 pr-2">
+                            <span className="text-[11px] text-gray-400 truncate">{supplier.supplier_name}</span>
+                            <PageTypeBadge pageType={supplier.page_type} />
                           </div>
-                          <div className="text-[10px] text-gray-600 text-center">{supplier.delivery_time || '—'}</div>
+                          <div className="text-right pr-2 font-mono text-[11px]">
+                            <PriceCell
+                              bidder_unit_price={supplier.bidder_unit_price}
+                              currency_code={supplier.currency_code}
+                              requires_quote={supplier.requires_quote}
+                            />
+                          </div>
+                          <div className="text-[10px] text-gray-600 text-center">
+                            <DeliveryCell
+                              delivery_time={supplier.delivery_time}
+                              requires_quote={supplier.requires_quote}
+                            />
+                          </div>
                         </div>
                       );
                     })}
@@ -246,13 +326,23 @@ export function SupplierSearchDocument({ data }: SupplierSearchDocumentProps) {
                           }}
                         >
                           <div/> {/* Empty for chevron column */}
-                          <div className="text-[11px] text-gray-400 truncate pr-2">Alternative {idx + 1}: {supplier.supplier_name}</div>
-                          <div className="text-right pr-2 font-mono text-[11px]">
-                            {supplier.bidder_unit_price !== null
-                              ? <span className="text-emerald-400">{supplier.currency_code} {supplier.bidder_unit_price.toFixed(2)}</span>
-                              : <span className="text-gray-700">—</span>}
+                          <div className="flex items-center gap-1.5 min-w-0 pr-2">
+                            <span className="text-[11px] text-gray-400 truncate">Alternative {idx + 1}: {supplier.supplier_name}</span>
+                            <PageTypeBadge pageType={supplier.page_type} />
                           </div>
-                          <div className="text-[10px] text-gray-600 text-center">{supplier.delivery_time || '—'}</div>
+                          <div className="text-right pr-2 font-mono text-[11px]">
+                            <PriceCell
+                              bidder_unit_price={supplier.bidder_unit_price}
+                              currency_code={supplier.currency_code}
+                              requires_quote={supplier.requires_quote}
+                            />
+                          </div>
+                          <div className="text-[10px] text-gray-600 text-center">
+                            <DeliveryCell
+                              delivery_time={supplier.delivery_time}
+                              requires_quote={supplier.requires_quote}
+                            />
+                          </div>
                         </div>
                       );
                     })}
@@ -309,36 +399,63 @@ export function SupplierSearchDocument({ data }: SupplierSearchDocumentProps) {
                 </div>
               )}
 
-              {/* Price */}
-              <div className="text-[11px]">
-                <span className="text-gray-500">Price:</span>{' '}
-                <span className="font-mono text-emerald-400">
-                  {selectedSupplier.currency_code} {selectedSupplier.bidder_unit_price.toFixed(2)}
-                </span>{' '}
-                <span className="text-gray-500">per unit</span>
-              </div>
+              {/* Price + commercial fields — with graceful fallback */}
+              {(() => {
+                const hasPrice = selectedSupplier.bidder_unit_price > 0;
+                const hasDelivery = Boolean(selectedSupplier.delivery_time);
+                const hasQty = selectedSupplier.available_qty !== null;
+                const hasSellUnit = selectedSupplier.selling_unit !== null;
+                const hasPack = selectedSupplier.pack_size !== null && selectedSupplier.pack_size > 0;
+                const hasAnyCommercial = hasPrice || hasDelivery || hasQty || hasSellUnit || hasPack;
 
-              {/* Selling Type */}
-              {selectedSupplier.selling_unit === 'per_pack' && selectedSupplier.pack_size && (
-                <div className="text-[11px] text-gray-300">
-                  <Package className="w-3 h-3 inline-block mr-1 text-gray-500" />
-                  Sold per Pack — 1 pack = {selectedSupplier.pack_size} units
-                </div>
-              )}
-              {selectedSupplier.selling_unit === 'per_unit' && (
-                <div className="text-[11px] text-gray-300">
-                  <Package className="w-3 h-3 inline-block mr-1 text-gray-500" />
-                  Sold per Unit
-                </div>
-              )}
+                if (!hasAnyCommercial) {
+                  return (
+                    <p className="text-[11px] text-gray-600 italic">Please quote the suppliers to know</p>
+                  );
+                }
 
-              {/* Inventory */}
-              {selectedSupplier.available_qty !== null && (
-                <div className="text-[11px] text-gray-300">
-                  <span className="text-gray-500">Inventory:</span>{' '}
-                  <span className="text-yellow-500">{selectedSupplier.available_qty} available</span>
-                </div>
-              )}
+                return (
+                  <>
+                    {/* Price */}
+                    {hasPrice ? (
+                      <div className="text-[11px]">
+                        <span className="text-gray-500">Price:</span>{' '}
+                        <span className="font-mono text-emerald-400">
+                          {selectedSupplier.currency_code} {selectedSupplier.bidder_unit_price.toFixed(2)}
+                        </span>{' '}
+                        <span className="text-gray-500">per unit</span>
+                      </div>
+                    ) : selectedSupplier.requires_quote ? (
+                      <div className="text-[11px]">
+                        <span className="text-gray-500">Price:</span>{' '}
+                        <span className="text-amber-400">QUOTE REQUIRED</span>
+                      </div>
+                    ) : null}
+
+                    {/* Selling Type */}
+                    {selectedSupplier.selling_unit === 'per_pack' && selectedSupplier.pack_size && (
+                      <div className="text-[11px] text-gray-300">
+                        <Package className="w-3 h-3 inline-block mr-1 text-gray-500" />
+                        Sold per Pack — 1 pack = {selectedSupplier.pack_size} units
+                      </div>
+                    )}
+                    {selectedSupplier.selling_unit === 'per_unit' && (
+                      <div className="text-[11px] text-gray-300">
+                        <Package className="w-3 h-3 inline-block mr-1 text-gray-500" />
+                        Sold per Unit
+                      </div>
+                    )}
+
+                    {/* Inventory */}
+                    {selectedSupplier.available_qty !== null && (
+                      <div className="text-[11px] text-gray-300">
+                        <span className="text-gray-500">Inventory:</span>{' '}
+                        <span className="text-yellow-500">{selectedSupplier.available_qty} available</span>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
               {/* Reasoning for Match (only for alternatives) */}
               {selectedSupplier.category === 'alternative' && (
@@ -350,6 +467,29 @@ export function SupplierSearchDocument({ data }: SupplierSearchDocumentProps) {
                   }
                 </div>
               )}
+
+              {/* Match & Supplier Notes */}
+              <div>
+                <h3 className="text-[11px] font-semibold text-gray-400 mb-1">Match & Supplier Notes</h3>
+                <div className="space-y-1.5">
+                  <div className="text-[11px]">
+                    <span className="text-gray-500">Spec Compliance: </span>
+                    {selectedSupplier.compliance_deviation
+                      ? <span className="text-gray-300">{selectedSupplier.compliance_deviation}</span>
+                      : <span className="text-gray-700 italic">Not assessed</span>
+                    }
+                  </div>
+                  <div className="text-[11px]">
+                    <span className="text-gray-500">Supplier Notes: </span>
+                    {(() => {
+                      const stripped = stripViaAltPrefix(selectedSupplier.notes);
+                      return stripped
+                        ? <span className="text-gray-300">{stripped}</span>
+                        : <span className="text-gray-700 italic">None</span>;
+                    })()}
+                  </div>
+                </div>
+              </div>
 
               {/* Bidder Description */}
               <div>

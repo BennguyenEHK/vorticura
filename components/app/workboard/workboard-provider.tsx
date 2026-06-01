@@ -125,7 +125,7 @@ export function WorkboardProvider({ children }: WorkboardProviderProps) {
               );
 
               // Update state with hydrated values from DB
-              // eslint-disable-next-line react-hooks/set-state-in-effect
+               
               setState((prev) => ({
                 ...prev,
                 layout: layoutPrefs.layout as LayoutItem[],

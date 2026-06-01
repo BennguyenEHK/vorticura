@@ -5,4 +5,5 @@ export { SupplierSearchDocument } from './supplier-search-document';
 export { ItemsOrderingDocument } from './items-ordering-document';
 export { DocumentToolbar } from './document-toolbar';
 export { WorkboardHistory } from './workboard-history';
+export { WorkflowHistory } from './workflow-history';
 export { BlankDocument } from './blank-document';

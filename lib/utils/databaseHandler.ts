@@ -305,8 +305,8 @@ export function buildSupplierItemStatusPayload(data: Record<string, unknown>, up
   if (data.contact_phone != null) payload.contactPhone = clampStr(data.contact_phone, 50);   // Map to DB column
   // Provenance / extraction signals (additive — only the supplier-search flow sets these)
   if (data.available_qty != null) payload.availableQty = parseInt(String(data.available_qty), 10);
-  if (data.source_tier != null) payload.sourceTier = parseInt(String(data.source_tier), 10);
-  if (data.extraction_track != null) payload.extractionTrack = String(data.extraction_track);
+  // source_tier + extraction_track dropped (2026-06-01) — see schema.ts. Provenance
+  // now lives solely in extraction_confidence (mapped below).
   // Dossier signals — only persist meaningful values (nullable columns)
   if (data.selling_unit === 'per_unit' || data.selling_unit === 'per_pack') payload.sellingUnit = data.selling_unit;
   if (data.pack_size != null && Number(data.pack_size) > 0) payload.packSize = parseInt(String(data.pack_size), 10);
