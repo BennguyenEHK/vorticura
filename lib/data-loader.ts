@@ -168,9 +168,10 @@ async function loadSupplierSearchSearchInput(
 }
 
 /**
- * supplier_search + research: Load from supplierSearch + supplierItemStatus + rfqAnalysis.
+ * supplier_search + research: Load from supplierItemStatus + rfqAnalysis.
  * Builds the exact JSON shape of supplier-search.json Input_2.
- * Sources: supplierSearch (search_id, subject, search_content), supplierItemStatus (items_source), rfqAnalysis (rfq_reference)
+ * Sources: rfqAnalysis (rfq_reference, subject), supplierItemStatus (items_source)
+ * NOTE: supplierSearch table is dropped; subject derived from rfqAnalysis (mirrors loadSupplierSearchSearchInput).
  */
 async function loadSupplierSearchResearchInput(
   params: LoaderParams
@@ -178,19 +179,18 @@ async function loadSupplierSearchResearchInput(
   const { rfq_id, workspace } = params;
   if (!rfq_id) throw new Error('[data-loader] rfq_id required for supplier_search/research');
 
-  // Fetch existing supplier search record
-  const searchRows = await getData('supplierSearch', { rfqId: rfq_id }, workspace);
-  if (!searchRows.length) {
-    throw new Error(`[data-loader] No supplierSearch found for rfq_id=${rfq_id}`);
+  // Fetch rfqAnalysis for subject + rfq_reference (supplierSearch table is dropped)
+  const analysisRows = await getData('rfqAnalysis', { rfqId: rfq_id }, workspace);
+  if (!analysisRows.length) {
+    throw new Error(`[data-loader] No rfqAnalysis found for rfq_id=${rfq_id}`);
   }
-  const searchRecord = searchRows[0];
+  const analysis = analysisRows[0];
 
   // Fetch all supplier item statuses for this RFQ
   const itemRows = await getData('supplierItemStatus', { rfqId: rfq_id }, workspace);
 
   // rfq_reference lives on rfq_analysis table (single source of truth)
-  const analysisRows = await getData('rfqAnalysis', { rfqId: rfq_id }, workspace);
-  const rfqReference = String(analysisRows[0]?.rfqReference ?? '');
+  const rfqReference = String(analysis.rfqReference ?? '');
 
   // Build items_source array matching supplier-search.json Input_2 shape
   const itemsSource = itemRows.map((item: any) => ({
@@ -215,8 +215,8 @@ async function loadSupplierSearchResearchInput(
     rfq_id,
     rfq_reference: rfqReference,
     search: {
-      subject: searchRecord.subject ?? '',                 // Search subject
-      search_content: searchRecord.searchContent ?? '',    // Search results summary
+      subject: analysis.subject ?? '',                     // Subject derived from rfqAnalysis (supplierSearch table dropped)
+      search_content: '',                                  // Summary removed with supplierSearch table; field kept for ProcessorInput shape
     },
     items_source: itemsSource,                             // Supplier items array
   } as Partial<ProcessorInput>;

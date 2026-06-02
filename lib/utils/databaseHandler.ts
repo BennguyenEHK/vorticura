@@ -62,9 +62,6 @@ export interface ModifyDatabaseInput {
   email_id?: number;
   // RFQ Analysis-specific
   rfq_analysis?: Record<string, unknown>;
-  // Supplier Search-specific
-  suppliers_search?: Record<string, unknown>;
-  search_id?: number;
   // Incoming Email-specific
   incoming_email?: Record<string, unknown>;
   incoming_email_id?: number;
@@ -237,22 +234,7 @@ export function buildRfqAnalysisPayload(data: Record<string, unknown>, update = 
   return payload;
 }
 
-/**
- * Build supplier search payload for SUPPLIER_SEARCH table
- */
-export function buildSupplierSearchPayload(data: Record<string, unknown>, update = false): Payload {
-  const payload: Payload = {};
-
-  if (!update && data.rfq_id != null) payload.rfqId = data.rfq_id;
-  if (!update && data.search_id != null) payload.searchId = data.search_id;
-  if (data.subject != null) payload.subject = String(data.subject);
-  if (data.search_content != null) payload.searchContent = String(data.search_content);
-  if (data.search_status != null) payload.searchStatus = String(data.search_status);
-  // Run telemetry blob (jsonb) — store as-is when the orchestrator provides it
-  if (data.search_telemetry != null) payload.searchTelemetry = data.search_telemetry;
-
-  return payload;
-}
+// buildSupplierSearchPayload removed 2026-06-02 — supplier_search summary table dropped.
 
 // ─── Column-fit clamps for supplier_item_status ───────────────────────────────
 // The HuggingFace remote extraction path is schema-less, so the LLM can emit
@@ -444,20 +426,7 @@ const TC_customers: TableWriteConfig = {
   getUpdateFilter: (_data, input) => ({ rfqId: input.quotationData?.rfq_id ?? input.rfq_id }),
 };
 
-// ─── SUPPLIER SEARCH ───────────────────────────
-
-const TC_supplierSearch: TableWriteConfig = {
-  table: 'supplierSearch',
-  builder: buildSupplierSearchPayload,
-  extract: (input) => {
-    if (!input.suppliers_search) return null;
-    return { ...input.suppliers_search, rfq_id: input.rfq_id };
-  },
-  getExistsComposite: (_data, input) => {
-    return input.rfq_id ? { rfqId: input.rfq_id } : null;
-  },
-  getUpdateFilter: (_data, input) => ({ searchId: input.search_id }),
-};
+// TC_supplierSearch removed 2026-06-02 — supplier_search summary table dropped.
 
 // ─── SUPPLIER ITEM STATUS (unified: search + quotation) ─
 
@@ -663,7 +632,7 @@ const TC_incomingEmail: TableWriteConfig = {
 
 const WRITE_MAP: Record<string, TableWriteConfig[]> = {
   rfq_analysis:    [TC_rfqAnalysis, TC_rfqItems, TC_customers],
-  supplier_search: [TC_supplierSearch, TC_supplierItemStatus],
+  supplier_search: [TC_supplierItemStatus], // summary table dropped 2026-06-02; per-item rows still persist
   quotation:       [TC_quotations, TC_customers, TC_userCompany, TC_rfqItems, TC_supplierItemStatus, TC_quotationPricing, TC_quotationsTotal],
   email:           [TC_email],
   incoming_email:  [TC_incomingEmail],

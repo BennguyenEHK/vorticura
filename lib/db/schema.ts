@@ -406,38 +406,11 @@ export const sseConnections = pgTable('sse_connections', {
 });
 
 // ============================================
-// 12. SUPPLIER_SEARCH TABLE — belongs to RFQ stage
+// 12. (removed) SUPPLIER_SEARCH summary table — dropped 2026-06-02 as redundant.
+// Its subject/search_content/search_status/telemetry were all derivable in-memory
+// from supplier_item_status rows. The search ENGINE and the per-item results
+// table below are unchanged.
 // ============================================
-export const supplierSearch = pgTable('supplier_search', {
-  // Primary key - Auto-incrementing search ID
-  searchId: serial('search_id').primaryKey(),
-
-  // CHANGED: quotation_id → rfq_id (supplier search happens during RFQ stage)
-  rfqId: integer('rfq_id').notNull().references(() => rfqAnalysis.rfqId, { onDelete: 'cascade' }),
-
-  // Foreign keys — company_id NOT NULL
-  companyId: integer('company_id').notNull().references(() => userCompany.companyId),
-  userId: integer('user_id'),  // renamed from client_id
-
-  // Search identification
-  subject: text('subject'),
-
-  // Search content
-  searchContent: text('search_content'),
-
-  // Search status
-  searchStatus: varchar('search_status', { length: 30 }).default('completed'),
-
-  // Run telemetry (cost/latency observability for the budget-bounded pipeline):
-  // { tavily_calls, llm_calls, dropped_count, budget_exhausted, items_below_target[] }
-  searchTelemetry: jsonb('search_telemetry').default({}),
-
-  // Timestamps
-  createdAt: timestamp('created_at', { withTimezone: false }).defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: false })
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-});
 
 // ============================================
 // 13. SUPPLIER_ITEM_STATUS TABLE
@@ -798,8 +771,7 @@ export type NewSession = typeof sessions.$inferInsert;
 export type SseConnection = typeof sseConnections.$inferSelect;
 export type NewSseConnection = typeof sseConnections.$inferInsert;
 
-export type SupplierSearch = typeof supplierSearch.$inferSelect;
-export type NewSupplierSearch = typeof supplierSearch.$inferInsert;
+// SupplierSearch types removed with the supplier_search table (dropped 2026-06-02).
 
 export type SupplierItemStatus = typeof supplierItemStatus.$inferSelect;
 export type NewSupplierItemStatus = typeof supplierItemStatus.$inferInsert;

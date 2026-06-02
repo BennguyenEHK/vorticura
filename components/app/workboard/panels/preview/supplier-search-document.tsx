@@ -9,7 +9,7 @@ import type { SupplierSearchDocumentData } from '@/types/preview';
 
 interface SupplierSearchDocumentProps {
   data: SupplierSearchDocumentData;
-  isEditing: boolean;                            // will be unused, subject/search_content are read-only
+  isEditing: boolean;                            // will be unused
   onFieldChange: (path: string, value: string) => void; // will be unused
 }
 
@@ -179,13 +179,7 @@ export function SupplierSearchDocument({ data }: SupplierSearchDocumentProps) {
       className="flex flex-col bg-[#0d1117] text-gray-100 overflow-hidden"
       style={{ margin: '-1rem', height: 'calc(100% + 2rem)' }}
     >
-      {/* ================================================================
-          TOP STRIP — Subject and Search Content (Read-only)
-      ================================================================ */}
-      <div className="flex-none px-4 py-2.5 bg-[#111827] border-b border-[#1f2937] select-none">
-        <h1 className="text-[12px] font-semibold text-gray-300 truncate mb-1">Subject: {data.subject}</h1>
-        <p className="text-[11px] text-gray-500 line-clamp-2">{data.search_content}</p>
-      </div>
+      {/* Summary strip removed to reclaim vertical space in the panel */}
 
       {/* ================================================================
           SPLIT PANEL CONTAINER — resize driven by splitPct state

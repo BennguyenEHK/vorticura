@@ -38,7 +38,7 @@ interface FetchWorkspaceResult {
 // items_ordering is excluded — it fetches from multiple tables handled inline in fetchPreviewByType
 const PREVIEW_TABLE_MAP: Partial<Record<PreviewType, { table: string; idColumn: string }>> = {
   analysis:         { table: 'rfqAnalysis',    idColumn: 'rfqId' },
-  suppliers_search: { table: 'supplierSearch', idColumn: 'rfqId' },
+  // suppliers_search removed: supplierSearch table is dropped; no single-table preview record exists
   email:            { table: 'emailTable',     idColumn: 'rfqId' },
   quotation:        { table: 'quotations',     idColumn: 'rfqId' },
 };
@@ -229,18 +229,15 @@ async function fetchPreviewByType(
     }
   }
 
-  // Suppliers search preview: fetch supplier_search + supplier items in parallel
+  // Suppliers search preview: fetch supplier items (supplierSearch table is dropped)
   if (previewType === 'suppliers_search') {
     try {
-      const [searchRows, itemRows, rfqItemRows] = await Promise.all([
-        getData('supplierSearch', { rfqId }, workspace),
+      const [itemRows, rfqItemRows] = await Promise.all([
         getData('supplierItemStatus', { rfqId }, workspace),
         // rfq_items carries agent_item_summary — we surface its `identification`
         // axis in the parent item row of the supplier-search panel.
         getData('rfqItems', { rfqId }, workspace),
       ]);
-      const search = searchRows[0];
-      if (!search) return null;
 
       // Build itemId → identification[] map from rfq_items.agent_item_summary.
       // Defensive: agentItemSummary is jsonb and may be null / partially shaped.
@@ -255,8 +252,7 @@ async function fetchPreviewByType(
 
       return {
         suppliers_search: {
-          subject: search.subject,
-          search_content: search.searchContent,
+          subject: 'Supplier Search Results',  // Constant: subject no longer stored (supplierSearch table dropped)
         },
         items_source: (itemRows || []).map((item: Record<string, unknown>) => {
           // Alternatives are tagged by a `via_alt:` prefix the search pipeline

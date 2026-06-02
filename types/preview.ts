@@ -2,7 +2,6 @@
 // PREVIEW TYPES - Type definitions for preview panel
 // =============================================
 
-import type { DataType } from '@/lib/utils/validator';
 import type { WorkflowStep, WorkflowStepId } from '@/types/workflow';
 
 // ---------------------------------------------
@@ -126,10 +125,9 @@ export interface RfqAnalysisDocumentData {
 // ---------------------------------------------
 
 export interface SupplierSearchDocumentData {
-  search_id: number | null;
+  // search_id and search_content dropped with supplier_search table
   rfq_id: number | null;       // required for proceed pipeline (Accept button)
   subject: string;
-  search_content: string;
   items_source: Array<{        // Supplier rows for the source-tree + dossier panel
     item_id: number;
     supplier_name: string;

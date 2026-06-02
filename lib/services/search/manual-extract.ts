@@ -2,6 +2,8 @@
    Manual Extract: Regex-based supplier field extraction + verify gate
    ======================================================================== */
 
+import { selectBestPrice, type PriceCandidate } from './price-select';
+
 /**
  * Structural shape of the scorer's detected-field map.
  * Used to skip searching for fields the scorer already said are absent.
@@ -54,9 +56,17 @@ const CURRENCY_SYMBOLS = new Map<string, string>([
 ]);
 
 // Price: currency symbol/code + number (with optional commas/dots).
-// Pattern: currency near a numeric value (up to 20 chars of digits/commas/dots).
+// GLOBAL flag (/g) so we can find ALL occurrences in the page for multi-price disambiguation.
 const pricePattern =
-  /(?:USD|EUR|GBP|VND|SGD|MYR|THB|IDR|CNY|JPY|AUD|[$€£¥])\s*[\d,.]{1,20}|[\d,.]{1,20}\s*(?:USD|EUR|GBP|VND|SGD|MYR|THB|IDR|CNY|JPY|AUD|[$€£¥])/i;
+  /(?:USD|EUR|GBP|VND|SGD|MYR|THB|IDR|CNY|JPY|AUD|[$€£¥])\s*[\d,.]{1,20}|[\d,.]{1,20}\s*(?:USD|EUR|GBP|VND|SGD|MYR|THB|IDR|CNY|JPY|AUD|[$€£¥])/gi;
+
+// Labeled price: an explicit price-label phrase immediately precedes a bare number (no currency symbol needed).
+// Captures "sales price 1,234.56", "unit price: 99.00", "MSRP 199", etc.
+// Bare "price" and "now" are intentionally excluded — they match too broadly
+// (e.g. "price list 2024" → 2024, "now 50 in stock" → 50).
+// Group 1 = the raw number string.
+const labeledPricePattern =
+  /(?:sales\s+price|list\s+price|unit\s+price|price\s+each|our\s+price|msrp)\s*:?\s*([\d,.]{1,20})/gi;
 
 // Email: standard pattern (alphanumeric, +, _, -, . before @, domain, TLD).
 const emailPattern = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/;
@@ -142,11 +152,18 @@ export function verifyAgainstContent(value: string | number, content: string): b
  * Extract supplier fields from page content via regex patterns.
  * `detected` (optional) lets the caller skip searching for fields
  * the scorer already said are absent (cheaper, fewer false positives).
+ * `specTokens` (optional) are RFQ spec identification tokens (e.g. part size,
+ * class, model) forwarded to selectBestPrice to pick the correct variant price
+ * when the page lists multiple prices for different configurations.
  *
  * Returns fields, per-field confidence [0..1], and a list of missing fields.
  * Fields that fail the verify gate are reset to their empty value, confidence 0, and included in missing.
  */
-export function manualExtract(content: string, detected?: DetectedFieldMap): ManualExtractResult {
+export function manualExtract(
+  content: string,
+  detected?: DetectedFieldMap,
+  specTokens: string[] = [],
+): ManualExtractResult {
   const fields: ManualFields = {
     supplier_name: '',
     bidder_unit_price: 0,
@@ -174,47 +191,107 @@ export function manualExtract(content: string, detected?: DetectedFieldMap): Man
   confidence.supplier_name = 0;
 
   // =============================================
-  // Price + Currency
+  // Price + Currency — multi-price disambiguation
   // =============================================
+  // Collect ALL price occurrences on the page (currency-tagged and label-tagged),
+  // build a PriceCandidate per match, then use selectBestPrice to pick the one
+  // whose surrounding context best matches the RFQ spec tokens (e.g. size, class).
+  // This avoids blindly picking the first/cheapest price when a page lists several
+  // variant prices (e.g. different flange sizes at different unit costs).
   if (!detected || detected.has_price !== false) {
-    const priceMatch = content.match(pricePattern);
-    if (priceMatch) {
-      const priceText = priceMatch[0];
+    const candidates: PriceCandidate[] = [];
 
-      // Extract the numeric part.
+    // --- Pass 1: currency-tagged prices (symbol or ISO code adjacent to number) ---
+    // Reset lastIndex before iterating (global regex retains state between calls).
+    pricePattern.lastIndex = 0;
+    let pm: RegExpExecArray | null;
+    while ((pm = pricePattern.exec(content)) !== null) {
+      const priceText = pm[0];
+      const matchIndex = pm.index;
+
+      // Parse numeric value (strip commas, e.g. "1,234.56" → 1234.56).
       const numericMatch = priceText.match(/[\d,.]+/);
-      if (numericMatch) {
-        const cleanedPrice = numericMatch[0].replace(/,/g, '');
-        const price = parseFloat(cleanedPrice);
-        if (!isNaN(price) && price > 0) {
-          fields.bidder_unit_price = price;
-          confidence.bidder_unit_price = 0.8;
-        }
-      }
+      if (!numericMatch) continue;
+      const value = parseFloat(numericMatch[0].replace(/,/g, ''));
+      if (isNaN(value) || value <= 0) continue;
 
-      // Extract the currency symbol or code.
-      // Try ISO codes first (higher confidence because they appear in text).
+      // Derive currency: try ISO code first, then symbol → code map.
+      let currency = '';
       const codeMatch = priceText.match(/(?:USD|EUR|GBP|VND|SGD|MYR|THB|IDR|CNY|JPY|AUD)/i);
-      if (codeMatch) {
-        const currencyFound = codeMatch[0].toUpperCase();
-        if (CURRENCY_CODES.has(currencyFound)) {
-          fields.currency_code = currencyFound;
-          confidence.currency_code = 0.9;
-        }
+      if (codeMatch && CURRENCY_CODES.has(codeMatch[0].toUpperCase())) {
+        currency = codeMatch[0].toUpperCase();
       } else {
-        // Fall back to symbol → code mapping (lower confidence, inferred not verifiable).
         for (const [symbol, code] of CURRENCY_SYMBOLS) {
           if (priceText.includes(symbol)) {
-            fields.currency_code = code;
-            // Lower confidence: symbol was inferred, code won't verify against content.
-            confidence.currency_code = 0.6;
-            // Skip verification for inferred codes (they won't appear as ISO text).
-            skipVerify.add('currency_code');
+            currency = code;
             break;
           }
         }
       }
+
+      // Capture ~±60 chars of surrounding text as context for spec-token matching.
+      const ctxStart = Math.max(0, matchIndex - 60);
+      const ctxEnd = Math.min(content.length, matchIndex + priceText.length + 60);
+      candidates.push({ value, currency, context: content.slice(ctxStart, ctxEnd) });
     }
+
+    // --- Pass 2: labeled prices (no currency symbol required) ---
+    // Catches "Unit Price: 99.00", "MSRP 199", "now 29.99", etc.
+    // These become candidates with currency '' if no currency info is adjacent.
+    labeledPricePattern.lastIndex = 0;
+    let lm: RegExpExecArray | null;
+    while ((lm = labeledPricePattern.exec(content)) !== null) {
+      const rawNum = lm[1]; // numeric string captured by the label pattern
+      const matchIndex = lm.index;
+      const value = parseFloat(rawNum.replace(/,/g, ''));
+      if (isNaN(value) || value <= 0) continue;
+
+      // Look for a currency code or symbol within ±15 chars of this match for context.
+      const nearbyStart = Math.max(0, matchIndex - 15);
+      const nearbyEnd = Math.min(content.length, matchIndex + lm[0].length + 15);
+      const nearby = content.slice(nearbyStart, nearbyEnd);
+
+      let currency = '';
+      const nearCode = nearby.match(/(?:USD|EUR|GBP|VND|SGD|MYR|THB|IDR|CNY|JPY|AUD)/i);
+      if (nearCode && CURRENCY_CODES.has(nearCode[0].toUpperCase())) {
+        currency = nearCode[0].toUpperCase();
+      } else {
+        for (const [symbol, code] of CURRENCY_SYMBOLS) {
+          if (nearby.includes(symbol)) {
+            currency = code;
+            break;
+          }
+        }
+      }
+
+      // Capture ±60 char context window for spec-token scoring.
+      const ctxStart = Math.max(0, matchIndex - 60);
+      const ctxEnd = Math.min(content.length, matchIndex + lm[0].length + 60);
+      candidates.push({ value, currency, context: content.slice(ctxStart, ctxEnd) });
+    }
+
+    // --- Disambiguate: pick the candidate whose context best matches spec tokens ---
+    const best = selectBestPrice(candidates, specTokens);
+    if (best) {
+      fields.bidder_unit_price = best.value;
+      confidence.bidder_unit_price = 0.8;
+
+      if (best.currency) {
+        fields.currency_code = best.currency;
+        // High confidence only if the ISO code literally appears in content (verifiable).
+        // Otherwise it was inferred from a symbol ($/€/£/¥) and won't verify — skip the gate.
+        // NOTE: cannot use CURRENCY_CODES.has() here — a symbol-inferred code like 'USD'/'GBP'
+        // is also a valid ISO code, so that check would always be true and skipVerify would
+        // never be set, causing the verify gate to fail on symbol-only pages (e.g. "£100").
+        if (verifyAgainstContent(best.currency, content)) {
+          confidence.currency_code = 0.9;
+        } else {
+          confidence.currency_code = 0.6;
+          skipVerify.add('currency_code');
+        }
+      }
+    }
+    // No candidate → price stays 0, currency stays '', added to missing below.
   }
 
   // =============================================

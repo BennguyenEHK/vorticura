@@ -15,7 +15,7 @@ export interface TavilySnippet {
   title: string;
   url: string;
   snippet: string;       // short Tavily-generated summary (≈ "content" field)
-  content: string;       // raw page text when include_raw_content=true (truncated by Tavily)
+  content: string;       // raw page text as plain text when include_raw_content='text' (truncated by Tavily)
 }
 
 // Tunable bits exposed per call. Defaults pulled from env so the orchestrator
@@ -61,9 +61,9 @@ export async function tavilySearch(query: string, opts: TavilyOptions = {}): Pro
       query,
       max_results: maxResults,
       search_depth: searchDepth,
-      // Pull full page text so the LLM can extract price / contact info from
-      // the actual product page, not just the Tavily snippet.
-      include_raw_content: true,
+      // Pull full page text (raw_content as plain text) so regex/LLM extraction
+      // sees clean prose, not markdown noise.
+      include_raw_content: 'text',
     }),
     // Hard cap so a hung Tavily can't park a server action against the Vercel
     // 60s function timeout. 12s is well above their p95 (~3-5s for advanced).

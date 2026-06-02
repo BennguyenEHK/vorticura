@@ -10,7 +10,6 @@ import type {
   Customer,
   Email,
   RfqAnalysis,
-  SupplierSearch,
   FileMetadata,
   UserSession,
   UserCompany,       // renamed from ClientCompany
@@ -25,7 +24,6 @@ export type {
   Customer,
   Email,
   RfqAnalysis,
-  SupplierSearch,
   FileMetadata,
   UserSession,
   UserCompany,

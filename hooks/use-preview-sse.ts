@@ -211,10 +211,8 @@ export function transformResultToDocument(result: ProcessorResult): DocumentData
       const rawItems = (data.items_source as Array<Record<string, unknown>>) || [];
 
       const searchData: SupplierSearchDocumentData = {
-        search_id: null,
         rfq_id: (data.rfq_id as number) || null,  // needed for Accept → proceed pipeline
         subject: (suppliersSearch.subject as string) || 'Supplier Search Results',
-        search_content: (suppliersSearch.search_content as string) || '',
         items_source: rawItems.map((item) => {
           const notes = (item.notes as string) || '';
           const category: 'source' | 'alternative' =

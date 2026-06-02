@@ -53,8 +53,10 @@ import {
   type MemoryHit,
 } from '@/lib/services/search/supplier-memory';
 import type { ParsedSpec } from '@/lib/ai-agent/schemas/query-plan';
-// Deterministic microdata price extraction — used to override an LLM price of 0
-import { extractMicrodataPrice } from '@/lib/services/search/html-gate';
+// Extraction cascade — Layer 0 (URL liveness pre-gate) + Layer 2 (structured-HTML
+// price via cheerio JSON-LD/microdata/OG). Replaces the dead text-only microdata layer.
+import { checkLiveness } from '@/lib/services/search/liveness';
+import { extractFromHtml } from '@/lib/services/search/html-extract';
 
 
 // ---------------------------------------------
@@ -124,18 +126,33 @@ interface ItemSourceRow {
 // Deterministic suppliers_search summary (no LLM)
 // ---------------------------------------------
 
-function buildSearchContent(rfqReference: string, rows: ItemSourceRow[], droppedCount: number): string {
-  if (rows.length === 0) {
-    return `No supplier results for RFQ ${rfqReference}.`;
+// buildSearchContent removed 2026-06-02 — the supplier_search summary table/string
+// was dropped; the panel renders directly from the per-item supplier rows.
+
+/** Pull the `identification` axis (string[]) from a row's agent_item_summary jsonb. */
+function extractIdentification(row: Record<string, unknown>): string[] {
+  const summary = row.agentItemSummary as { identification?: unknown } | null;
+  return summary && Array.isArray(summary.identification)
+    ? (summary.identification as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim() !== '')
+    : [];
+}
+
+/**
+ * Flatten an item's discriminating spec tokens (identification axis + parsed-spec
+ * scalar values) into a string[] for multi-price disambiguation. These are the
+ * size/class/model/material terms that distinguish one priced variant from another
+ * on a page that lists several prices (the Amazon flanged-valve case).
+ */
+function buildSpecTokens(parsed: ParsedSpec, identification: string[]): string[] {
+  const tokens: string[] = [...identification];
+  for (const v of Object.values(parsed ?? {})) {
+    if (typeof v === 'string' && v.trim()) tokens.push(v.trim());
+    else if (typeof v === 'number') tokens.push(String(v));
+    else if (Array.isArray(v)) {
+      for (const x of v) if (typeof x === 'string' && x.trim()) tokens.push(x.trim());
+    }
   }
-  // One <br>-separated line per item — readable in the panel preview, no double-<br>s
-  const lines = rows.map((r) => {
-    const ccy = r.currency_code || 'USD';
-    const price = r.bidder_unit_price > 0 ? `${ccy} ${r.bidder_unit_price.toFixed(2)}` : 'price n/a';
-    return `• Item #${r.item_id}: ${r.supplier_name} — ${price} — ${r.delivery_time}`;
-  });
-  const drop = droppedCount > 0 ? `<br>Note: ${droppedCount} candidate URL(s) dropped (offline or homepage-only).` : '';
-  return `Supplier search for RFQ ${rfqReference}:<br>${lines.join('<br>')}${drop}`;
+  return tokens;
 }
 
 // ---------------------------------------------
@@ -190,7 +207,7 @@ interface RfqItemInput {
 interface ExtractResult {
   rows: ItemSourceRow[] | null;
   tavilyCalls: number;
-  // Snippet URLs dropped pre-extraction (kept at 0; liveness gate removed).
+  // Candidate URLs dropped pre-extraction by the Layer-0 liveness gate (404/410).
   deadUrls: number;
 }
 
@@ -232,6 +249,9 @@ async function extractSupplierForItem(
   // Substitute round: when true, surface the LLM's match_reasoning (why a
   // non-exact product still fulfils the requirement). '' for exact matches.
   isSubstitute: boolean = false,
+  // Spec identification tokens (size/class/model/material) threaded into the
+  // manual + structured extractors for multi-price disambiguation.
+  specTokens: string[] = [],
 ): Promise<ExtractResult> {
   // (1) One Tavily search → classify → eliminate → score → ranked candidates,
   //     each carrying its detected-field map + page classification.
@@ -255,23 +275,42 @@ async function extractSupplierForItem(
   //     search can satisfy the MIN_SOURCES floor on its own.
   const pages = search.candidates.slice(0, MAX_PAGES_PER_QUERY);
   const rows: ItemSourceRow[] = [];
+  let deadUrls = 0;   // candidates dropped by the Layer-0 liveness gate (404/410)
 
   for (const cand of pages) {
     // Budget is the hard leash — stop opening new pages once it's spent.
     if (isExhausted(budget)) break;
 
+    // (2.0) LAYER 0 — URL liveness pre-gate. One fetch classifies the page and,
+    //       when live (2xx), hands us the real HTML for the structured layer.
+    //       404/410 = truly dead → drop. 403/503/timeout = blocked → keep the
+    //       candidate on Tavily raw_content (bot-proof), just skip HTML enhancement.
+    const live = await checkLiveness(cand.snippet.url);
+    if (live.status === 'dead') { deadUrls++; continue; }
+    const html = live.html;   // non-null only when status === 'live'
+
     const content = cand.snippet.content || cand.snippet.snippet || '';
 
-    // (2a) MANUAL extract + verify-against-content. Regex pulls price/currency/
-    //      contact/qty/delivery; each value must re-appear in content or it is
-    //      discarded into `missing` for the LLM to recover.
-    const manual = manualExtract(content, cand.detected);
+    // (2a) LAYER 1 — MANUAL regex on Tavily raw_content (text). specTokens drive
+    //      multi-price disambiguation (pick the variant that matches the RFQ spec).
+    //      Each value must re-appear in content (verify gate) or it is discarded.
+    const manual = manualExtract(content, cand.detected, specTokens);
     const manualUsed = Object.values(manual.confidence).some((c) => c > 0);
 
-    // (2b) LLM GAP-FILL — supplier_name + description are never regex-extracted,
-    //      so the LLM still runs (budget-gated) but grounded by the SINGLE
-    //      pre-filtered page. consumeLlmCall reserves the call BEFORE the model;
-    //      a spent budget skips the LLM and the page degrades to manual-only.
+    // (2b) LAYER 2 — STRUCTURED HTML (cheerio JSON-LD/microdata/OG). Runs only
+    //      when manual found no price AND we have live HTML. This is the canonical,
+    //      un-hallucinated price; it supersedes the old text-only microdata layer.
+    let structuredPrice = 0;
+    let structuredCurrency = '';
+    if (manual.fields.bidder_unit_price === 0 && html) {
+      const s = extractFromHtml(html, specTokens);
+      if (s.price > 0) { structuredPrice = s.price; structuredCurrency = s.currency; }
+    }
+
+    // (2c) LAYER 3 — LLM GAP-FILL. Always runs (supplier_name + description are
+    //      never regex-extractable); also recovers price/contact the deterministic
+    //      layers missed. consumeLlmCall reserves the call BEFORE the model; a spent
+    //      budget skips the LLM and the page degrades to deterministic-only.
     let llm: SupplierExtraction | null = null;
     if (consumeLlmCall(budget)) {
       const llmStart = Date.now();
@@ -290,8 +329,9 @@ async function extractSupplierForItem(
       console.log(`[ai-server] item=${item.itemId} gap-fill latency=${Date.now() - llmStart}ms`);
     }
 
-    // (2c) MERGE — manual-verified fields win; the LLM fills the rest. Fields the
-    //      regex layer can't do (name/description/compliance/notes/packaging/
+    // (2d) MERGE — deterministic price wins in cascade order: manual (raw_content)
+    //      → structured (HTML) → LLM. Currency follows the same precedence. Fields
+    //      the regex layer can't do (name/description/compliance/notes/packaging/
     //      reasoning) always come from the LLM.
     const f = manual.fields;
     const supplier_name = llm?.supplier_name ?? '';
@@ -299,23 +339,21 @@ async function extractSupplierForItem(
     // A page with no name or description is not a usable supplier source.
     if (!supplier_name.trim() || !bidder_description.trim()) continue;
 
-    let price = f.bidder_unit_price > 0 ? f.bidder_unit_price : (llm?.bidder_unit_price ?? 0);
-    let currency = f.currency_code || llm?.currency_code || 'USD';
+    const price =
+      f.bidder_unit_price > 0 ? f.bidder_unit_price
+      : structuredPrice > 0 ? structuredPrice
+      : (llm?.bidder_unit_price ?? 0);
+    const currency = f.currency_code || structuredCurrency || llm?.currency_code || 'USD';
     const delivery_time = f.delivery_time || llm?.delivery_time || '';
     const contact_email = f.contact_email || llm?.contact_email || '';
     const contact_phone = f.contact_phone || llm?.contact_phone || '';
     const available_qty = f.available_qty > 0 ? f.available_qty : (llm?.available_qty ?? 0);
 
-    // (2d) Deterministic microdata price override when price is still 0.
-    let track = manualUsed ? (llm ? 'manual+llm' : 'manual') : 'llm';
-    if (price === 0) {
-      const micro = extractMicrodataPrice(content);
-      if (micro) {
-        price = micro.value;
-        if (micro.currency) currency = micro.currency;
-        track = `${track}+microdata`;
-      }
-    }
+    // Provenance — which layer supplied the price.
+    const track =
+      f.bidder_unit_price > 0 ? (manualUsed ? (llm ? 'manual+llm' : 'manual') : 'manual')
+      : structuredPrice > 0 ? (llm ? 'structured+llm' : 'structured')
+      : 'llm';
 
     // (2e) Stock Protection — drop suppliers that can't fulfil. 0 = unknown = bypass.
     if (available_qty > 0 && available_qty < item.qty + 5) {
@@ -323,8 +361,11 @@ async function extractSupplierForItem(
       continue;
     }
 
-    // (2f) requires_quote — page sells the item but has no public price and asks
-    //      buyers to request a quote (LLM flag OR price-absent + quote-intent signal).
+    // (2f) requires_quote gate — page sells the item but has no public price and
+    //      asks buyers to request a quote (LLM flag OR price-absent + quote-intent).
+    //      When price is still unknown AND there is NO quote-intent signal, the page
+    //      is eligible for Layer 4 (vision/image-to-text) — deferred to Phase 2, so
+    //      for now we accept the row with price unknown.
     const requiresQuote = (llm?.requires_quote ?? false) || (price === 0 && cand.detected.has_quote_request);
 
     const stockPrefix = available_qty > 0 ? `Stock: ${available_qty} available. ` : '';
@@ -370,7 +411,7 @@ async function extractSupplierForItem(
     if (rows.length >= MAX_PAGES_PER_QUERY) break;
   }
 
-  return { rows: rows.length ? rows : null, tavilyCalls: search.tavilyCalls, deadUrls: 0 };
+  return { rows: rows.length ? rows : null, tavilyCalls: search.tavilyCalls, deadUrls };
 }
 
 // ---------------------------------------------
@@ -480,6 +521,9 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
           const plan = await planQueries(searchText);
           const parsed: ParsedSpec = plan.parsed;
           const queries: string[] = plan.queries;
+          // Spec tokens (identification axis + parsed-spec values) for multi-price
+          // disambiguation in the manual + structured extraction layers.
+          const specTokens = buildSpecTokens(parsed, extractIdentification(row));
 
           // (3b) L0 MEMORY — exact-match short-circuit. Disabled by default
           //      (SEARCH_MEMORY_ENABLED); lookupMemory no-ops + returns null when
@@ -516,7 +560,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
             baseItem,
             effectiveQueries,
             budget,
-            (q, b) => extractSupplierForItem(q, baseItem, b, baseItem.description, parsed, false),
+            (q, b) => extractSupplierForItem(q, baseItem, b, baseItem.description, parsed, false, specTokens),
           );
 
           // (3c) ALT OUTER LOOP — bounded substitute discovery. If the item is
@@ -541,7 +585,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
               baseItem,
               replanQueries,
               budget,
-              (q, b) => extractSupplierForItem(q, baseItem, b, baseItem.description, replan.parsed ?? parsed, true),
+              (q, b) => extractSupplierForItem(q, baseItem, b, baseItem.description, replan.parsed ?? parsed, true, specTokens),
             );
             for (const r of altResult.rows) {
               if (!collected.has(r.source_url)) collected.set(r.source_url, r);
@@ -578,6 +622,40 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     // urls; isProductPage rejects homepages/PDFs/listings even if the LLM slipped.
     // searchOneQuery already filters to verified product pages before extraction.
     const productPageItems = beforeUrlGuards.filter((r) => isUsableSourceRow(r) && isProductPage(r.source_url));
+
+    // (3b2) CONTACT LOOPBACK — rows with NEITHER email nor phone get ONE bounded
+    //       recovery pass: a contact-targeted Tavily query built from the supplier
+    //       name, then a contacts-only manual extract. Bounded by a global cap and
+    //       fully fail-safe so a contact hunt can never blow up cost or break the run.
+    const CONTACT_RECOVERY_CAP = Number(process.env.SEARCH_CONTACT_RECOVERY_CAP ?? 10);
+    let contactRecoveries = 0;
+    let contactTavilyCalls = 0;
+    for (const row of productPageItems) {
+      if (contactRecoveries >= CONTACT_RECOVERY_CAP) break;        // global cost cap
+      if (row.contact_email || row.contact_phone || !row.supplier_name) continue; // already has a contact / no name to search
+      contactRecoveries++;
+      try {
+        // Contact-specific query (supplier name, not the item spec).
+        const contactQuery = `"${row.supplier_name}" contact email phone "get in touch"`;
+        const cs = await searchOneQuery(contactQuery);
+        contactTavilyCalls += cs.tavilyCalls;
+        for (const c of cs.candidates.slice(0, 2)) {
+          // Extract ONLY contacts (skip price/stock/delivery) from the candidate text.
+          const extracted = manualExtract(
+            c.snippet.content || c.snippet.snippet || '',
+            { has_price: false, has_stock: false, has_delivery: false, has_contact_email: true, has_contact_phone: true },
+          );
+          if (!row.contact_email && extracted.fields.contact_email) row.contact_email = extracted.fields.contact_email;
+          if (!row.contact_phone && extracted.fields.contact_phone) row.contact_phone = extracted.fields.contact_phone;
+          if (row.contact_email && row.contact_phone) break;       // both found — stop early
+        }
+      } catch (err) {
+        console.warn(`[supplier-search] contact recovery failed for "${row.supplier_name}":`, err instanceof Error ? err.message : err);
+      }
+    }
+    if (contactRecoveries > 0) {
+      console.log(`[supplier-search] contact recovery: attempted=${contactRecoveries} tavily=${contactTavilyCalls}`);
+    }
 
     // (3c) MEMORIZE (Phase 2) — persist verified sourcings so an identical spec
     //      resolves at Tier-0 next time. Skip rows that CAME from memory (no
@@ -625,10 +703,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     // Defensive: agentItemSummary is jsonb and may be null / partially shaped.
     const identByItem = new Map<number, string[]>();
     for (const row of itemRows) {
-      const summary = row.agentItemSummary as { identification?: unknown } | null;
-      const ident = summary && Array.isArray(summary.identification)
-        ? (summary.identification as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim() !== '')
-        : [];
+      const ident = extractIdentification(row);
       if (ident.length) identByItem.set(Number(row.itemId), ident);
     }
 
@@ -638,8 +713,8 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
       item_identification: identByItem.get(row.item_id) ?? [],  // surfaced in the panel parent row
     }));
 
-    // deadUrls is 0 per-item (liveness gate removed); aggregate and add the
-    // row-level URL-guard drops for the total dropped figure.
+    // Aggregate the Layer-0 liveness drops (404/410) and add the row-level
+    // URL-guard drops below for the total dropped figure.
     const deadUrlCount = rawItemResults.reduce((sum, r) => sum + r.result.deadUrls, 0);
     const totalDropped = (beforeUrlGuards.length - productPageItems.length) + deadUrlCount;
     console.log(`[supplier-search] done rfq_id=${rfq_id} returned=${finalItems.length} dropped=${totalDropped}`);
@@ -651,7 +726,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     // dropped_count: URL-guard + liveness drops (existing totalDropped).
     // items_below_target: item_ids whose distinct-source count is BELOW the floor
     //   (MIN_SOURCES) — now includes both under-filled AND zero-row items.
-    const tavily_calls = rawItemResults.reduce((sum, r) => sum + r.result.tavilyCalls, 0);
+    const tavily_calls = rawItemResults.reduce((sum, r) => sum + r.result.tavilyCalls, 0) + contactTavilyCalls;
     const llm_calls = rawItemResults.reduce((sum, r) => sum + r.budget.llmCallsUsed, 0);
     const budget_exhausted = rawItemResults.some((r) => r.budget.exhausted);
     const dropped_count = totalDropped;
@@ -676,13 +751,12 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
       `[supplier-search] telemetry rfq_id=${rfq_id} tavily=${tavily_calls} llm=${llm_calls} exhausted=${budget_exhausted} items_below_target=${items_below_target.length}`,
     );
 
-    // Build suppliers_search summary deterministically — NO LLM call here.
-    // Stage 14 — attach search_telemetry so modifyDatabase can persist it to
-    // the supplier_search jsonb column (lead mapped data.search_telemetry →
-    // searchTelemetry via TC_supplierSearch spread in databaseHandler.ts).
+    // Build the suppliers_search envelope for the SSE/preview document ONLY — the
+    // supplier_search summary table was dropped (2026-06-02), so this is NOT
+    // persisted; the panel renders from items_source + this subject. search_telemetry
+    // is still surfaced in the SSE payload for observability.
     const suppliers_search = {
       subject: `Supplier Search Results - ${rfq_reference || `RFQ ${rfq_id}`}`,
-      search_content: buildSearchContent(rfq_reference || `${rfq_id ?? ''}`, finalItems, totalDropped),
       search_status: 'completed',
       search_telemetry,
     };
@@ -713,7 +787,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
           data_type: 'supplier_search',
           rfq_id,
           rfq_reference,
-          suppliers_search,
+          // suppliers_search removed — summary table dropped; only supplier_item_status persists.
           // Explicit item_id ASC sort on the DB payload — guarantees a
           // deterministic supplier_id ↔ item_id ordering in supplierItemStatus
           // independent of any upstream reordering. FK linkage via rfq_id.
