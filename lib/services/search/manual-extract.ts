@@ -2,7 +2,7 @@
    Manual Extract: Regex-based supplier field extraction + verify gate
    ======================================================================== */
 
-import { selectBestPrice, type PriceCandidate } from './price-select';
+import { selectBestPrice, type PriceCandidate, type SpecTokenInput } from './price-select';
 
 /**
  * Structural shape of the scorer's detected-field map.
@@ -40,6 +40,8 @@ export interface ManualExtractResult {
   confidence: Record<keyof ManualFields, number>;
   /** fields that are missing, zero, or failed verification. */
   missing: (keyof ManualFields)[];
+  /** optional: 0..1 confidence of the selected price variant match. */
+  priceConfidence?: number;
 }
 
 // =============================================
@@ -149,6 +151,51 @@ function parseNumeric(token: string): number {
 }
 
 // =============================================
+// Helper: expand context window with line/sentence boundaries
+// =============================================
+
+/**
+ * Expand a fixed-window context slice around a price match by including
+ * complete lines/sentences/table cells. Delimiters: newlines, pipes, bullets,
+ * arrows, periods. Caps total expansion to ~240 chars to stay cheap.
+ *
+ * Heuristic: if the original ±60 chars didn't capture a nearby variant label,
+ * try including the full line or sentence containing the match, up to ~240 chars total.
+ */
+function expandContextWindow(content: string, matchIndex: number, priceText: string, baseWindow: string): string {
+  // Already have a base window from ±60 chars. Try to expand by including
+  // complete lines/cells around it. Delimiters: \n, |, •, ►, .
+  const windowStart = content.indexOf(baseWindow);
+  const windowEnd = windowStart >= 0 ? windowStart + baseWindow.length : matchIndex + priceText.length + 60;
+
+  // Expand backward to a preceding newline or delimiter, with a bound.
+  let expandStart = Math.max(0, windowStart - 120);
+  const delimBefore = Math.max(
+    content.lastIndexOf('\n', expandStart),
+    content.lastIndexOf('|', expandStart),
+    content.lastIndexOf('•', expandStart),
+    content.lastIndexOf('►', expandStart),
+    content.lastIndexOf('.', expandStart),
+  );
+  if (delimBefore > 0) expandStart = delimBefore;
+
+  // Expand forward to a following newline or delimiter, with a bound.
+  let expandEnd = Math.min(content.length, windowEnd + 120);
+  const delimAfter = Math.min(
+    content.indexOf('\n', expandEnd),
+    content.indexOf('|', expandEnd),
+    content.indexOf('•', expandEnd),
+    content.indexOf('►', expandEnd),
+    content.indexOf('.', expandEnd),
+  );
+  if (delimAfter > 0) expandEnd = delimAfter;
+
+  // Cap total expansion to ~240 chars.
+  const expanded = content.slice(expandStart, Math.min(expandEnd, expandStart + 240));
+  return expanded.length > baseWindow.length ? expanded : baseWindow;
+}
+
+// =============================================
 // Helper: normalize delivery to "X-Y weeks"
 // =============================================
 
@@ -239,14 +286,16 @@ export function verifyAgainstContent(value: string | number, content: string): b
  * `specTokens` (optional) are RFQ spec identification tokens (e.g. part size,
  * class, model) forwarded to selectBestPrice to pick the correct variant price
  * when the page lists multiple prices for different configurations.
+ * Can be bare strings (weight 1 each) or {token, weight} objects.
  *
- * Returns fields, per-field confidence [0..1], and a list of missing fields.
+ * Returns fields, per-field confidence [0..1], list of missing fields, and optional
+ * priceConfidence (0..1) reflecting the selected price variant's match quality.
  * Fields that fail the verify gate are reset to their empty value, confidence 0, and included in missing.
  */
 export function manualExtract(
   content: string,
   detected?: DetectedFieldMap,
-  specTokens: string[] = [],
+  specTokens?: SpecTokenInput[],
 ): ManualExtractResult {
   const fields: ManualFields = {
     supplier_name: '',
@@ -270,6 +319,9 @@ export function manualExtract(
 
   // Track fields that should NOT be verified (inferred from symbols, not literal text).
   const skipVerify = new Set<keyof ManualFields>();
+
+  // Track price confidence to surface in the result.
+  let priceConfidence: number | undefined;
 
   // supplier_name: left empty (unreliable; LLM gap-fill handles it).
   confidence.supplier_name = 0;
@@ -314,9 +366,14 @@ export function manualExtract(
       }
 
       // Capture ~±60 chars of surrounding text as context for spec-token matching.
+      // Then expand with line/sentence boundaries to catch nearby variant labels.
       const ctxStart = Math.max(0, matchIndex - 60);
       const ctxEnd = Math.min(content.length, matchIndex + priceText.length + 60);
-      candidates.push({ value, currency, context: content.slice(ctxStart, ctxEnd) });
+      const baseWindow = content.slice(ctxStart, ctxEnd);
+      const context = specTokens && specTokens.length > 0
+        ? expandContextWindow(content, matchIndex, priceText, baseWindow)
+        : baseWindow;
+      candidates.push({ value, currency, context });
     }
 
     // --- Pass 2: labeled prices (no currency symbol required) ---
@@ -349,9 +406,14 @@ export function manualExtract(
       }
 
       // Capture ±60 char context window for spec-token scoring.
+      // Then expand with line/sentence boundaries.
       const ctxStart = Math.max(0, matchIndex - 60);
       const ctxEnd = Math.min(content.length, matchIndex + lm[0].length + 60);
-      candidates.push({ value, currency, context: content.slice(ctxStart, ctxEnd) });
+      const baseWindow = content.slice(ctxStart, ctxEnd);
+      const context = specTokens && specTokens.length > 0
+        ? expandContextWindow(content, matchIndex, lm[0], baseWindow)
+        : baseWindow;
+      candidates.push({ value, currency, context });
     }
 
     // --- Disambiguate: pick the candidate whose context best matches spec tokens ---
@@ -359,6 +421,10 @@ export function manualExtract(
     if (best) {
       fields.bidder_unit_price = best.value;
       confidence.bidder_unit_price = 0.8;
+      // Surface the price variant confidence when a price was selected.
+      if (specTokens && specTokens.length > 0) {
+        priceConfidence = best.matchConfidence;
+      }
 
       if (best.currency) {
         fields.currency_code = best.currency;
@@ -538,5 +604,9 @@ export function manualExtract(
     missing.push('available_qty');
   }
 
-  return { fields, confidence, missing };
+  const result: ManualExtractResult = { fields, confidence, missing };
+  if (priceConfidence !== undefined) {
+    result.priceConfidence = priceConfidence;
+  }
+  return result;
 }

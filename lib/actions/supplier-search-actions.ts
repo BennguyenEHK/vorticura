@@ -38,6 +38,12 @@ import {
   consumeVisionCall,
   type VisionBudget,
 } from '@/lib/services/search/budget';
+// Task 4 — weighted price disambiguation + Task 3 — homepage fallback.
+import {
+  type SpecToken,
+  type SpecTokenInput,
+  PRICE_CONF_THRESHOLD,
+} from '@/lib/services/search/price-select';
 // Stage 11+ — density-validation loop (the source-count floor) + telemetry.
 // Phase 1 (2026-05-31 spec): the orchestrator drives the SPECULATIVE FAN-OUT
 // variant (gatherSourcesForItemParallel) so an item's query attempts overlap
@@ -147,19 +153,69 @@ function extractIdentification(row: Record<string, unknown>): string[] {
 
 /**
  * Flatten an item's discriminating spec tokens (identification axis + parsed-spec
- * scalar values) into a string[] for multi-price disambiguation. These are the
- * size/class/model/material terms that distinguish one priced variant from another
- * on a page that lists several prices (the Amazon flanged-valve case).
+ * scalar values) into a SpecToken[] with weights for multi-price disambiguation.
+ * These are the size/class/model/material terms that distinguish one priced variant
+ * from another on a page that lists several prices (the Amazon flanged-valve case).
+ *
+ * Weighting:
+ *   - identification axis tokens → weight 2 (high priority)
+ *   - parsed spec keys matching /model|size|class|rating|pressure|dimension|dn|type/i → weight 3 (very high)
+ *   - parsed spec keys matching /material/i → weight 2
+ *   - other string/number/array values → weight 2
+ *   - auxiliary tokens from compliance/notes fields → weight 1 (lowest)
  */
-function buildSpecTokens(parsed: ParsedSpec, identification: string[]): string[] {
-  const tokens: string[] = [...identification];
-  for (const v of Object.values(parsed ?? {})) {
-    if (typeof v === 'string' && v.trim()) tokens.push(v.trim());
-    else if (typeof v === 'number') tokens.push(String(v));
-    else if (Array.isArray(v)) {
-      for (const x of v) if (typeof x === 'string' && x.trim()) tokens.push(x.trim());
+function buildSpecTokens(parsed: ParsedSpec, identification: string[], agentItemSummary?: Record<string, unknown>): SpecToken[] {
+  const tokens: SpecToken[] = [];
+
+  // Identification axis tokens → weight 2.
+  for (const ident of identification) {
+    if (ident.trim()) {
+      tokens.push({ token: ident.trim(), weight: 2 });
     }
   }
+
+  // Parsed spec values — weight by key name.
+  for (const [key, v] of Object.entries(parsed ?? {})) {
+    const keyLower = key.toLowerCase();
+    // Keys matching /model|size|class|rating|pressure|dimension|dn|type/i → weight 3.
+    let weight = 2;  // default for other keys
+    if (/model|size|class|rating|pressure|dimension|dn|type/i.test(keyLower)) {
+      weight = 3;
+    } else if (/material/i.test(keyLower)) {
+      weight = 2;
+    }
+
+    if (typeof v === 'string' && v.trim()) {
+      tokens.push({ token: v.trim(), weight });
+    } else if (typeof v === 'number') {
+      tokens.push({ token: String(v), weight });
+    } else if (Array.isArray(v)) {
+      for (const x of v) {
+        if (typeof x === 'string' && x.trim()) {
+          tokens.push({ token: x.trim(), weight });
+        }
+      }
+    }
+  }
+
+  // Auxiliary tokens from compliance/notes-style fields (Task 4 cross-reference).
+  // Extract any agentItemSummary axis values whose KEY matches /compl|deviat|note|remark/i.
+  if (agentItemSummary && typeof agentItemSummary === 'object') {
+    for (const [key, v] of Object.entries(agentItemSummary)) {
+      if (/compl|deviat|note|remark/i.test(key)) {
+        if (typeof v === 'string' && v.trim()) {
+          tokens.push({ token: v.trim(), weight: 1 });
+        } else if (Array.isArray(v)) {
+          for (const x of v) {
+            if (typeof x === 'string' && x.trim()) {
+              tokens.push({ token: x.trim(), weight: 1 });
+            }
+          }
+        }
+      }
+    }
+  }
+
   return tokens;
 }
 
@@ -260,7 +316,8 @@ async function extractSupplierForItem(
   isSubstitute: boolean = false,
   // Spec identification tokens (size/class/model/material) threaded into the
   // manual + structured extractors for multi-price disambiguation.
-  specTokens: string[] = [],
+  // Task 4: now weighted SpecToken[] (or bare strings, which are auto-wrapped at weight 1).
+  specTokens: SpecTokenInput[] = [],
 ): Promise<ExtractResult> {
   // (1) One Tavily search → classify → eliminate → score → ranked candidates,
   //     each carrying its detected-field map + page classification.
@@ -305,15 +362,28 @@ async function extractSupplierForItem(
     //      Each value must re-appear in content (verify gate) or it is discarded.
     const manual = manualExtract(content, cand.detected, specTokens);
     const manualUsed = Object.values(manual.confidence).some((c) => c > 0);
+    // Task 4 — track low-confidence price variant matching from manual extraction.
+    let manualPriceConfidence: number | undefined;
+    if (manual.fields.bidder_unit_price > 0 && manual.priceConfidence !== undefined) {
+      manualPriceConfidence = manual.priceConfidence;
+    }
 
     // (2b) LAYER 2 — STRUCTURED HTML (cheerio JSON-LD/microdata/OG). Runs only
     //      when manual found no price AND we have live HTML. This is the canonical,
     //      un-hallucinated price; it supersedes the old text-only microdata layer.
     let structuredPrice = 0;
     let structuredCurrency = '';
+    let structuredPriceConfidence: number | undefined;
     if (manual.fields.bidder_unit_price === 0 && html) {
       const s = extractFromHtml(html, specTokens);
-      if (s.price > 0) { structuredPrice = s.price; structuredCurrency = s.currency; }
+      if (s.price > 0) {
+        structuredPrice = s.price;
+        structuredCurrency = s.currency;
+        // Task 4 — track low-confidence price from structured extraction.
+        if (s.confidence !== undefined) {
+          structuredPriceConfidence = s.confidence;
+        }
+      }
     }
 
     // (2c) LAYER 3 — LLM GAP-FILL. Always runs (supplier_name + description are
@@ -360,6 +430,13 @@ async function extractSupplierForItem(
     // VND/MYR page would otherwise be off by ~1000×). The quote layer applies the
     // USD default at quote-build time (quotation-actions: `currency_code || 'USD'`).
     let currency = f.currency_code || structuredCurrency || llm?.currency_code || '';
+    // Task 4 — track which confidence value came through if a price was selected.
+    let winningPriceConfidence: number | undefined;
+    if (f.bidder_unit_price > 0) {
+      winningPriceConfidence = manualPriceConfidence;
+    } else if (structuredPrice > 0) {
+      winningPriceConfidence = structuredPriceConfidence;
+    }
 
     // (2c-vision) LAYER 4 — VISION/IMAGE-TO-TEXT. Last resort: runs ONLY when every
     //      prior layer left price unknown AND we have live HTML to locate the product
@@ -370,7 +447,10 @@ async function extractSupplierForItem(
     // consumeVisionCall reserves the slot BEFORE the costly screenshot+VLM call; the
     // isVisionEnabled() pre-check avoids burning a slot on a disabled no-op.
     if (price === 0 && html && isVisionEnabled() && consumeVisionCall(visionBudget)) {
-      const vision = await extractFromVision(html, cand.snippet.url, specTokens);
+      // Cast specTokens to string[] for extractFromVision (legacy signature; vision-extract
+      // not yet updated to accept SpecTokenInput[]).
+      const visionSpecTokens = specTokens.map((t) => typeof t === 'string' ? t : t.token);
+      const vision = await extractFromVision(html, cand.snippet.url, visionSpecTokens);
       if (vision.price > 0) {
         price = vision.price;
         currency = vision.currency || currency;   // keep cascade currency if vision gave none
@@ -406,8 +486,18 @@ async function extractSupplierForItem(
     //      is eligible for the future Layer 4 vision pass — see Q2 / Phase 2).
     const requiresQuote = price === 0 && ((llm?.requires_quote ?? false) || cand.detected.has_quote_request);
 
+    // Task 4 — CONFIDENCE PROPAGATION. When the winning price came from a
+    // low-confidence multi-variant disambiguation, prepend a short marker to notes.
+    // Only annotate when confidence is defined and below the threshold; otherwise
+    // change nothing (high or undefined = normal flow).
     const stockPrefix = available_qty > 0 ? `Stock: ${available_qty} available. ` : '';
-    const notes = `${stockPrefix}${llm?.notes ?? ''}`.trim();
+    let notes = `${stockPrefix}${llm?.notes ?? ''}`.trim();
+    if (
+      winningPriceConfidence !== undefined &&
+      winningPriceConfidence < PRICE_CONF_THRESHOLD
+    ) {
+      notes = `[price match: low-confidence variant] ${notes}`.trim();
+    }
 
     rows.push({
       item_id: item.itemId,
@@ -450,6 +540,78 @@ async function extractSupplierForItem(
   }
 
   return { rows: rows.length ? rows : null, tavilyCalls: search.tavilyCalls, deadUrls };
+}
+
+// ---------------------------------------------
+// Task 3 — Homepage Fallback Helpers
+// ---------------------------------------------
+
+/**
+ * Derive the home origin (protocol + host + /) from a source URL.
+ * Defensively returns '' on URL parse failure.
+ */
+function deriveHomeOrigin(sourceUrl: string): string {
+  try {
+    const url = new URL(sourceUrl);
+    return `${url.protocol}//${url.host}/`;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Bounded, fail-safe homepage fallback for contact recovery.
+ * Acts only when row has NEITHER contact_email NOR contact_phone AND has a source_url.
+ * Tries up to 5 common homepage paths; breaks as soon as BOTH contacts are found.
+ * Wraps everything in try/catch — NEVER throws.
+ */
+async function contactHomepageFallback(row: ItemSourceRow): Promise<void> {
+  // Gate: only proceed if BOTH email and phone are missing, and we have a URL to start from.
+  if ((row.contact_email || row.contact_phone) || !row.source_url) {
+    return;
+  }
+
+  const origin = deriveHomeOrigin(row.source_url);
+  if (!origin) return;  // URL parse failed
+
+  // Paths to try: '' (root), 'contact', 'contact-us', 'about', 'about-us' (cap at 5).
+  const paths = ['', 'contact', 'contact-us', 'about', 'about-us'];
+
+  try {
+    for (const path of paths) {
+      // Break early if both contacts are found.
+      if (row.contact_email && row.contact_phone) break;
+
+      const homeUrl = origin + path;
+      const live = await checkLiveness(homeUrl);
+
+      // Only act when status === 'live' and we have HTML.
+      if (live.status !== 'live' || !live.html) continue;
+
+      // Extract contacts only (no spec tokens, no price/stock/delivery).
+      const extracted = manualExtract(
+        live.html,
+        {
+          has_price: false,
+          has_stock: false,
+          has_delivery: false,
+          has_contact_email: true,
+          has_contact_phone: true,
+        },
+      );
+
+      // Fill in contacts if found.
+      if (!row.contact_email && extracted.fields.contact_email) {
+        row.contact_email = extracted.fields.contact_email;
+      }
+      if (!row.contact_phone && extracted.fields.contact_phone) {
+        row.contact_phone = extracted.fields.contact_phone;
+      }
+    }
+  } catch (err) {
+    // Fail-safe: never throw. Log and continue.
+    console.warn(`[supplier-search] homepage fallback error:`, err instanceof Error ? err.message : err);
+  }
 }
 
 // ---------------------------------------------
@@ -566,7 +728,8 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
           const queries: string[] = plan.queries;
           // Spec tokens (identification axis + parsed-spec values) for multi-price
           // disambiguation in the manual + structured extraction layers.
-          const specTokens = buildSpecTokens(parsed, extractIdentification(row));
+          // Pass agentItemSummary for auxiliary (compliance/notes) token extraction.
+          const specTokens = buildSpecTokens(parsed, extractIdentification(row), row.agentItemSummary as Record<string, unknown> | undefined);
 
           // (3b) L0 MEMORY — exact-match short-circuit. Disabled by default
           //      (SEARCH_MEMORY_ENABLED); lookupMemory no-ops + returns null when
@@ -666,16 +829,34 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     // searchOneQuery already filters to verified product pages before extraction.
     const productPageItems = beforeUrlGuards.filter((r) => isUsableSourceRow(r) && isProductPage(r.source_url));
 
-    // (3b2) CONTACT LOOPBACK — rows with NEITHER email nor phone get ONE bounded
-    //       recovery pass: a contact-targeted Tavily query built from the supplier
-    //       name, then a contacts-only manual extract. Bounded by a global cap and
-    //       fully fail-safe so a contact hunt can never blow up cost or break the run.
+    // (3b1) CONTACT HOMEPAGE FALLBACK — Task 3. Rows with NEITHER email nor phone
+    //       get a bounded, fail-safe homepage fallback: derive the origin URL and
+    //       try up to 5 common homepage paths (root, /contact, /contact-us, /about,
+    //       /about-us). Extract contacts-only via manualExtract (no price/stock).
+    //       Gate behind env flag SEARCH_CONTACT_HOMEPAGE_FALLBACK=1 (default OFF).
+    //       Counts toward the SAME CONTACT_RECOVERY_CAP global counter as the
+    //       loopback below. Fail-safe: errors are caught and logged, never thrown.
     const CONTACT_RECOVERY_CAP = Number(process.env.SEARCH_CONTACT_RECOVERY_CAP ?? 10);
     let contactRecoveries = 0;
     let contactTavilyCalls = 0;
+    const homepageFallbackEnabled = process.env.SEARCH_CONTACT_HOMEPAGE_FALLBACK === '1';
     for (const row of productPageItems) {
       if (contactRecoveries >= CONTACT_RECOVERY_CAP) break;        // global cost cap
-      if (row.contact_email || row.contact_phone || !row.supplier_name) continue; // already has a contact / no name to search
+      // Original entry condition (preserved): only rows with NEITHER contact and a
+      // usable supplier_name qualify. This keeps flag-OFF behavior byte-for-byte
+      // identical to before and bounds each row to exactly ONE cap unit.
+      if (row.contact_email || row.contact_phone || !row.supplier_name) continue;
+
+      // (3b1) Task 3 — HOMEPAGE FALLBACK runs FIRST (flag-gated). May fill one or
+      //       both contacts off the supplier's own root/contact/about pages. If it
+      //       resolves BOTH, we count this row and skip the costlier name-search
+      //       Tavily loopback below. If it resolves one/none, we fall through.
+      if (homepageFallbackEnabled) {
+        await contactHomepageFallback(row);
+        if (row.contact_email && row.contact_phone) { contactRecoveries++; continue; }
+      }
+
+      // (3b2) Existing CONTACT LOOPBACK — name-targeted Tavily contact discovery.
       contactRecoveries++;
       try {
         // Query builder: feed the supplier name + contact-finder prompt to the LLM

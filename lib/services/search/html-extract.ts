@@ -12,7 +12,7 @@
    ======================================================================== */
 
 import * as cheerio from 'cheerio';
-import { selectBestPrice, type PriceCandidate } from './price-select';
+import { selectBestPrice, type PriceCandidate, type SpecTokenInput } from './price-select';
 
 // =============================================
 // Public API
@@ -22,6 +22,8 @@ import { selectBestPrice, type PriceCandidate } from './price-select';
 export interface StructuredExtract {
   price: number;
   currency: string;
+  /** optional: 0..1 confidence of the selected price variant match. */
+  confidence?: number;
 }
 
 // Cap HTML input to avoid runaway cheerio parse on multi-megabyte pages.
@@ -69,6 +71,9 @@ function normCurrency(raw: string | undefined | null): string {
 /**
  * Walk a JSON-LD node (object or array) and collect PriceCandidates from
  * Product / Offer / AggregateOffer nodes. Handles nested @graph arrays.
+ *
+ * For Product nodes with hasVariant array: create one candidate per variant
+ * using the variant's name/sku as context for matching.
  *
  * Called per <script type="application/ld+json"> block; wrapped in try/catch
  * by the caller so a malformed block doesn't abort the rest.
@@ -122,15 +127,69 @@ function collectFromJsonLdNode(node: unknown, candidates: PriceCandidate[]): voi
     }
   }
 
-  // For a Product node, recurse into offers (object OR array).
+  // For a Product node, handle variants and recurse into offers.
   if (isProduct) {
+    // PER-VARIANT PAIRING: if the product has a hasVariant array,
+    // create one candidate per variant using that variant's name/sku as context.
+    const variants = obj['hasVariant'];
+    if (Array.isArray(variants)) {
+      for (const variant of variants) {
+        if (typeof variant === 'object' && variant !== null) {
+          const variantObj = variant as Record<string, unknown>;
+          // Use variant name/sku as context for this variant candidate.
+          const variantContext: string[] = [];
+          for (const key of ['name', 'sku'] as const) {
+            const v = variantObj[key];
+            if (typeof v === 'string' && v.trim()) variantContext.push(v.trim());
+          }
+          const variantCtx = variantContext.join(' ').slice(0, 240);
+
+          // If the variant has a price directly, use it.
+          for (const priceKey of ['price', 'lowPrice', 'highPrice']) {
+            const rawPrice = variantObj[priceKey];
+            if (rawPrice !== undefined && rawPrice !== null) {
+              const value = parsePrice(String(rawPrice));
+              if (!isNaN(value) && value > 0) {
+                const currency = normCurrency(variantObj['priceCurrency'] as string | undefined);
+                candidates.push({ value, currency, context: variantCtx });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Also handle offers array: each distinct offer could be a variant.
     const offers = obj['offers'];
     if (offers !== null && offers !== undefined) {
       if (Array.isArray(offers)) {
+        // Multiple distinct offers: treat each as a potential variant.
         for (const offer of offers) {
-          collectFromJsonLdNode(offer, candidates);
+          if (typeof offer === 'object' && offer !== null) {
+            const offerObj = offer as Record<string, unknown>;
+            // For each offer in an array, use offer name/sku as variant context.
+            const offerContext: string[] = [];
+            for (const key of ['name', 'sku'] as const) {
+              const v = offerObj[key];
+              if (typeof v === 'string' && v.trim()) offerContext.push(v.trim());
+            }
+            // If no name/sku on the offer itself, fall back to product context.
+            const ctx = offerContext.length > 0 ? offerContext.join(' ') : nodeContext;
+
+            for (const priceKey of ['price', 'lowPrice', 'highPrice']) {
+              const rawPrice = offerObj[priceKey];
+              if (rawPrice !== undefined && rawPrice !== null) {
+                const value = parsePrice(String(rawPrice));
+                if (!isNaN(value) && value > 0) {
+                  const currency = normCurrency(offerObj['priceCurrency'] as string | undefined);
+                  candidates.push({ value, currency, context: ctx.slice(0, 240) });
+                }
+              }
+            }
+          }
         }
       } else {
+        // Single offer object: recurse normally.
         collectFromJsonLdNode(offers, candidates);
       }
     }
@@ -248,15 +307,15 @@ function collectOpenGraph(
  * Parse structured-data price signals out of real page HTML.
  *
  * Sources tried (each independently, in parallel within the same cheerio pass):
- *   A. JSON-LD  — most authoritative; preferred when present.
+ *   A. JSON-LD  — most authoritative; preferred when present. Includes per-variant pairing.
  *   B. Microdata — Schema.org itemprop annotations in the DOM.
  *   C. OpenGraph — product:price:amount / product:price:currency meta tags.
  *
  * All candidates are passed to selectBestPrice for spec-token-aware
- * disambiguation. Returns { price: 0, currency: '' } on any error or when
+ * disambiguation. Returns { price: 0, currency: '', confidence?: number } on any error or when
  * no valid price is found.
  */
-export function extractFromHtml(html: string, specTokens?: string[]): StructuredExtract {
+export function extractFromHtml(html: string, specTokens?: SpecTokenInput[]): StructuredExtract {
   // Guard: missing input.
   if (!html) return { price: 0, currency: '' };
 
@@ -277,11 +336,15 @@ export function extractFromHtml(html: string, specTokens?: string[]): Structured
     // Source C: OpenGraph product price meta tags.
     collectOpenGraph($, candidates);
 
-    const best = selectBestPrice(candidates, specTokens ?? []);
-    return {
+    const best = selectBestPrice(candidates, specTokens);
+    const result: StructuredExtract = {
       price: best?.value ?? 0,
       currency: best?.currency ?? '',
     };
+    if (best && specTokens && specTokens.length > 0) {
+      result.confidence = best.matchConfidence;
+    }
+    return result;
   } catch {
     // Top-level guard: never throw.
     return { price: 0, currency: '' };

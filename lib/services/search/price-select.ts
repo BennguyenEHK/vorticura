@@ -16,6 +16,24 @@ export interface PriceCandidate {
   context: string;   // surrounding text window the price appeared in
 }
 
+/** Spec token with optional weight (weight >= 1; default 1). */
+export interface SpecToken {
+  token: string;
+  weight: number;
+}
+
+/** Spec token input: either bare string (weight 1) or {token, weight} object. */
+export type SpecTokenInput = string | SpecToken;
+
+/** Price candidate with confidence metadata. */
+export interface PricePick extends PriceCandidate {
+  matchConfidence: number;  // 0..1 confidence score
+  lowConfidence: boolean;   // true if matchConfidence < threshold
+}
+
+/** Confidence threshold for low-confidence flag (tunable). */
+export const PRICE_CONF_THRESHOLD = 0.34;
+
 /**
  * Normalize for loose matching: lowercase + strip non-alphanumerics so
  * '1/2"' → '12' and 'Class 150' → 'class150' line up regardless of punctuation.
@@ -27,44 +45,92 @@ function norm(s: string): string {
 /**
  * Pick the price whose context window best matches the spec tokens.
  *
- * Scoring: +1 per DISTINCT spec token whose normalized form appears in the
- * candidate's normalized context. Highest score wins; ties break to the LOWEST
- * price (conservative — never over-quote on an ambiguous match).
+ * Scoring: weighted match. For each candidate, sum the weights of all distinct
+ * spec tokens whose normalized form appears in the candidate's normalized context.
+ * Divide by maxWeight (sum of all token weights) to get matchConfidence (0..1).
+ * Highest weightedScore wins; ties break to LOWEST price (conservative).
  *
- * Returns null when there are no valid (positive) candidates. When specTokens is
- * empty, or no token matches any context, the lowest valid price is returned so
- * the caller always gets a deterministic, conservative result.
+ * When no spec token matched anything, falls back to the lowest valid price
+ * with matchConfidence 0.
+ *
+ * Returns null when there are no valid (positive) candidates.
+ * A single valid candidate gets matchConfidence 1 and lowConfidence false.
  */
 export function selectBestPrice(
   candidates: PriceCandidate[],
-  specTokens: string[] = [],
-): PriceCandidate | null {
+  specTokens?: SpecTokenInput[],
+  confThreshold?: number,
+): PricePick | null {
   // Keep only real, positive prices.
   const valid = candidates.filter((c) => c.value > 0);
   if (valid.length === 0) return null;       // nothing usable
-  if (valid.length === 1) return valid[0];   // no ambiguity to resolve
 
-  // Pre-normalize spec tokens once (drop empties + dupes).
-  const tokens = Array.from(
-    new Set(specTokens.map(norm).filter((t) => t.length > 0)),
-  );
+  // For a single valid candidate, no ambiguity: return with high confidence.
+  if (valid.length === 1) {
+    return {
+      ...valid[0],
+      matchConfidence: 1,
+      lowConfidence: false,
+    };
+  }
 
-  // Score each candidate by how many distinct spec tokens its context contains.
-  let best: PriceCandidate | null = null;
-  let bestScore = -1;
-  for (const cand of valid) {
-    const ctx = norm(cand.context);
-    const score = tokens.reduce((n, t) => (ctx.includes(t) ? n + 1 : n), 0);
-    // Higher score wins; on a tie prefer the lower price (conservative).
-    if (score > bestScore || (score === bestScore && best !== null && cand.value < best.value)) {
-      best = cand;
-      bestScore = score;
+  const threshold = confThreshold ?? PRICE_CONF_THRESHOLD;
+
+  // Normalize spec tokens: convert bare strings to SpecToken, drop empties, dedupe by token.
+  // When multiple SpecToken objects have the same normalized token, keep the MAX weight.
+  const tokenMap = new Map<string, number>(); // normToken -> weight
+  if (specTokens && specTokens.length > 0) {
+    for (const input of specTokens) {
+      const spec: SpecToken = typeof input === 'string' ? { token: input, weight: 1 } : input;
+      const normToken = norm(spec.token);
+      if (normToken.length > 0) {
+        const existing = tokenMap.get(normToken) ?? 0;
+        tokenMap.set(normToken, Math.max(existing, spec.weight));
+      }
     }
   }
 
-  // No spec token matched any context → fall back to the lowest valid price.
-  if (bestScore <= 0) {
-    return valid.reduce((lo, c) => (c.value < lo.value ? c : lo));
+  const maxWeight = Array.from(tokenMap.values()).reduce((a, b) => a + b, 0);
+
+  // Score each candidate by weighted sum of tokens that match.
+  let best: PricePick | null = null;
+  let bestWeightedScore = 0;  // 0 = no match
+  for (const cand of valid) {
+    const ctx = norm(cand.context);
+    let weightedScore = 0;
+    for (const [token, weight] of Array.from(tokenMap.entries())) {
+      if (ctx.includes(token)) {
+        weightedScore += weight;
+      }
+    }
+    // Higher weightedScore wins; on a tie prefer the lower price (conservative).
+    if (
+      weightedScore > bestWeightedScore ||
+      (weightedScore === bestWeightedScore && best !== null && cand.value < best.value)
+    ) {
+      best = {
+        ...cand,
+        matchConfidence: maxWeight > 0 ? weightedScore / maxWeight : 0,
+        lowConfidence: false,
+      };
+      bestWeightedScore = weightedScore;
+    }
   }
+
+  // No spec token matched → fall back to lowest valid price with matchConfidence 0.
+  if (bestWeightedScore === 0) {
+    const fallback = valid.reduce((lo, c) => (c.value < lo.value ? c : lo));
+    return {
+      ...fallback,
+      matchConfidence: 0,
+      lowConfidence: true,
+    };
+  }
+
+  // Set lowConfidence flag based on threshold.
+  if (best && best.matchConfidence < threshold) {
+    best.lowConfidence = true;
+  }
+
   return best;
 }
