@@ -32,10 +32,25 @@ const HTML_BYTE_CAP = 200_000;
 // =============================================
 
 /**
- * Strip commas, parse to float. Returns NaN when the token is not a number.
+ * Parse a raw price token with European/US format disambiguation.
+ * Returns NaN when the token is not a valid number.
+ *
+ * Heuristic (robust for 2-decimal currency values):
+ *   - Token ends in comma + exactly 2 digits  → European decimal-comma format.
+ *     Remove all dots (thousands separators), replace trailing comma with dot.
+ *     e.g. "1.234,56" → "1234.56"; "1234,56" → "1234.56"
+ *   - Otherwise → US/ISO format: comma is thousands separator, remove it.
+ *     e.g. "1,234.56" → "1234.56"; "500,000" → "500000"
  */
 function parsePrice(raw: string): number {
-  return parseFloat(raw.replace(/,/g, '').trim());
+  const t = raw.trim();
+  if (/,\d{2}$/.test(t)) {
+    // European format: comma is decimal separator.
+    const normalized = t.replace(/\./g, '').replace(',', '.');
+    return parseFloat(normalized);
+  }
+  // US/ISO format: comma is thousands separator.
+  return parseFloat(t.replace(/,/g, ''));
 }
 
 /**
@@ -92,8 +107,10 @@ function collectFromJsonLdNode(node: unknown, candidates: PriceCandidate[]): voi
 
   // For an Offer/AggregateOffer node, pull price directly from this node.
   if (isOffer) {
-    // AggregateOffer may carry lowPrice rather than (or alongside) price.
-    for (const priceKey of ['price', 'lowPrice']) {
+    // AggregateOffer may carry lowPrice and/or highPrice rather than (or alongside) price.
+    // Include highPrice as a candidate so selectBestPrice can pick by spec-token match
+    // rather than always defaulting to the lowest variant price.
+    for (const priceKey of ['price', 'lowPrice', 'highPrice']) {
       const rawPrice = obj[priceKey];
       if (rawPrice !== undefined && rawPrice !== null) {
         const value = parsePrice(String(rawPrice));

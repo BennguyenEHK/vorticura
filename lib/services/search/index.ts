@@ -149,6 +149,11 @@ export async function searchOneQuery(
   query: string,
   spec: ScorerSpec = {},
   requiredQty: number = 0,
+  // rawCandidates: bypass the product-page GATE (eliminate + score-threshold) and
+  // return every deduped snippet, still ranked by score. Used by non-product search
+  // paths (e.g. the contact-recovery loopback) that want supplier CONTACT pages,
+  // which the product-page scorer would otherwise drop below KEEP_THRESHOLD.
+  opts: { rawCandidates?: boolean } = {},
 ): Promise<SearchResult> {
   // (1) Cache-first lookup.
   let snippets = await getCachedSearch(query);
@@ -182,16 +187,21 @@ export async function searchOneQuery(
 
     // 2b ELIMINATE — drop out-of-stock / can't-fulfil-qty / non-product pages
     //    BEFORE the expensive scoring + extraction. Unknown always bypasses.
-    const elim = eliminatePage(
-      { url: snippet.url, title: snippet.title, content: snippet.content || snippet.snippet || '' },
-      requiredQty,
-    );
-    if (elim.eliminated) continue;
+    //    Skipped for rawCandidates (contact search isn't looking for product pages).
+    if (!opts.rawCandidates) {
+      const elim = eliminatePage(
+        { url: snippet.url, title: snippet.title, content: snippet.content || snippet.snippet || '' },
+        requiredQty,
+      );
+      if (elim.eliminated) continue;
+    }
 
     // 2c SCORE — weighted relevance; keep only at/above KEEP_THRESHOLD. The
     //    scorer also emits the detected-field map the hybrid extractor consumes.
+    //    rawCandidates keeps every page (still scored, for ranking) — the contact
+    //    loopback needs supplier contact pages the product gate would reject.
     const { score, kept, detected } = scoreProductPage(snippet, spec);
-    if (!kept) continue;
+    if (!kept && !opts.rawCandidates) continue;
 
     const existing = acc.get(snippet.url);
     if (!existing || score > existing.score) {

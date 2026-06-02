@@ -1,6 +1,5 @@
 import assert from 'assert';
 import { isProductPage } from '@/lib/services/search/index';
-import { hasProductSignals } from '@/lib/services/search/html-gate';
 
 // =============================================
 // Persist-gate URL guard regression tests
@@ -65,22 +64,6 @@ assert.strictEqual(
   isProductPage('https://company.com/kf941.html'),
   true,
   'ugly-slug product page must pass (URL-pattern filtering alone would fail it)',
-);
-
-// ----- hasProductSignals (still exported helper) -----
-
-assert.strictEqual(
-  hasProductSignals('Ball valve 2" 150#, price $42.50, in stock, MOQ 10'),
-  true,
-  'text with price and procurement keywords must return true',
-);
-
-assert.strictEqual(
-  hasProductSignals(
-    'Vietnam manufacturing supporting industry yearbook 2019-2020 regional overview',
-  ),
-  false,
-  'yearbook/editorial text with no product signals must return false',
 );
 
 console.log('✓ testProductPageGuard passed');

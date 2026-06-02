@@ -354,7 +354,12 @@ async function extractSupplierForItem(
       f.bidder_unit_price > 0 ? f.bidder_unit_price
       : structuredPrice > 0 ? structuredPrice
       : (llm?.bidder_unit_price ?? 0);
-    let currency = f.currency_code || structuredCurrency || llm?.currency_code || 'USD';
+    // Currency follows the same cascade. NO 'USD' fabrication here: when a price
+    // was extracted but every layer left the currency unknown, persist '' so the
+    // row honestly reads "unknown currency" instead of silently claiming USD (a
+    // VND/MYR page would otherwise be off by ~1000×). The quote layer applies the
+    // USD default at quote-build time (quotation-actions: `currency_code || 'USD'`).
+    let currency = f.currency_code || structuredCurrency || llm?.currency_code || '';
 
     // (2c-vision) LAYER 4 — VISION/IMAGE-TO-TEXT. Last resort: runs ONLY when every
     //      prior layer left price unknown AND we have live HTML to locate the product

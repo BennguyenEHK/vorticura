@@ -342,14 +342,33 @@ export async function extractFromVision(
     // captures the price as rendered on screen (incl. JS-injected / image-only
     // prices), which is the whole point of the vision layer. We fetch it server-side
     // and inline it as a base64 data URL so the model is GUARANTEED to receive the
-    // pixels. Fall back to the page's primary product image (a plain URL the model
-    // fetches) when no screenshot service is set up.
+    // pixels.
+    //
+    // Fallback chain (in priority order):
+    //   1. Screenshot service configured AND download succeeds  → base64 data URL
+    //   2. Screenshot service configured BUT download fails     → DOM og:image / largest <img>
+    //   3. No screenshot service configured                     → DOM og:image / largest <img>
+    //
+    // This ensures a usable og:image is never discarded just because the screenshot
+    // service is temporarily unavailable or over quota.
     const shotUrl = buildScreenshotUrl(pageUrl);
-    const imageUrl = shotUrl
-      ? await fetchImageAsDataUrl(shotUrl, SCREENSHOT_TIMEOUT_MS)
-      : findImageUrl(html, pageUrl);
+    let imageUrl: string | null = null;
+
+    if (shotUrl) {
+      imageUrl = await fetchImageAsDataUrl(shotUrl, SCREENSHOT_TIMEOUT_MS);
+      if (!imageUrl) {
+        // Screenshot download failed (service error / quota exhausted) — fall
+        // back to the DOM image rather than giving up entirely.
+        console.warn('[vision-extract] screenshot download failed, falling back to DOM image for', pageUrl);
+        imageUrl = findImageUrl(html, pageUrl);
+      }
+    } else {
+      // No screenshot service configured — use DOM image directly.
+      imageUrl = findImageUrl(html, pageUrl);
+    }
+
     if (!imageUrl) {
-      // No screenshot bytes and no usable page image — vision can't help.
+      // Neither screenshot bytes nor a usable page image — vision can't help.
       return ZERO_RESULT;
     }
 

@@ -41,13 +41,34 @@ export async function checkLiveness(
       method: 'GET',
       redirect: 'follow',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; QuoteFlowBot/1.0)',
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+        Accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
       },
       signal: AbortSignal.timeout(timeout),
     });
 
-    // Handle 2xx responses: body is accessible
+    // Handle 2xx responses: only read the body when Content-Type signals HTML.
+    // PDFs, images, zip datasheets, etc. produce a binary/non-HTML body that
+    // cheerio can't parse — classify those as 'blocked' (no HTML) so the
+    // caller falls back to Tavily raw_content instead of wasting work on an
+    // empty DOM or misclassifying non-HTML resources as live pages.
     if (response.ok) {
+      const contentType = response.headers.get('content-type') ?? '';
+      const isHtml =
+        contentType.startsWith('text/html') ||
+        contentType.startsWith('application/xhtml+xml');
+
+      if (!isHtml) {
+        return {
+          status: 'blocked',
+          httpStatus: response.status,
+          html: null,
+        };
+      }
+
       const body = await response.text();
       // Cap body to first 500k characters to avoid memory bloat
       const cappedHtml = body.slice(0, 500_000);

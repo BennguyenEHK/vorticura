@@ -49,7 +49,11 @@ export async function planQueries(searchText: string): Promise<QueryPlan> {
     const raw = await aiChatCompletion<unknown>(
       PLAN_QUERIES_PROMPT,
       buildPlanUserMessage(searchText),
-      500,
+      // 1024 (was 500): on the default remote/HF path the JSON schema is NOT
+      // enforced, so the whole {parsed + up to 8 queries} object must fit in the
+      // token budget. 500 truncated rich specs → empty plan → weak raw-text
+      // fallback. 1024 gives the full plan headroom at negligible cost.
+      1024,
       QUERY_PLAN_SCHEMA as object,
     );
 

@@ -60,31 +60,6 @@ export function isLikelyProductPage(html: string): boolean {
   );
 }
 
-// Plain-text product signals — no HTML required. Matches a currency symbol/code
-// near a number OR procurement-intent keywords. Bounded patterns; no global flag.
-// Currency: $, €, £, ¥ or ISO codes USD/EUR/GBP/VND/SGD/MYR/THB/IDR/CNY/JPY/AUD
-// near a digit sequence (up to 30 chars away). Bounded: \d{1,12} avoids backtrack.
-const currencyNearNumberPattern =
-  /(?:USD|EUR|GBP|VND|SGD|MYR|THB|IDR|CNY|JPY|AUD|[$€£¥])\s*[\d,.]{1,20}|[\d,.]{1,20}\s*(?:USD|EUR|GBP|VND|SGD|MYR|THB|IDR|CNY|JPY|AUD)/i;
-
-// Procurement-intent keywords (any one is sufficient).
-const procurementKeywordsPattern =
-  /\b(?:buy|price|quote|in stock|datasheet|SKU|part number|MOQ|add to cart)\b/i;
-
-/**
- * hasProductSignals: Returns true when plain text (stripped of HTML tags)
- * contains at least one product-commerce signal — either a price/currency
- * expression or a procurement-intent keyword.
- *
- * Used by runQueryAndDedup to verify cleaned-text Tavily responses (which
- * carry no HTML tags and therefore cannot be inspected by isLikelyProductPage).
- * Permissive: any one signal qualifies so sparse product pages are not dropped.
- */
-export function hasProductSignals(text: string): boolean {
-  const chunk = text.slice(0, 16384);
-  return currencyNearNumberPattern.test(chunk) || procurementKeywordsPattern.test(chunk);
-}
-
 /**
  * extractMicrodataPrice: Extract price and currency from microdata patterns.
  *

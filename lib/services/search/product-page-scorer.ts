@@ -2,7 +2,7 @@
 // PRODUCT-PAGE SCORER — weighted multi-layer relevance classifier
 // =============================================
 // Replaces the old binary product-page gate (isProductPage + isLikelyProductPage
-// + hasProductSignals all-or-nothing). Industrial supplier pages frequently use
+// all-or-nothing). Industrial supplier pages frequently use
 // ugly URLs (company.com/kf941.html, company.com/pid=12984) where pure URL
 // pattern matching completely fails — so we SCORE candidates across several
 // independent signals and keep anything above a threshold, instead of rejecting
@@ -165,7 +165,7 @@ const DET_EMAIL =
 // fax, whatsapp, wechat, contact, and direct in addition to the original set.
 const DET_PHONE =
   /(?:tel(?:ephone)?|phone|call|hotline|mobile|cell(?:phone)?|fax|whatsapp|wechat|contact|direct(?:\s+line)?|\+?\d)[\s:]*\+?\d[\d\s().-]{6,18}\d/i;
-const DET_STOCK = /\bin\s+stock\b|\bavailable\b|\bstock\s*[:=]/i;
+const DET_STOCK = /\bin\s+stock\b|\bavailable\s+(?:now|to\s+ship|to\s+order|in\s+stock|for\s+(?:immediate\s+)?(?:shipment|delivery|order|dispatch)|qty|quantity)\b|\bstock\s*[:=]|\bavailability\s*[:=]/i;
 const DET_DELIVERY = /\blead\s*time\b|\bdelivery\b|\bships?\s+in\b|\b\d+\s*(?:day|days|week|weeks|month|months)\b/i;
 const DET_QUOTE = /request\s+a?\s*quote|request\s+for\s+quotation|get\s+a\s+quote|contact\s+for\s+price|price\s+on\s+request|\brfq\b/i;
 

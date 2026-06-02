@@ -118,6 +118,37 @@ const deliveryPatterns = [
 ];
 
 // =============================================
+// Helper: parse a numeric token with European/US format disambiguation
+// =============================================
+
+/**
+ * Parse a raw numeric token that may use European decimal-comma notation
+ * ("1.234,56") or standard US/ISO notation ("1,234.56").
+ *
+ * Heuristic (robust for 2-decimal currency values):
+ *   - Token ends in comma + exactly 2 digits  → comma is decimal separator.
+ *     Remove all dots (thousands separators), then replace the trailing comma
+ *     with a dot before passing to parseFloat.
+ *     e.g. "1.234,56" → "1234.56"; "1.234.567,89" → "1234567.89"; "1234,56" → "1234.56"
+ *   - Otherwise → comma is a thousands separator (US/ISO style).
+ *     Remove all commas, leave dots as decimal point.
+ *     e.g. "1,234.56" → "1234.56"; "1,234" → "1234"; "500,000" → "500000"
+ *
+ * Returns NaN when the result is not a finite number (mirrors parseFloat semantics).
+ */
+function parseNumeric(token: string): number {
+  const t = token.trim();
+  if (/,\d{2}$/.test(t)) {
+    // European format: comma is decimal separator.
+    // Remove all dots (thousands separators), then swap the decimal comma for a dot.
+    const normalized = t.replace(/\./g, '').replace(',', '.');
+    return parseFloat(normalized);
+  }
+  // US/ISO format: comma is thousands separator. Strip commas.
+  return parseFloat(t.replace(/,/g, ''));
+}
+
+// =============================================
 // Helper: normalize delivery to "X-Y weeks"
 // =============================================
 
@@ -152,17 +183,47 @@ function normalizeDelivery(value1: string | undefined, value2: string | undefine
 
 /**
  * True when the (normalized) value re-appears in content.
- * Normalize both sides: lowercase, strip non-alphanumeric.
- * Numbers: compare digit sequences.
+ *
+ * For NUMERIC values (prices, quantities): requires a digit-boundary match
+ * against the ORIGINAL content so that a price of 50 does NOT falsely verify
+ * against a part number like "SKU 5012" (substring of digits). The regex
+ * forbids adjacent digits on either side of the match.
+ *
+ * For NON-NUMERIC values (names, emails, delivery text): uses the existing
+ * alphanumeric-substring behavior (lowercase, strip non-alphanumeric, .includes).
  */
 export function verifyAgainstContent(value: string | number, content: string): boolean {
   if (value === '' || value === 0) return false;
 
   const valueStr = String(value);
+
+  // Detect purely numeric values (digits, with an optional leading decimal point
+  // or internal decimal separator — after stripping currency symbols the token
+  // should be entirely digits/dots/commas).
+  const isNumeric = /^[\d.,]+$/.test(valueStr.trim());
+
+  if (isNumeric) {
+    // Compare NUMERIC VALUES, not digit strings. A price of 50 must NOT verify
+    // against "5012" (digit-substring false positive), but 42.5 MUST verify
+    // against "$42.50" and 1234.56 against the European "1.234,56". So we scan
+    // every number token in content, parse each with the same separator-aware
+    // parseNumeric, and accept iff one equals the target value. Maximal-token
+    // scanning is boundary-correct (5012 parses to 5012, never 50) while staying
+    // tolerant of thousands separators, decimal commas, and trailing zeros.
+    const target = typeof value === 'number' ? value : parseNumeric(valueStr);
+    if (!Number.isFinite(target) || target === 0) return false;
+    const tokenRe = /\d[\d.,]*/g;
+    let tok: RegExpExecArray | null;
+    while ((tok = tokenRe.exec(content)) !== null) {
+      const parsed = parseNumeric(tok[0]);
+      if (Number.isFinite(parsed) && Math.abs(parsed - target) < 0.005) return true;
+    }
+    return false;
+  }
+
+  // Non-numeric: existing alphanumeric-substring behavior.
   const normalized = valueStr.toLowerCase().replace(/[^a-z0-9]/g, '');
-
   if (!normalized) return false;
-
   const contentNormalized = content.toLowerCase().replace(/[^a-z0-9]/g, '');
   return contentNormalized.includes(normalized);
 }
@@ -232,10 +293,10 @@ export function manualExtract(
       const priceText = pm[0];
       const matchIndex = pm.index;
 
-      // Parse numeric value (strip commas, e.g. "1,234.56" → 1234.56).
+      // Parse numeric value with European/US format disambiguation.
       const numericMatch = priceText.match(/[\d,.]+/);
       if (!numericMatch) continue;
-      const value = parseFloat(numericMatch[0].replace(/,/g, ''));
+      const value = parseNumeric(numericMatch[0]);
       if (isNaN(value) || value <= 0) continue;
 
       // Derive currency: try ISO code first, then symbol → code map.
@@ -266,7 +327,7 @@ export function manualExtract(
     while ((lm = labeledPricePattern.exec(content)) !== null) {
       const rawNum = lm[1]; // numeric string captured by the label pattern
       const matchIndex = lm.index;
-      const value = parseFloat(rawNum.replace(/,/g, ''));
+      const value = parseNumeric(rawNum);
       if (isNaN(value) || value <= 0) continue;
 
       // Look for a currency code or symbol within ±15 chars of this match for context.

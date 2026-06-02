@@ -36,7 +36,7 @@ const assertResult = (
   assert.equal(verifyAgainstContent('USD', 'Price in USD: 100'), true, 'substring match');
   assert.equal(verifyAgainstContent('USD', 'Price in US Dollar'), true, 'USD is found in "US Dollar" after normalization');
   assert.equal(verifyAgainstContent(123, 'Item qty 123 units'), true, 'number digit match');
-  assert.equal(verifyAgainstContent(123, 'Item qty 1234 units'), true, 'number as substring of digits → true');
+  assert.equal(verifyAgainstContent(123, 'Item qty 1234 units'), false, 'numeric value must match at a digit boundary — 123 inside 1234 is NOT a valid match (prevents price/qty false positives from part numbers)');
   assert.equal(
     verifyAgainstContent('john@example.com', 'Contact: john@example.com'),
     true,
