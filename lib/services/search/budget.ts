@@ -76,6 +76,48 @@ export function consumeLlmCall(b: SearchBudget): boolean {
 }
 
 // =============================================
+// VISION BUDGET — per-RFQ cap on the costly vision/screenshot layer
+// =============================================
+// Layer 4 (vision-extract) makes a hosted-screenshot fetch + a VLM call — both
+// billable and slow. Unlike SearchBudget (one per ITEM), this counter is created
+// ONCE PER RFQ and shared across every item, so a single search run can never
+// fire more than maxVisionCalls of these expensive calls regardless of how many
+// items/pages came back price-unknown.
+
+/** Shared RFQ-scoped counter for Layer-4 vision calls. */
+export interface VisionBudget {
+  /** Hard ceiling on vision/screenshot calls for the whole RFQ run. */
+  maxVisionCalls: number;
+  /** Running count of vision calls already spent (mutated as we go). */
+  visionCallsUsed: number;
+}
+
+/** Default per-RFQ vision-call ceiling (override via SEARCH_VISION_CAP). */
+const DEFAULT_MAX_VISION_CALLS = 5;
+
+/**
+ * Create the per-RFQ vision budget. Reads SEARCH_VISION_CAP defensively —
+ * a missing/garbage value falls back to the default (never NaN, which would
+ * make the >= comparison behave unpredictably).
+ */
+export function createVisionBudget(max?: number): VisionBudget {
+  const envCap = Number(process.env.SEARCH_VISION_CAP);
+  const fallback = Number.isFinite(envCap) && envCap >= 0 ? envCap : DEFAULT_MAX_VISION_CALLS;
+  return { maxVisionCalls: max ?? fallback, visionCallsUsed: 0 };
+}
+
+/**
+ * Reserve one vision call against the RFQ budget BEFORE invoking the layer.
+ * Returns false when the cap is reached (caller must skip vision); returns true
+ * (and increments) when a call is allowed.
+ */
+export function consumeVisionCall(b: VisionBudget): boolean {
+  if (b.visionCallsUsed >= b.maxVisionCalls) return false;
+  b.visionCallsUsed += 1;
+  return true;
+}
+
+// =============================================
 // LEXICAL RELEVANCE — alt-URL re-loop drift guard (Stage 10)
 // =============================================
 // Cheap, dependency-free Jaccard token overlap in [0,1]. We only follow an

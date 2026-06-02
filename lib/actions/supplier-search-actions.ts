@@ -33,6 +33,10 @@ import {
   consumeLlmCall,
   isExhausted,
   type SearchBudget,
+  // Per-RFQ cap on the costly Layer-4 vision/screenshot calls.
+  createVisionBudget,
+  consumeVisionCall,
+  type VisionBudget,
 } from '@/lib/services/search/budget';
 // Stage 11+ — density-validation loop (the source-count floor) + telemetry.
 // Phase 1 (2026-05-31 spec): the orchestrator drives the SPECULATIVE FAN-OUT
@@ -60,7 +64,7 @@ import { extractFromHtml } from '@/lib/services/search/html-extract';
 // Layer 4 (vision/image-to-text) — last-resort price recovery from the product
 // image when text/HTML/LLM layers all came back price-unknown. Env-gated OFF by
 // default (SEARCH_VISION_ENABLED) and fail-safe (never throws).
-import { extractFromVision } from '@/lib/services/search/vision-extract';
+import { extractFromVision, isVisionEnabled } from '@/lib/services/search/vision-extract';
 
 
 // ---------------------------------------------
@@ -246,6 +250,7 @@ async function extractSupplierForItem(
   query: string,
   item: RfqItemInput,
   budget: SearchBudget,            // per-item circuit-breaker budget
+  visionBudget: VisionBudget,      // per-RFQ cap on costly Layer-4 vision calls (shared across items)
   // The ORIGINAL RFQ requirement — drives substitute match_reasoning.
   originalDescription: string = item.description,
   // Parsed spec for the product-page scorer (exact-model + spec-density layers).
@@ -356,7 +361,10 @@ async function extractSupplierForItem(
     //      image. Off by default (SEARCH_VISION_ENABLED) and fail-safe, so this is a
     //      no-op in production until explicitly enabled — answers the Phase-2 gate.
     let visionUsed = false;
-    if (price === 0 && html) {
+    // Gate: attempt vision ONLY when enabled AND the per-RFQ budget has a slot left.
+    // consumeVisionCall reserves the slot BEFORE the costly screenshot+VLM call; the
+    // isVisionEnabled() pre-check avoids burning a slot on a disabled no-op.
+    if (price === 0 && html && isVisionEnabled() && consumeVisionCall(visionBudget)) {
       const vision = await extractFromVision(html, cand.snippet.url, specTokens);
       if (vision.price > 0) {
         price = vision.price;
@@ -523,6 +531,11 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     // Tenant scope for the supplier-memory layer (L0 exact-match cache).
     const scope: MemoryScope = { companyId: workspace.company_id, userId: workspace.user_id };
 
+    // ONE vision budget for the whole RFQ run, shared (by reference) across every
+    // item's extractor so the costly Layer-4 vision/screenshot calls are capped
+    // per-RFQ (SEARCH_VISION_CAP), not per-item.
+    const visionBudget = createVisionBudget();
+
     // (3) Per-item DENSITY LOOP with one budget per item (Stage 11+).
     //     planQueries() generates up to 8 LLM-ranked queries + a parsed spec.
     //     gatherSourcesForItem walks the query list and re-extracts until the
@@ -585,7 +598,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
             baseItem,
             effectiveQueries,
             budget,
-            (q, b) => extractSupplierForItem(q, baseItem, b, baseItem.description, parsed, false, specTokens),
+            (q, b) => extractSupplierForItem(q, baseItem, b, visionBudget, baseItem.description, parsed, false, specTokens),
           );
 
           // (3c) ALT OUTER LOOP — bounded substitute discovery. If the item is
@@ -610,7 +623,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
               baseItem,
               replanQueries,
               budget,
-              (q, b) => extractSupplierForItem(q, baseItem, b, baseItem.description, replan.parsed ?? parsed, true, specTokens),
+              (q, b) => extractSupplierForItem(q, baseItem, b, visionBudget, baseItem.description, replan.parsed ?? parsed, true, specTokens),
             );
             for (const r of altResult.rows) {
               if (!collected.has(r.source_url)) collected.set(r.source_url, r);
@@ -772,9 +785,12 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
 
     // write_failures is populated AFTER the DB save (a write can't know its own
     // outcome before it runs); initialised here so the telemetry shape is stable.
+    // vision_calls: Layer-4 vision/screenshot calls spent against the per-RFQ cap.
+    const vision_calls = visionBudget.visionCallsUsed;
     const search_telemetry = {
       tavily_calls,
       llm_calls,
+      vision_calls,
       dropped_count,
       budget_exhausted,
       items_below_target,
@@ -782,7 +798,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     };
 
     console.log(
-      `[supplier-search] telemetry rfq_id=${rfq_id} tavily=${tavily_calls} llm=${llm_calls} exhausted=${budget_exhausted} items_below_target=${items_below_target.length}`,
+      `[supplier-search] telemetry rfq_id=${rfq_id} tavily=${tavily_calls} llm=${llm_calls} vision=${vision_calls} exhausted=${budget_exhausted} items_below_target=${items_below_target.length}`,
     );
 
     // Build the suppliers_search envelope for the SSE/preview document ONLY — the

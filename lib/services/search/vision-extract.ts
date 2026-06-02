@@ -71,6 +71,16 @@ const VISION_TIMEOUT_MS = 12_000;
 /** Sentinel returned on every failure path — never throws. */
 const ZERO_RESULT: VisionExtract = { price: 0, currency: '' };
 
+/**
+ * True when the vision layer is enabled (SEARCH_VISION_ENABLED=1). Exposed so the
+ * orchestrator can gate its per-RFQ vision budget WITHOUT re-reading the env name
+ * or wasting a budget slot on a disabled no-op call. extractFromVision still
+ * re-checks this internally (defense in depth).
+ */
+export function isVisionEnabled(): boolean {
+  return process.env.SEARCH_VISION_ENABLED === '1';
+}
+
 // =============================================
 // Helper: resolve a potentially relative image URL
 // =============================================
