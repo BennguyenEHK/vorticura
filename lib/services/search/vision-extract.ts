@@ -3,10 +3,12 @@
    extraction cascade.
 
    Sends an image of the product page to a HuggingFace vision model for price
-   extraction via chat completion. The image is a FULL-PAGE SCREENSHOT from a
-   hosted screenshot API when SCREENSHOT_URL_TEMPLATE is set (preferred — it
-   captures JS/image-only prices); otherwise it falls back to the primary
-   product image found in the page HTML (og:image / largest <img>).
+   extraction via chat completion. The image is a FULL-PAGE SCREENSHOT (preferred —
+   it captures JS/image-only prices): from ScreenshotOne when SCREENSHOTONE_ACCESS_KEY
+   is set, or any vendor via SCREENSHOT_URL_TEMPLATE. The screenshot is fetched
+   server-side and inlined as a base64 data URL so the model is guaranteed to receive
+   it. With no screenshot service configured, it falls back to the primary product
+   image found in the page HTML (og:image / largest <img>).
 
    This layer is OFF by default (SEARCH_VISION_ENABLED !== '1') because
    the vision model may not be available on all HF serverless provider
@@ -68,6 +70,9 @@ export interface VisionExtract {
 /** How long (ms) to wait for the vision model before giving up. */
 const VISION_TIMEOUT_MS = 12_000;
 
+/** How long (ms) to wait for the screenshot service (render + download) before giving up. */
+const SCREENSHOT_TIMEOUT_MS = 25_000;
+
 /** Sentinel returned on every failure path — never throws. */
 const ZERO_RESULT: VisionExtract = { price: 0, currency: '' };
 
@@ -110,21 +115,76 @@ function resolveImageUrl(raw: string | undefined, pageUrl: string): string | nul
 // =============================================
 
 /**
- * Build a FULL-PAGE screenshot URL for the target page using a hosted screenshot
- * service. Provider-agnostic: configured via the SCREENSHOT_URL_TEMPLATE env var,
- * which must contain the literal "{{url}}" placeholder. The placeholder is replaced
- * with the URL-encoded target page; everything else (API key, full_page flag,
- * format) lives in the template so any provider works without code changes, e.g.
- *   SCREENSHOT_URL_TEMPLATE="https://api.screenshotone.com/take?access_key=KEY&full_page=true&format=png&url={{url}}"
+ * Build a FULL-PAGE screenshot request URL for the target page.
  *
- * Returns null when no template is configured (caller falls back to the DOM image).
+ * Two configuration paths, checked in order:
+ *   1. SCREENSHOTONE_ACCESS_KEY — turnkey ScreenshotOne integration. We assemble
+ *      the /take URL with production-sane params (full page, ad/cookie/tracker
+ *      blocking, JPEG q80, raw-image response). Setting the access key is all the
+ *      operator must do.
+ *   2. SCREENSHOT_URL_TEMPLATE — provider-agnostic escape hatch for any other
+ *      vendor: a template containing the literal "{{url}}" placeholder.
+ *
+ * Returns null when neither is configured (caller falls back to the DOM image).
  */
 function buildScreenshotUrl(pageUrl: string): string | null {
+  // --- Path 1: ScreenshotOne (turnkey) ---
+  const accessKey = process.env.SCREENSHOTONE_ACCESS_KEY;
+  if (accessKey) {
+    // URLSearchParams handles encoding of the target url + every param value.
+    const params = new URLSearchParams({
+      access_key: accessKey,
+      url: pageUrl,
+      full_page: 'true',            // capture the WHOLE page, not just the viewport
+      format: 'jpg',                // compact raster the VLM reads well
+      response_type: 'by_format',   // return raw image bytes so we can fetch them server-side
+      image_quality: '80',          // good enough for OCR, keeps the payload small
+      block_ads: 'true',
+      block_cookie_banners: 'true', // strip overlays that hide the price
+      block_trackers: 'true',
+      timeout: '20',                // ScreenshotOne navigation timeout (s) — bounded for serverless
+    });
+    return `https://api.screenshotone.com/take?${params.toString()}`;
+  }
+
+  // --- Path 2: generic template (any other provider) ---
   const template = process.env.SCREENSHOT_URL_TEMPLATE;
-  // Require an explicit, well-formed template — no template means "feature off".
-  if (!template || !template.includes('{{url}}')) return null;
-  // Substitute the URL-encoded target so the screenshot service renders the right page.
-  return template.replace('{{url}}', encodeURIComponent(pageUrl));
+  if (template && template.includes('{{url}}')) {
+    return template.replace('{{url}}', encodeURIComponent(pageUrl));
+  }
+
+  return null;
+}
+
+/**
+ * Fetch the screenshot bytes SERVER-SIDE and return them as a base64 data URL
+ * (data:image/...;base64,...). We inline the image instead of handing the raw
+ * screenshot URL to the model because it GUARANTEES the model receives the pixels
+ * (no reliance on the inference provider fetching an arbitrary URL) and keeps the
+ * ScreenshotOne access_key server-side (never sent to HF). Bounded by an
+ * AbortSignal timeout; returns null on any failure.
+ */
+async function fetchImageAsDataUrl(url: string, timeoutMs: number): Promise<string | null> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+    if (!res.ok) {
+      console.warn('[vision-extract] screenshot fetch failed:', res.status, res.statusText);
+      return null;
+    }
+    // Content-type drives the data-URL mime; default to jpeg (our requested format).
+    const mime = res.headers.get('content-type')?.split(';')[0]?.trim() || 'image/jpeg';
+    if (!mime.startsWith('image/')) {
+      // by_format errors come back as JSON — not an image we can OCR.
+      console.warn('[vision-extract] screenshot response was not an image:', mime);
+      return null;
+    }
+    // Base64-encode the raw bytes into an inline data URL the model ingests directly.
+    const buf = Buffer.from(await res.arrayBuffer());
+    return `data:${mime};base64,${buf.toString('base64')}`;
+  } catch (err) {
+    console.warn('[vision-extract] screenshot fetch error:', err instanceof Error ? err.message : err);
+    return null;
+  }
 }
 
 // =============================================
@@ -278,21 +338,26 @@ export async function extractFromVision(
     if (!html || !pageUrl) return ZERO_RESULT;
 
     // --- Step 1: choose the image the model will read ---
-    // Prefer a FULL-PAGE SCREENSHOT (hosted screenshot API) when configured — it
+    // Prefer a FULL-PAGE SCREENSHOT (ScreenshotOne / template) when configured: it
     // captures the price as rendered on screen (incl. JS-injected / image-only
-    // prices), which is the whole point of the vision layer. Fall back to the
-    // page's primary product image (og:image / largest <img>) when no screenshot
-    // service is set up.
-    const imageUrl = buildScreenshotUrl(pageUrl) ?? findImageUrl(html, pageUrl);
+    // prices), which is the whole point of the vision layer. We fetch it server-side
+    // and inline it as a base64 data URL so the model is GUARANTEED to receive the
+    // pixels. Fall back to the page's primary product image (a plain URL the model
+    // fetches) when no screenshot service is set up.
+    const shotUrl = buildScreenshotUrl(pageUrl);
+    const imageUrl = shotUrl
+      ? await fetchImageAsDataUrl(shotUrl, SCREENSHOT_TIMEOUT_MS)
+      : findImageUrl(html, pageUrl);
     if (!imageUrl) {
-      // Neither a screenshot service nor a usable page image — vision can't help.
+      // No screenshot bytes and no usable page image — vision can't help.
       return ZERO_RESULT;
     }
 
     // --- Step 2: resolve the vision model ID ---
-    // Override via HF_VISION_MODEL_ID; default to Qwen2.5-VL-7B-Instruct
-    // which has strong multilingual OCR and product-page comprehension.
-    const model = process.env.HF_VISION_MODEL_ID || 'Qwen/Qwen2.5-VL-7B-Instruct';
+    // Override via HF_VISION_MODEL_ID; default to Qwen2.5-VL-72B-Instruct — strong
+    // OCR + product-page comprehension AND verified reachable on HF Inference
+    // providers (the 7B variant 404s on the default routing for our token).
+    const model = process.env.HF_VISION_MODEL_ID || 'Qwen/Qwen2.5-VL-72B-Instruct';
 
     // --- Step 3: build the multimodal message array ---
     // The user message carries both the spec-hint text and the image URL so

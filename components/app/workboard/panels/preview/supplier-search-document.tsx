@@ -369,8 +369,8 @@ export function SupplierSearchDocument({ data }: SupplierSearchDocumentProps) {
           style={{ height: `${100 - splitPct}%` }}
         >
           {selectedSupplier ? (
-            // zoom: 2 — enlarge the whole dossier (text + icons + spacing) ~2x for readability
-            <div className="px-4 py-3 space-y-4" style={{ zoom: 2 }}>
+            // zoom: 1.5 — enlarge the whole dossier (text + icons + spacing) ~1.5x for readability
+            <div className="px-4 py-3 space-y-4" style={{ zoom: 1.5 }}>
               {/* Dossier Header */}
               <div className="flex items-center gap-2 pb-2 border-b border-[#1a2030]">
                 <h2 className="text-[14px] font-bold text-gray-100">{selectedSupplier.supplier_name}</h2>
