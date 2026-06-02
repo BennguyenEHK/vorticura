@@ -30,6 +30,7 @@ import {
   BlankDocument,
 } from './preview';
 
+import { SearchPhaseDashboard } from './search-dashboard';
 import { getWorkboardSnapshots, getSnapshotById, persistRevertedPreviewType } from '@/lib/actions/snapshot-actions';
 import type { DocumentData, WorkboardSnapshotRecord } from '@/types/preview';
 import type { DataType } from '@/lib/utils/validator';
@@ -79,6 +80,18 @@ interface InlineNote {
   timestamp: Date;
 }
 
+/**
+ * True when the pending Accept will run the supplier-search pipeline — the only
+ * phase that emits live search telemetry, so the only phase that gets the
+ * multi-panel Search Phase Dashboard (every other phase keeps the simple bar).
+ */
+function isSearchDiscoveryPhase(docType: string, acceptAction: string): boolean {
+  return (
+    (docType === 'rfq_analysis' && acceptAction === 'proceed') ||
+    (docType === 'supplier_search' && acceptAction === 'research')
+  );
+}
+
 // ---------------------------------------------
 // Main Component
 // ---------------------------------------------
@@ -94,6 +107,7 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
   // Accept loading state — drives the overlay + futuristic button morph
   const [isAccepting, setIsAccepting]       = useState(false);
   const [acceptProgress, setAcceptProgress] = useState(0);
+  const [isSearchPhase, setIsSearchPhase]   = useState(false); // search_discovery → dashboard
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null); // fake progress timer
 
   // History panel state
@@ -359,13 +373,21 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
 
     setIsAccepting(true);
     setAcceptProgress(0);
-    // Tick every 120ms: each tick adds (85 - current) * 8% so it asymptotically approaches 85%
-    progressTimerRef.current = setInterval(() => {
-      setAcceptProgress(prev => {
-        if (prev >= 85) { clearInterval(progressTimerRef.current!); return prev; }
-        return prev + (85 - prev) * 0.08;
-      });
-    }, 120);
+
+    // Search discovery gets the live multi-panel dashboard (real telemetry); every
+    // other phase keeps the fake-easing progress bar. Skip the fake timer entirely
+    // during search so its 120ms ticks don't re-render the dashboard's parent.
+    const searchPhase = isSearchDiscoveryPhase(docType, mapping.accept);
+    setIsSearchPhase(searchPhase);
+    if (!searchPhase) {
+      // Tick every 120ms: each tick adds (85 - current) * 8% so it asymptotically approaches 85%
+      progressTimerRef.current = setInterval(() => {
+        setAcceptProgress(prev => {
+          if (prev >= 85) { clearInterval(progressTimerRef.current!); return prev; }
+          return prev + (85 - prev) * 0.08;
+        });
+      }, 120);
+    }
 
     try {
       const result = await handleHTTPRequest({
@@ -382,14 +404,16 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
         actions.setError(result.error || 'Action failed');
         setIsAccepting(false);
         setAcceptProgress(0);
+        setIsSearchPhase(false);
         return;
       }
       setAcceptProgress(100); // snap to full on success
-      setTimeout(() => { setIsAccepting(false); setAcceptProgress(0); }, 500);
+      setTimeout(() => { setIsAccepting(false); setAcceptProgress(0); setIsSearchPhase(false); }, 500);
     } catch (err) {
       actions.setError(err instanceof Error ? err.message : 'Action failed');
       setIsAccepting(false);
       setAcceptProgress(0);
+      setIsSearchPhase(false);
     } finally {
       clearInterval(progressTimerRef.current!);
     }
@@ -633,23 +657,31 @@ export function PreviewPanelContent({ className = '' }: PreviewPanelContentProps
         </div>
 
         {isAccepting && (
-          <div
-            aria-busy="true"
-            role="status"
-            aria-live="polite"
-            className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 backdrop-blur-sm bg-background/60 pointer-events-auto"
-          >
-            <div className="w-64 h-[2px] bg-border rounded-full overflow-hidden">
-              <div
-                className="h-full bg-neon-emerald neon-glow-accept transition-all duration-200 ease-out"
-                style={{ width: `${acceptProgress}%` }}
-              />
+          isSearchPhase ? (
+            // search_discovery → live multi-panel telemetry dashboard
+            <SearchPhaseDashboard
+              rfqId={(state.activeDocument?.data as { rfq_id?: number | null } | undefined)?.rfq_id ?? null}
+            />
+          ) : (
+            // every other phase → simple blur + fake-easing progress bar
+            <div
+              aria-busy="true"
+              role="status"
+              aria-live="polite"
+              className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 backdrop-blur-sm bg-background/60 pointer-events-auto"
+            >
+              <div className="w-64 h-[2px] bg-border rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-neon-emerald neon-glow-accept transition-all duration-200 ease-out"
+                  style={{ width: `${acceptProgress}%` }}
+                />
+              </div>
+              <div className="animate-scanner absolute left-0 w-full h-px bg-neon-cyan/40 pointer-events-none" />
+              <span className="micro-label text-neon-cyan animate-neon-flicker">
+                AI PROCESSING · {Math.round(acceptProgress)}%
+              </span>
             </div>
-            <div className="animate-scanner absolute left-0 w-full h-px bg-neon-cyan/40 pointer-events-none" />
-            <span className="micro-label text-neon-cyan animate-neon-flicker">
-              AI PROCESSING · {Math.round(acceptProgress)}%
-            </span>
-          </div>
+          )
         )}
       </div>
 

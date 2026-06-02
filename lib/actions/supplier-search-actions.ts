@@ -54,7 +54,13 @@ import {
   isUsableSourceRow,
   MIN_SOURCES,
 } from '@/lib/services/search/density-loop';
-import { logSearchStage } from '@/lib/services/search/telemetry';
+import {
+  logSearchStage,
+  enterSearchRun,
+  emitRunStart,
+  emitLiveness,
+  emitLayer,
+} from '@/lib/services/search/telemetry';
 // Phase 2 — supplier memory (L0 exact-match learned cache; gated off by default).
 import {
   lookupMemory,
@@ -76,6 +82,15 @@ import { extractFromVision, isVisionEnabled } from '@/lib/services/search/vision
 // ---------------------------------------------
 // Configuration
 // ---------------------------------------------
+
+/** Host of a URL for the dashboard liveness stream; '' on a malformed URL. */
+function safeHost(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return '';
+  }
+}
 
 /** Per-RFQ concurrency cap — keeps Tavily free-tier happy and prevents pod OOM */
 const RAG_CONCURRENCY = 8;
@@ -352,6 +367,8 @@ async function extractSupplierForItem(
     //       404/410 = truly dead → drop. 403/503/timeout = blocked → keep the
     //       candidate on Tavily raw_content (bot-proof), just skip HTML enhancement.
     const live = await checkLiveness(cand.snippet.url);
+    // Dashboard: report this source's health (feeds live/dead/blocked counters).
+    emitLiveness(item.itemId, live.status, safeHost(cand.snippet.url));
     if (live.status === 'dead') { deadUrls++; continue; }
     const html = live.html;   // non-null only when status === 'live'
 
@@ -361,6 +378,7 @@ async function extractSupplierForItem(
     //      multi-price disambiguation (pick the variant that matches the RFQ spec).
     //      Each value must re-appear in content (verify gate) or it is discarded.
     const manual = manualExtract(content, cand.detected, specTokens);
+    emitLayer(item.itemId, 1); // L1 manual regex — runs on every candidate page
     const manualUsed = Object.values(manual.confidence).some((c) => c > 0);
     // Task 4 — track low-confidence price variant matching from manual extraction.
     let manualPriceConfidence: number | undefined;
@@ -375,6 +393,7 @@ async function extractSupplierForItem(
     let structuredCurrency = '';
     let structuredPriceConfidence: number | undefined;
     if (manual.fields.bidder_unit_price === 0 && html) {
+      emitLayer(item.itemId, 2); // L2 structured HTML — only when live HTML present
       const s = extractFromHtml(html, specTokens);
       if (s.price > 0) {
         structuredPrice = s.price;
@@ -392,6 +411,7 @@ async function extractSupplierForItem(
     //      budget skips the LLM and the page degrades to deterministic-only.
     let llm: SupplierExtraction | null = null;
     if (consumeLlmCall(budget)) {
+      emitLayer(item.itemId, 3); // L3 LLM gap-fill — a reserved budget call
       const llmStart = Date.now();
       try {
         const raw = await aiChatCompletion<unknown>(
@@ -447,6 +467,7 @@ async function extractSupplierForItem(
     // consumeVisionCall reserves the slot BEFORE the costly screenshot+VLM call; the
     // isVisionEnabled() pre-check avoids burning a slot on a disabled no-op.
     if (price === 0 && html && isVisionEnabled() && consumeVisionCall(visionBudget)) {
+      emitLayer(item.itemId, 4); // L4 vision/screenshot — a reserved RFQ vision slot
       // Cast specTokens to string[] for extractFromVision (legacy signature; vision-extract
       // not yet updated to accept SpecTokenInput[]).
       const visionSpecTokens = specTokens.map((t) => typeof t === 'string' ? t : t.token);
@@ -584,6 +605,8 @@ async function contactHomepageFallback(row: ItemSourceRow): Promise<void> {
 
       const homeUrl = origin + path;
       const live = await checkLiveness(homeUrl);
+      // Dashboard: homepage-fallback probes are real source checks too.
+      emitLiveness(Number(row.item_id) || 0, live.status, safeHost(homeUrl));
 
       // Only act when status === 'live' and we have HTML.
       if (live.status !== 'live' || !live.html) continue;
@@ -702,6 +725,13 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     // item's extractor so the costly Layer-4 vision/screenshot calls are capped
     // per-RFQ (SEARCH_VISION_CAP), not per-item.
     const visionBudget = createVisionBudget();
+
+    // Search Phase Dashboard — open the live progress stream for this run. enterSearchRun
+    // seeds an AsyncLocalStorage context (rfqId + seq) inherited by every nested
+    // extract/density emit below; emitRunStart resets the client dashboard and carries
+    // the budget denominators (per-item LLM cap, per-RFQ vision cap) for the layer bars.
+    enterSearchRun(rfq_id ?? 0);
+    emitRunStart(itemRows.length, createBudget().maxLlmCalls, visionBudget.maxVisionCalls);
 
     // (3) Per-item DENSITY LOOP with one budget per item (Stage 11+).
     //     planQueries() generates up to 8 LLM-ranked queries + a parsed spec.

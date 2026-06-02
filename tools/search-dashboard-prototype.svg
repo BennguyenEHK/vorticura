@@ -1,0 +1,297 @@
+<svg width="1640" height="1060" viewBox="0 0 1640 1060" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="22%" r="80%">
+      <stop offset="0%" stop-color="#101a2b"/>
+      <stop offset="55%" stop-color="#0a0e16"/>
+      <stop offset="100%" stop-color="#05070b"/>
+    </radialGradient>
+    <linearGradient id="emerald" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#18E29A"/><stop offset="100%" stop-color="#0FB37A"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3EE0FF"/><stop offset="100%" stop-color="#1C9BE0"/>
+    </linearGradient>
+    <linearGradient id="amber" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFC857"/><stop offset="100%" stop-color="#F59E1B"/>
+    </linearGradient>
+    <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#B79CFF"/><stop offset="100%" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <linearGradient id="cardFrost" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#141c2a" stop-opacity="0.96"/>
+      <stop offset="100%" stop-color="#0d131e" stop-opacity="0.96"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="9" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowEm"><feGaussianBlur stdDeviation="3.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse">
+      <path d="M34 0H0V34" fill="none" stroke="#7fa8d0" stroke-opacity="0.05" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <!-- backdrop: the blurred document beneath the loading layer -->
+  <rect width="1640" height="1060" fill="url(#bgGlow)"/>
+  <rect width="1640" height="1060" fill="url(#grid)"/>
+  <!-- ghosted "document" being resolved, sitting behind the blur layer -->
+  <g opacity="0.06" filter="url(#soft)">
+    <rect x="120" y="120" width="1400" height="820" rx="14" fill="#9fc4e8"/>
+    <rect x="170" y="180" width="620" height="22" rx="6" fill="#cfe3f7"/>
+    <rect x="170" y="230" width="1300" height="14" rx="5" fill="#cfe3f7"/>
+    <rect x="170" y="262" width="1180" height="14" rx="5" fill="#cfe3f7"/>
+    <rect x="170" y="294" width="1240" height="14" rx="5" fill="#cfe3f7"/>
+  </g>
+  <!-- the frosted loading layer plate -->
+  <rect x="60" y="48" width="1520" height="964" rx="20" fill="#070b12" fill-opacity="0.55" stroke="#2a3a52" stroke-opacity="0.5"/>
+  <!-- scanline accent (animate-scanner in the app) -->
+  <rect x="60" y="300" width="1520" height="2" fill="#3EE0FF" opacity="0.22"/>
+
+  <!-- ===================== HEADER ===================== -->
+  <g transform="translate(96,84)">
+    <circle cx="9" cy="10" r="9" fill="url(#emerald)" filter="url(#glowEm)"/>
+    <circle cx="9" cy="10" r="4" fill="#06210f"/>
+    <text x="34" y="6" fill="#EAF2FB" font-size="26" font-weight="700" letter-spacing="3">SEARCH&#160;PHASE&#160;DASHBOARD</text>
+    <text x="35" y="31" fill="#6B86A6" font-size="12.5" letter-spacing="2.5">PHASE&#160;3&#160;/&#160;5&#160;&#183;&#160;SEARCH_DISCOVERY&#160;&#183;&#160;RFQ-2026-0488&#160;&#183;&#160;6&#160;ITEMS</text>
+
+    <!-- overall progress arc -->
+    <g transform="translate(1300,-8)">
+      <text x="118" y="-2" text-anchor="end" fill="#6B86A6" font-size="11" letter-spacing="3">PIPELINE</text>
+      <circle cx="150" cy="34" r="30" fill="none" stroke="#22314a" stroke-width="7"/>
+      <path d="M150 4 a30 30 0 1 1 -21.2 8.8" fill="none" stroke="url(#emerald)" stroke-width="7" stroke-linecap="round" filter="url(#glowEm)"/>
+      <text x="150" y="40" text-anchor="middle" fill="#EAF2FB" font-size="20" font-weight="700">62%</text>
+    </g>
+    <g transform="translate(1140,6)" fill="#8aa0bd" font-size="12.5">
+      <text x="0" y="0" letter-spacing="1.5">ELAPSED</text>
+      <text x="0" y="22" fill="#EAF2FB" font-size="20" font-weight="600" font-family="Consolas, monospace">00:18.4s</text>
+    </g>
+  </g>
+  <line x1="96" y1="138" x2="1544" y2="138" stroke="#22314a" stroke-opacity="0.6"/>
+
+  <!-- ===================== 4 PHASE PANELS ===================== -->
+  <!-- helper geometry: each panel 344 wide, 372 tall, gap 24, start x=96 y=160 -->
+
+  <!-- PANEL 1 — QUERY GENERATION (DONE) -->
+  <g transform="translate(96,160)">
+    <rect width="344" height="372" rx="14" fill="url(#cardFrost)" stroke="#18E29A" stroke-opacity="0.30"/>
+    <rect width="4" height="372" rx="2" fill="url(#emerald)"/>
+    <text x="26" y="40" fill="#7e93af" font-size="12" font-weight="700">01</text>
+    <text x="50" y="40" fill="#EAF2FB" font-size="17" font-weight="700" letter-spacing="0.4">Query Generation</text>
+    <text x="26" y="62" fill="#6B86A6" font-size="11.5">LLM spec-parse &#183; planQueries()</text>
+    <!-- status pill DONE -->
+    <rect x="246" y="22" width="76" height="24" rx="12" fill="#18E29A" fill-opacity="0.14" stroke="#18E29A" stroke-opacity="0.5"/>
+    <circle cx="262" cy="34" r="4" fill="#18E29A" filter="url(#glowEm)"/>
+    <text x="274" y="38" fill="#5EEFC0" font-size="11" font-weight="700" letter-spacing="1">DONE</text>
+
+    <text x="26" y="118" fill="#EAF2FB" font-size="46" font-weight="700" font-family="Consolas, monospace">8</text>
+    <text x="26" y="138" fill="#6B86A6" font-size="11.5">ranked queries (narrow &#8594; broad)</text>
+
+    <!-- parsed spec chips -->
+    <g font-size="11" font-weight="600">
+      <rect x="26" y="156" width="96" height="22" rx="11" fill="#16202f" stroke="#2c3c56"/>
+      <text x="36" y="171" fill="#9fb6d2">class: 150</text>
+      <rect x="130" y="156" width="86" height="22" rx="11" fill="#16202f" stroke="#2c3c56"/>
+      <text x="140" y="171" fill="#9fb6d2">DN: 1/2"</text>
+      <rect x="224" y="156" width="96" height="22" rx="11" fill="#16202f" stroke="#2c3c56"/>
+      <text x="234" y="171" fill="#9fb6d2">carbon steel</text>
+    </g>
+    <!-- query list -->
+    <g font-family="Consolas, monospace" font-size="11.5">
+      <rect x="26" y="196" width="296" height="150" rx="8" fill="#0a0f17" stroke="#1c2a3e"/>
+      <text x="40" y="222" fill="#18E29A">q1 &#9656; carbon steel flanged valve class 150 1/2"</text>
+      <text x="40" y="246" fill="#8aa0bd">q2 &#9656; flanged gate valve DN15 cl150 supplier</text>
+      <text x="40" y="270" fill="#8aa0bd">q3 &#9656; CS flanged valve 1/2 inch price datasheet</text>
+      <text x="40" y="294" fill="#8aa0bd">q4 &#9656; A105 flanged valve class150 distributor</text>
+      <text x="40" y="318" fill="#566b8a">&#8230; +4 broaden / bare-code queries (last)</text>
+    </g>
+  </g>
+
+  <!-- PANEL 2 — SOURCE DISCOVERY (ACTIVE) -->
+  <g transform="translate(464,160)">
+    <rect width="344" height="372" rx="14" fill="url(#cardFrost)" stroke="#3EE0FF" stroke-opacity="0.55"/>
+    <rect width="4" height="372" rx="2" fill="url(#cyan)"/>
+    <text x="26" y="40" fill="#7e93af" font-size="12" font-weight="700">02</text>
+    <text x="50" y="40" fill="#EAF2FB" font-size="17" font-weight="700">Source Discovery</text>
+    <text x="26" y="62" fill="#6B86A6" font-size="11.5">Tavily + score + Layer-0 liveness</text>
+    <!-- status pill ACTIVE (pulsing ring) -->
+    <rect x="238" y="22" width="84" height="24" rx="12" fill="#3EE0FF" fill-opacity="0.16" stroke="#3EE0FF" stroke-opacity="0.7"/>
+    <circle cx="254" cy="34" r="5" fill="none" stroke="#3EE0FF" stroke-opacity="0.5" stroke-width="2"/>
+    <circle cx="254" cy="34" r="3.4" fill="#3EE0FF" filter="url(#glowEm)"/>
+    <text x="266" y="38" fill="#9CEBFF" font-size="11" font-weight="700" letter-spacing="1">ACTIVE</text>
+
+    <text x="26" y="118" fill="#EAF2FB" font-size="46" font-weight="700" font-family="Consolas, monospace">37</text>
+    <text x="120" y="118" fill="#6B86A6" font-size="14">candidates scored</text>
+    <text x="26" y="138" fill="#6B86A6" font-size="11.5">KEEP &#8805; threshold &#183; deduped by URL</text>
+
+    <!-- liveness mini-stats -->
+    <g font-size="12">
+      <g transform="translate(26,160)">
+        <rect width="88" height="50" rx="8" fill="#0e2a22" stroke="#18E29A" stroke-opacity="0.35"/>
+        <text x="12" y="22" fill="#5EEFC0" font-size="20" font-weight="700" font-family="Consolas, monospace">24</text>
+        <text x="12" y="40" fill="#6B86A6" font-size="10.5">LIVE 2xx</text>
+      </g>
+      <g transform="translate(122,160)">
+        <rect width="88" height="50" rx="8" fill="#2a1620" stroke="#FF5C7A" stroke-opacity="0.35"/>
+        <text x="12" y="22" fill="#FF8AA3" font-size="20" font-weight="700" font-family="Consolas, monospace">5</text>
+        <text x="12" y="40" fill="#6B86A6" font-size="10.5">DEAD 404</text>
+      </g>
+      <g transform="translate(218,160)">
+        <rect width="100" height="50" rx="8" fill="#2a2416" stroke="#FFC857" stroke-opacity="0.4"/>
+        <text x="12" y="22" fill="#FFD587" font-size="20" font-weight="700" font-family="Consolas, monospace">8</text>
+        <text x="12" y="40" fill="#6B86A6" font-size="10.5">BLOCKED 403</text>
+      </g>
+    </g>
+    <!-- live discovery feed -->
+    <g font-family="Consolas, monospace" font-size="11">
+      <rect x="26" y="222" width="296" height="124" rx="8" fill="#0a0f17" stroke="#1c2a3e"/>
+      <text x="38" y="244" fill="#18E29A">&#9679; live  flowserve.com/&#8230;/valve-cl150</text>
+      <text x="38" y="266" fill="#18E29A">&#9679; live  emerson.com/&#8230;/A105-flanged</text>
+      <text x="38" y="288" fill="#FFC857">&#9680; 403   amazon.com/&#8230;/B0DBM6G9MF</text>
+      <text x="38" y="310" fill="#FF8AA3">&#9676; 404   valveworld.net/&#8230;/old-sku</text>
+      <text x="38" y="332" fill="#3EE0FF">&#9655; scan  globalspec.com/&#8230;/gate-valve</text>
+    </g>
+  </g>
+
+  <!-- PANEL 3 — CONTENT EXTRACTION (ACTIVE) -->
+  <g transform="translate(832,160)">
+    <rect width="344" height="372" rx="14" fill="url(#cardFrost)" stroke="#B79CFF" stroke-opacity="0.5"/>
+    <rect width="4" height="372" rx="2" fill="url(#violet)"/>
+    <text x="26" y="40" fill="#7e93af" font-size="12" font-weight="700">03</text>
+    <text x="50" y="40" fill="#EAF2FB" font-size="17" font-weight="700">Content Extraction</text>
+    <text x="26" y="62" fill="#6B86A6" font-size="11.5">4-layer price/contact cascade</text>
+    <rect x="238" y="22" width="84" height="24" rx="12" fill="#B79CFF" fill-opacity="0.16" stroke="#B79CFF" stroke-opacity="0.7"/>
+    <circle cx="254" cy="34" r="3.4" fill="#B79CFF" filter="url(#glowEm)"/>
+    <text x="266" y="38" fill="#D4C6FF" font-size="11" font-weight="700" letter-spacing="1">ACTIVE</text>
+
+    <text x="26" y="118" fill="#EAF2FB" font-size="46" font-weight="700" font-family="Consolas, monospace">19</text>
+    <text x="120" y="118" fill="#6B86A6" font-size="14">pages extracted</text>
+    <text x="26" y="138" fill="#6B86A6" font-size="11.5">deterministic price wins over LLM</text>
+
+    <!-- cascade layer ladder -->
+    <g font-size="12" font-family="Consolas, monospace">
+      <!-- L1 manual -->
+      <g transform="translate(26,158)">
+        <rect width="296" height="40" rx="8" fill="#0e2a22" stroke="#18E29A" stroke-opacity="0.4"/>
+        <text x="12" y="25" fill="#5EEFC0" font-weight="700">L1 MANUAL</text>
+        <text x="150" y="25" fill="#8aa0bd">regex raw_content</text>
+        <text x="284" y="25" text-anchor="end" fill="#5EEFC0" font-weight="700">11</text>
+      </g>
+      <g transform="translate(26,202)">
+        <rect width="296" height="40" rx="8" fill="#0e2336" stroke="#3EE0FF" stroke-opacity="0.4"/>
+        <text x="12" y="25" fill="#9CEBFF" font-weight="700">L2 STRUCT</text>
+        <text x="150" y="25" fill="#8aa0bd">JSON-LD / OG</text>
+        <text x="284" y="25" text-anchor="end" fill="#9CEBFF" font-weight="700">4</text>
+      </g>
+      <g transform="translate(26,246)">
+        <rect width="296" height="40" rx="8" fill="#1d1b33" stroke="#B79CFF" stroke-opacity="0.5"/>
+        <text x="12" y="25" fill="#D4C6FF" font-weight="700">L3 LLM</text>
+        <text x="150" y="25" fill="#8aa0bd">gap-fill (active)</text>
+        <text x="284" y="25" text-anchor="end" fill="#D4C6FF" font-weight="700">3</text>
+      </g>
+      <g transform="translate(26,290)">
+        <rect width="296" height="40" rx="8" fill="#2a2416" stroke="#FFC857" stroke-opacity="0.35"/>
+        <text x="12" y="25" fill="#FFD587" font-weight="700">L4 VISION</text>
+        <text x="150" y="25" fill="#8aa0bd">screenshot VLM &#183; capped</text>
+        <text x="284" y="25" text-anchor="end" fill="#FFD587" font-weight="700">1</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- PANEL 4 — RANKING & DENSITY (QUEUED tail) -->
+  <g transform="translate(1200,160)">
+    <rect width="344" height="372" rx="14" fill="url(#cardFrost)" stroke="#FFC857" stroke-opacity="0.4"/>
+    <rect width="4" height="372" rx="2" fill="url(#amber)"/>
+    <text x="26" y="40" fill="#7e93af" font-size="12" font-weight="700">04</text>
+    <text x="50" y="40" fill="#EAF2FB" font-size="17" font-weight="700">Ranking &amp; Density</text>
+    <text x="26" y="62" fill="#6B86A6" font-size="11.5">MIN_SOURCES floor &#183; fan-out loop</text>
+    <rect x="232" y="22" width="90" height="24" rx="12" fill="#FFC857" fill-opacity="0.14" stroke="#FFC857" stroke-opacity="0.5"/>
+    <circle cx="248" cy="34" r="3.4" fill="#FFC857"/>
+    <text x="260" y="38" fill="#FFD587" font-size="11" font-weight="700" letter-spacing="1">FILLING</text>
+
+    <text x="26" y="118" fill="#EAF2FB" font-size="46" font-weight="700" font-family="Consolas, monospace">3<tspan fill="#566b8a" font-size="26">/5</tspan></text>
+    <text x="26" y="138" fill="#6B86A6" font-size="11.5">avg distinct sources &#183; floor = 3</text>
+
+    <!-- ring gauges per item -->
+    <g transform="translate(26,160)">
+      <text x="0" y="0" fill="#6B86A6" font-size="11">density floor coverage</text>
+      <g font-size="10" text-anchor="middle" font-family="Consolas, monospace">
+        <!-- item gauges -->
+        <g transform="translate(24,40)"><circle r="22" fill="none" stroke="#22314a" stroke-width="6"/><path d="M0 -22 a22 22 0 1 1 -0.1 0" fill="none" stroke="url(#emerald)" stroke-width="6" stroke-linecap="round"/><text y="4" fill="#EAF2FB" font-weight="700">I1</text></g>
+        <g transform="translate(96,40)"><circle r="22" fill="none" stroke="#22314a" stroke-width="6"/><path d="M0 -22 a22 22 0 1 1 -0.1 0" fill="none" stroke="url(#emerald)" stroke-width="6" stroke-linecap="round"/><text y="4" fill="#EAF2FB" font-weight="700">I2</text></g>
+        <g transform="translate(168,40)"><circle r="22" fill="none" stroke="#22314a" stroke-width="6"/><path d="M0 -22 a22 22 0 0 1 19 33" fill="none" stroke="url(#amber)" stroke-width="6" stroke-linecap="round"/><text y="4" fill="#EAF2FB" font-weight="700">I3</text></g>
+        <g transform="translate(240,40)"><circle r="22" fill="none" stroke="#22314a" stroke-width="6"/><path d="M0 -22 a22 22 0 0 1 11 38" fill="none" stroke="url(#amber)" stroke-width="6" stroke-linecap="round"/><text y="4" fill="#EAF2FB" font-weight="700">I4</text></g>
+        <g transform="translate(60,108)"><circle r="22" fill="none" stroke="#22314a" stroke-width="6"/><path d="M0 -22 a22 22 0 1 1 -0.1 0" fill="none" stroke="url(#emerald)" stroke-width="6" stroke-linecap="round"/><text y="4" fill="#EAF2FB" font-weight="700">I5</text></g>
+        <g transform="translate(132,108)"><circle r="22" fill="none" stroke="#22314a" stroke-width="6"/><path d="M0 -22 a22 22 0 0 1 -6 41" fill="none" stroke="#FF5C7A" stroke-width="6" stroke-linecap="round"/><text y="4" fill="#EAF2FB" font-weight="700">I6</text></g>
+      </g>
+      <g transform="translate(180,84)" font-size="10.5" font-family="Segoe UI, sans-serif">
+        <circle cx="6" cy="10" r="5" fill="url(#emerald)"/><text x="18" y="14" fill="#8aa0bd">met (&#8805;3)</text>
+        <circle cx="6" cy="30" r="5" fill="url(#amber)"/><text x="18" y="34" fill="#8aa0bd">filling</text>
+        <circle cx="6" cy="50" r="5" fill="#FF5C7A"/><text x="18" y="54" fill="#8aa0bd">below floor</text>
+      </g>
+    </g>
+    <!-- substitute / contact loopback note -->
+    <g transform="translate(26,300)" font-size="11">
+      <rect width="296" height="46" rx="8" fill="#0a0f17" stroke="#1c2a3e"/>
+      <text x="12" y="20" fill="#FFD587" font-weight="600">I6 &#8594; substitute re-plan (round 1/2)</text>
+      <text x="12" y="38" fill="#6B86A6" font-family="Consolas, monospace">broaden: "equivalent compatible replacement"</text>
+    </g>
+  </g>
+
+  <!-- ===================== BUDGET / CIRCUIT-BREAKER STRIP ===================== -->
+  <g transform="translate(96,556)">
+    <rect width="1448" height="118" rx="14" fill="url(#cardFrost)" stroke="#22314a"/>
+    <text x="26" y="34" fill="#8aa0bd" font-size="12" font-weight="700" letter-spacing="2.5">RESOURCE&#160;BUDGET&#160;&#183;&#160;CIRCUIT-BREAKER</text>
+    <text x="1422" y="34" text-anchor="end" fill="#5EEFC0" font-size="12" font-weight="700">HEALTHY</text>
+
+    <!-- meters -->
+    <g transform="translate(26,52)" font-size="12">
+      <!-- LLM calls -->
+      <text x="0" y="14" fill="#9fb6d2">LLM calls</text>
+      <text x="330" y="14" text-anchor="end" fill="#EAF2FB" font-family="Consolas, monospace">23 / 40</text>
+      <rect x="0" y="24" width="330" height="8" rx="4" fill="#16202f"/>
+      <rect x="0" y="24" width="190" height="8" rx="4" fill="url(#emerald)"/>
+    </g>
+    <g transform="translate(386,52)" font-size="12">
+      <text x="0" y="14" fill="#9fb6d2">Tavily calls</text>
+      <text x="330" y="14" text-anchor="end" fill="#EAF2FB" font-family="Consolas, monospace">41</text>
+      <rect x="0" y="24" width="330" height="8" rx="4" fill="#16202f"/>
+      <rect x="0" y="24" width="150" height="8" rx="4" fill="url(#cyan)"/>
+    </g>
+    <g transform="translate(746,52)" font-size="12">
+      <text x="0" y="14" fill="#9fb6d2">Vision cap</text>
+      <text x="330" y="14" text-anchor="end" fill="#EAF2FB" font-family="Consolas, monospace">1 / 3</text>
+      <rect x="0" y="24" width="330" height="8" rx="4" fill="#16202f"/>
+      <rect x="0" y="24" width="110" height="8" rx="4" fill="url(#amber)"/>
+    </g>
+    <g transform="translate(1106,52)" font-size="12">
+      <text x="0" y="14" fill="#9fb6d2">Wall-clock</text>
+      <text x="316" y="14" text-anchor="end" fill="#EAF2FB" font-family="Consolas, monospace">18.4 / 45s</text>
+      <rect x="0" y="24" width="316" height="8" rx="4" fill="#16202f"/>
+      <rect x="0" y="24" width="129" height="8" rx="4" fill="url(#violet)"/>
+    </g>
+  </g>
+
+  <!-- ===================== RAW TELEMETRY FEED (the scrolling log, kept) ===================== -->
+  <g transform="translate(96,698)">
+    <rect width="1448" height="286" rx="14" fill="#080c13" stroke="#1c2a3e"/>
+    <rect width="1448" height="36" rx="14" fill="#0e1626"/>
+    <rect y="22" width="1448" height="14" fill="#0e1626"/>
+    <circle cx="24" cy="18" r="5" fill="#3EE0FF" filter="url(#glowEm)"/>
+    <text x="42" y="23" fill="#9fb6d2" font-size="12.5" font-weight="700" letter-spacing="2">LIVE&#160;TELEMETRY&#160;STREAM</text>
+    <text x="1422" y="23" text-anchor="end" fill="#566b8a" font-size="11" font-family="Consolas, monospace">[search-telemetry] &#183; SSE /api/search-stream</text>
+
+    <g font-family="Consolas, monospace" font-size="12.5" transform="translate(28,62)">
+      <text y="0"><tspan fill="#566b8a">00:17.9 </tspan><tspan fill="#18E29A">query-gen   </tspan><tspan fill="#8aa0bd">item=3 attempt=2 round=1 q="CS flanged valve 1/2 datasheet"</tspan></text>
+      <text y="26"><tspan fill="#566b8a">00:18.0 </tspan><tspan fill="#3EE0FF">raw-search  </tspan><tspan fill="#8aa0bd">item=3 snippets=9 tavilyCalls=1 kept=5</tspan></text>
+      <text y="52"><tspan fill="#566b8a">00:18.1 </tspan><tspan fill="#FF8AA3">liveness    </tspan><tspan fill="#8aa0bd">item=3 url=valveworld.net/&#8230; status=dead 404 &#8594; dropped</tspan></text>
+      <text y="78"><tspan fill="#566b8a">00:18.1 </tspan><tspan fill="#FFD587">liveness    </tspan><tspan fill="#8aa0bd">item=3 url=amazon.com/&#8230;/B0DBM6G9MF status=blocked 403 &#8594; Tavily raw_content</tspan></text>
+      <text y="104"><tspan fill="#566b8a">00:18.2 </tspan><tspan fill="#B79CFF">extract     </tspan><tspan fill="#8aa0bd">item=3 track=manual+llm price=128.40 cur=USD page=product</tspan></text>
+      <text y="130"><tspan fill="#566b8a">00:18.3 </tspan><tspan fill="#FFD587">price-select</tspan><tspan fill="#8aa0bd">item=3 4 candidates &#8594; matched class150 1/2" ctx (score 3) &#8594; 128.40</tspan></text>
+      <text y="156"><tspan fill="#566b8a">00:18.3 </tspan><tspan fill="#18E29A">density     </tspan><tspan fill="#8aa0bd">item=3 have=3 need=3 &#8594; FLOOR MET &#183; budgetLeft=17</tspan></text>
+      <text y="182"><tspan fill="#566b8a">00:18.4 </tspan><tspan fill="#3EE0FF">contact-loop</tspan><tspan fill="#8aa0bd">item=6 no email/phone &#8594; homepage fallback queued (cap 3/10)</tspan></text>
+    </g>
+  </g>
+
+  <!-- footer caption -->
+  <text x="820" y="1034" text-anchor="middle" fill="#41526b" font-size="11.5" letter-spacing="1.5">PROTOTYPE &#183; multi-panel Search Phase Dashboard rendered inside the backdrop-blur loading layer (search_discovery only)</text>
+</svg>
