@@ -24,7 +24,7 @@ import { modifyDatabase, type WriteFailure } from '@/lib/utils/databaseHandler';
 import { aiChatCompletion } from '@/lib/ai-agent/ai-router';
 import { searchOneQuery, isProductPage, type ScorerSpec } from '@/lib/services/search';
 import { manualExtract } from '@/lib/services/search/manual-extract';
-import { planQueries } from '@/lib/services/search/query-planner';
+import { planQueries, planContactQueries } from '@/lib/services/search/query-planner';
 import { SUPPLIER_SCHEMA, normalizeSupplierExtraction, type SupplierExtraction } from '@/lib/ai-agent/schemas/supplier';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
 // Budget circuit-breaker — the per-item resource leash (LLM calls + wall-clock).
@@ -57,6 +57,10 @@ import type { ParsedSpec } from '@/lib/ai-agent/schemas/query-plan';
 // price via cheerio JSON-LD/microdata/OG). Replaces the dead text-only microdata layer.
 import { checkLiveness } from '@/lib/services/search/liveness';
 import { extractFromHtml } from '@/lib/services/search/html-extract';
+// Layer 4 (vision/image-to-text) — last-resort price recovery from the product
+// image when text/HTML/LLM layers all came back price-unknown. Env-gated OFF by
+// default (SEARCH_VISION_ENABLED) and fail-safe (never throws).
+import { extractFromVision } from '@/lib/services/search/vision-extract';
 
 
 // ---------------------------------------------
@@ -339,19 +343,37 @@ async function extractSupplierForItem(
     // A page with no name or description is not a usable supplier source.
     if (!supplier_name.trim() || !bidder_description.trim()) continue;
 
-    const price =
+    // Price cascade: manual (raw_content) → structured (HTML) → LLM. `let` so the
+    // vision layer below can fill it in when every text layer came back unknown.
+    let price =
       f.bidder_unit_price > 0 ? f.bidder_unit_price
       : structuredPrice > 0 ? structuredPrice
       : (llm?.bidder_unit_price ?? 0);
-    const currency = f.currency_code || structuredCurrency || llm?.currency_code || 'USD';
+    let currency = f.currency_code || structuredCurrency || llm?.currency_code || 'USD';
+
+    // (2c-vision) LAYER 4 — VISION/IMAGE-TO-TEXT. Last resort: runs ONLY when every
+    //      prior layer left price unknown AND we have live HTML to locate the product
+    //      image. Off by default (SEARCH_VISION_ENABLED) and fail-safe, so this is a
+    //      no-op in production until explicitly enabled — answers the Phase-2 gate.
+    let visionUsed = false;
+    if (price === 0 && html) {
+      const vision = await extractFromVision(html, cand.snippet.url, specTokens);
+      if (vision.price > 0) {
+        price = vision.price;
+        currency = vision.currency || currency;   // keep cascade currency if vision gave none
+        visionUsed = true;
+      }
+    }
     const delivery_time = f.delivery_time || llm?.delivery_time || '';
     const contact_email = f.contact_email || llm?.contact_email || '';
     const contact_phone = f.contact_phone || llm?.contact_phone || '';
     const available_qty = f.available_qty > 0 ? f.available_qty : (llm?.available_qty ?? 0);
 
-    // Provenance — which layer supplied the price.
+    // Provenance — which layer supplied the price. Vision wins the label only when
+    // it actually filled the price (it runs after all text layers returned 0).
     const track =
-      f.bidder_unit_price > 0 ? (manualUsed ? (llm ? 'manual+llm' : 'manual') : 'manual')
+      visionUsed ? 'vision'
+      : f.bidder_unit_price > 0 ? (manualUsed ? (llm ? 'manual+llm' : 'manual') : 'manual')
       : structuredPrice > 0 ? (llm ? 'structured+llm' : 'structured')
       : 'llm';
 
@@ -361,12 +383,15 @@ async function extractSupplierForItem(
       continue;
     }
 
-    // (2f) requires_quote gate — page sells the item but has no public price and
-    //      asks buyers to request a quote (LLM flag OR price-absent + quote-intent).
-    //      When price is still unknown AND there is NO quote-intent signal, the page
-    //      is eligible for Layer 4 (vision/image-to-text) — deferred to Phase 2, so
-    //      for now we accept the row with price unknown.
-    const requiresQuote = (llm?.requires_quote ?? false) || (price === 0 && cand.detected.has_quote_request);
+    // (2f) requires_quote gate — LAST-RESORT fallback, never an override.
+    //      Principle (decision 2026-06-02): a parameter shows QUOTE REQUIRED only
+    //      when its value could NOT be extracted by ANY layer (manual → structured
+    //      → LLM). If we DID extract a price, the price wins even when the page also
+    //      carries a "request a quote" CTA. So requires_quote is gated on price===0:
+    //      no price AND a quote-on-request signal (LLM flag OR detected quote intent)
+    //      ⇒ QUOTE REQUIRED. No price AND no quote signal ⇒ unknown (price 0, the page
+    //      is eligible for the future Layer 4 vision pass — see Q2 / Phase 2).
+    const requiresQuote = price === 0 && ((llm?.requires_quote ?? false) || cand.detected.has_quote_request);
 
     const stockPrefix = available_qty > 0 ? `Stock: ${available_qty} available. ` : '';
     const notes = `${stockPrefix}${llm?.notes ?? ''}`.trim();
@@ -635,19 +660,28 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
       if (row.contact_email || row.contact_phone || !row.supplier_name) continue; // already has a contact / no name to search
       contactRecoveries++;
       try {
-        // Contact-specific query (supplier name, not the item spec).
-        const contactQuery = `"${row.supplier_name}" contact email phone "get in touch"`;
-        const cs = await searchOneQuery(contactQuery);
-        contactTavilyCalls += cs.tavilyCalls;
-        for (const c of cs.candidates.slice(0, 2)) {
-          // Extract ONLY contacts (skip price/stock/delivery) from the candidate text.
-          const extracted = manualExtract(
-            c.snippet.content || c.snippet.snippet || '',
-            { has_price: false, has_stock: false, has_delivery: false, has_contact_email: true, has_contact_phone: true },
-          );
-          if (!row.contact_email && extracted.fields.contact_email) row.contact_email = extracted.fields.contact_email;
-          if (!row.contact_phone && extracted.fields.contact_phone) row.contact_phone = extracted.fields.contact_phone;
-          if (row.contact_email && row.contact_phone) break;       // both found — stop early
+        // Query builder: feed the supplier name + contact-finder prompt to the LLM
+        // planner to mint contact-discovery queries. Fall back to a deterministic
+        // query when the planner returns nothing, so the loopback always searches.
+        const planned = await planContactQueries(row.supplier_name);
+        const contactQueries = planned.length
+          ? planned.slice(0, 2)                                   // cap to bound Tavily cost
+          : [`"${row.supplier_name}" contact email phone "get in touch"`];
+
+        for (const contactQuery of contactQueries) {
+          if (row.contact_email && row.contact_phone) break;      // both found — stop searching
+          const cs = await searchOneQuery(contactQuery);
+          contactTavilyCalls += cs.tavilyCalls;
+          for (const c of cs.candidates.slice(0, 2)) {
+            // Extract ONLY contacts (skip price/stock/delivery) from the candidate text.
+            const extracted = manualExtract(
+              c.snippet.content || c.snippet.snippet || '',
+              { has_price: false, has_stock: false, has_delivery: false, has_contact_email: true, has_contact_phone: true },
+            );
+            if (!row.contact_email && extracted.fields.contact_email) row.contact_email = extracted.fields.contact_email;
+            if (!row.contact_phone && extracted.fields.contact_phone) row.contact_phone = extracted.fields.contact_phone;
+            if (row.contact_email && row.contact_phone) break;     // both found — stop early
+          }
         }
       } catch (err) {
         console.warn(`[supplier-search] contact recovery failed for "${row.supplier_name}":`, err instanceof Error ? err.message : err);

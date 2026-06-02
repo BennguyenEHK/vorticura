@@ -157,8 +157,14 @@ function norm(s: string): string {
 // which fields are worth hunting for. Bounded module-scope regexes, no `g` flag.
 const DET_PRICE = /(?:USD|EUR|GBP|VND|SGD|MYR|THB|IDR|CNY|JPY|AUD|[$€£¥])\s*[\d,]+(?:\.\d+)?|[\d,]+(?:\.\d+)?\s*(?:USD|EUR|GBP|VND|SGD|MYR|THB|IDR|CNY|JPY|AUD)/i;
 const DET_CURRENCY = /(?:USD|EUR|GBP|VND|SGD|MYR|THB|IDR|CNY|JPY|AUD|[$€£¥])/i;
-const DET_EMAIL = /[a-z0-9._%+-]{1,64}@[a-z0-9.-]{1,253}\.[a-z]{2,24}/i;
-const DET_PHONE = /(?:tel|phone|call|hotline|\+?\d)[\s:]*\+?\d[\d\s().-]{6,18}\d/i;
+// DET_EMAIL: standard address form OR the obfuscated [at]/(at)/AT variant
+// used by many B2B sites to evade scrapers.
+const DET_EMAIL =
+  /[a-z0-9._%+-]{1,64}@[a-z0-9.-]{1,253}\.[a-z]{2,24}|[a-z0-9._%+-]{1,64}\s*(?:\[at\]|\(at\)|(?<!\w)at(?!\w))\s*[a-z0-9.-]{1,253}/i;
+// DET_PHONE: keyword vocabulary expanded to cover telephone, mobile, cell,
+// fax, whatsapp, wechat, contact, and direct in addition to the original set.
+const DET_PHONE =
+  /(?:tel(?:ephone)?|phone|call|hotline|mobile|cell(?:phone)?|fax|whatsapp|wechat|contact|direct(?:\s+line)?|\+?\d)[\s:]*\+?\d[\d\s().-]{6,18}\d/i;
 const DET_STOCK = /\bin\s+stock\b|\bavailable\b|\bstock\s*[:=]/i;
 const DET_DELIVERY = /\blead\s*time\b|\bdelivery\b|\bships?\s+in\b|\b\d+\s*(?:day|days|week|weeks|month|months)\b/i;
 const DET_QUOTE = /request\s+a?\s*quote|request\s+for\s+quotation|get\s+a\s+quote|contact\s+for\s+price|price\s+on\s+request|\brfq\b/i;

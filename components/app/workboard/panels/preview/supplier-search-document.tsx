@@ -57,11 +57,14 @@ function PriceCell({
   currency_code: string;
   requires_quote: boolean;
 }) {
-  if (requires_quote) {
-    return <span className="text-amber-400 text-[10px]">QUOTE REQUIRED</span>;
-  }
+  // Value-first: an extracted price always wins. QUOTE REQUIRED is only the
+  // fallback when there is no price (backend gates requires_quote on price===0,
+  // so the two are mutually exclusive — this ordering just makes it explicit).
   if (bidder_unit_price > 0) {
     return <span className="text-emerald-400">{currency_code} {bidder_unit_price.toFixed(2)}</span>;
+  }
+  if (requires_quote) {
+    return <span className="text-amber-400 text-[10px]">QUOTE REQUIRED</span>;
   }
   return <span className="text-gray-700">—</span>;
 }

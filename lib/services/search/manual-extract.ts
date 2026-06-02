@@ -71,10 +71,33 @@ const labeledPricePattern =
 // Email: standard pattern (alphanumeric, +, _, -, . before @, domain, TLD).
 const emailPattern = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/;
 
+// Obfuscated email: catches forms like "name [at] domain [dot] com",
+// "name(at)domain(dot)com", "name AT domain DOT com" used to evade scrapers.
+// Group 1 = local-part, Group 2 = domain, Group 3 = TLD.
+const obfuscatedEmailPattern =
+  /([a-zA-Z0-9._%+-]+)\s*(?:\[at\]|\(at\)|(?<!\w)AT(?!\w))\s*([a-zA-Z0-9.-]+)\s*(?:\[dot\]|\(dot\)|(?<!\w)DOT(?!\w))\s*([a-zA-Z]{2,})/i;
+
+/**
+ * Reconstruct a plain email address from an obfuscated match.
+ * e.g. "info [at] example [dot] com" → "info@example.com"
+ */
+function normalizeObfuscatedEmail(match: RegExpMatchArray): string {
+  // Combine the three captured groups into a standard email address.
+  return `${match[1].trim()}@${match[2].trim()}.${match[3].trim()}`;
+}
+
 // Phone: \+<country> <area> <number>, with spaces/dashes/parens as separators.
 // Require + for international or (area) for US-style, to avoid matching bare numbers.
 // Must total 7+ digits to be plausible.
 const phonePattern = /(?:\+\d{1,3}[\s.-]?\d{2,4}[\s.-]?\d{2,4}[\s.-]?\d{2,5}|\(\d{2,4}\)[\s.-]?\d{2,4}[\s.-]?\d{2,5})/;
+
+// Labeled-phone fallback: fires when a recognized contact-label word immediately
+// precedes a bare number string that doesn't carry the + or (area) required by
+// the strict phonePattern.  Vocabulary is intentionally broad to catch the many
+// ways B2B pages label their contact numbers.
+// Group 1 = the raw phone-number token (digits + separators) after the label.
+const labeledPhonePattern =
+  /(?:tel(?:ephone)?|phone|call(?:\s+us)?|contact|hotline|mobile|cell(?:phone)?|fax|whatsapp|wechat|direct(?:\s+line)?|ph)[\s:.-]*(\+?[\d][\d\s().+-]{5,20}\d)/i;
 
 // Stock patterns: "<N> in stock", "stock: <N>", "<N> available", etc.
 // Bounded: up to 50 chars to catch "stock: 1234".
@@ -300,8 +323,22 @@ export function manualExtract(
   if (!detected || detected.has_contact_email !== false) {
     const emailMatch = content.match(emailPattern);
     if (emailMatch) {
+      // Standard plain-text email found — use it directly.
       fields.contact_email = emailMatch[0];
       confidence.contact_email = 0.95;
+    } else {
+      // Fallback: try obfuscated form (e.g. "info [at] example [dot] com").
+      const obfMatch = content.match(obfuscatedEmailPattern);
+      if (obfMatch) {
+        const reconstructed = normalizeObfuscatedEmail(obfMatch);
+        fields.contact_email = reconstructed;
+        confidence.contact_email = 0.85;
+        // The reconstructed address (e.g. "info@example.com") will not appear
+        // verbatim in content, so verifyAgainstContent would reject it.
+        // Add to skipVerify — the same pattern the file uses for symbol-inferred
+        // fields like currency_code and normalized delivery times.
+        skipVerify.add('contact_email');
+      }
     }
   }
 
@@ -311,11 +348,26 @@ export function manualExtract(
   if (!detected || detected.has_contact_phone !== false) {
     const phoneMatch = content.match(phonePattern);
     if (phoneMatch) {
-      // Check if the matched phone has at least 7 digits (minimal plausibility).
+      // Strict match: verify 7+ digits for plausibility.
       const digitCount = (phoneMatch[0].match(/\d/g) || []).length;
       if (digitCount >= 7) {
         fields.contact_phone = phoneMatch[0];
         confidence.contact_phone = 0.8;
+      }
+    }
+
+    if (!fields.contact_phone) {
+      // Fallback: labeled-phone pattern (e.g. "Tel: 123 456 7890", "mobile 0123456789").
+      const labeledMatch = content.match(labeledPhonePattern);
+      if (labeledMatch && labeledMatch[1]) {
+        // Count digits in the captured number token; require >= 7 for plausibility.
+        const digitCount = (labeledMatch[1].match(/\d/g) || []).length;
+        if (digitCount >= 7) {
+          // Store the raw matched number group so verifyAgainstContent (which strips
+          // non-alphanumerics before comparing) can still find the digit sequence.
+          fields.contact_phone = labeledMatch[1].trim();
+          confidence.contact_phone = 0.7;
+        }
       }
     }
   }
@@ -402,7 +454,12 @@ export function manualExtract(
     missing.push('delivery_time');
   }
 
-  if (fields.contact_email === '' || !verifyAgainstContent(fields.contact_email, content)) {
+  if (skipVerify.has('contact_email')) {
+    // Reconstructed from obfuscated form — not verbatim in content; keep without verification.
+    if (fields.contact_email === '') {
+      missing.push('contact_email');
+    }
+  } else if (fields.contact_email === '' || !verifyAgainstContent(fields.contact_email, content)) {
     fields.contact_email = '';
     confidence.contact_email = 0;
     missing.push('contact_email');
