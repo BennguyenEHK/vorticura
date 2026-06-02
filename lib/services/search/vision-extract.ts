@@ -2,9 +2,11 @@
    Vision Extract: Last-resort image OCR price layer — Layer 4 of the
    extraction cascade.
 
-   Operates on the product-page HTML (to locate the primary product image)
-   and then sends that image URL to a HuggingFace vision model for price
-   extraction via chat completion.
+   Sends an image of the product page to a HuggingFace vision model for price
+   extraction via chat completion. The image is a FULL-PAGE SCREENSHOT from a
+   hosted screenshot API when SCREENSHOT_URL_TEMPLATE is set (preferred — it
+   captures JS/image-only prices); otherwise it falls back to the primary
+   product image found in the page HTML (og:image / largest <img>).
 
    This layer is OFF by default (SEARCH_VISION_ENABLED !== '1') because
    the vision model may not be available on all HF serverless provider
@@ -91,6 +93,28 @@ function resolveImageUrl(raw: string | undefined, pageUrl: string): string | nul
     // Unresolvable — skip this candidate.
     return null;
   }
+}
+
+// =============================================
+// Helper: build a full-page screenshot URL (hosted screenshot API)
+// =============================================
+
+/**
+ * Build a FULL-PAGE screenshot URL for the target page using a hosted screenshot
+ * service. Provider-agnostic: configured via the SCREENSHOT_URL_TEMPLATE env var,
+ * which must contain the literal "{{url}}" placeholder. The placeholder is replaced
+ * with the URL-encoded target page; everything else (API key, full_page flag,
+ * format) lives in the template so any provider works without code changes, e.g.
+ *   SCREENSHOT_URL_TEMPLATE="https://api.screenshotone.com/take?access_key=KEY&full_page=true&format=png&url={{url}}"
+ *
+ * Returns null when no template is configured (caller falls back to the DOM image).
+ */
+function buildScreenshotUrl(pageUrl: string): string | null {
+  const template = process.env.SCREENSHOT_URL_TEMPLATE;
+  // Require an explicit, well-formed template — no template means "feature off".
+  if (!template || !template.includes('{{url}}')) return null;
+  // Substitute the URL-encoded target so the screenshot service renders the right page.
+  return template.replace('{{url}}', encodeURIComponent(pageUrl));
 }
 
 // =============================================
@@ -243,10 +267,15 @@ export async function extractFromVision(
     // Guard: refuse to proceed without both HTML and URL.
     if (!html || !pageUrl) return ZERO_RESULT;
 
-    // --- Step 1: locate the primary product image URL ---
-    const imageUrl = findImageUrl(html, pageUrl);
+    // --- Step 1: choose the image the model will read ---
+    // Prefer a FULL-PAGE SCREENSHOT (hosted screenshot API) when configured — it
+    // captures the price as rendered on screen (incl. JS-injected / image-only
+    // prices), which is the whole point of the vision layer. Fall back to the
+    // page's primary product image (og:image / largest <img>) when no screenshot
+    // service is set up.
+    const imageUrl = buildScreenshotUrl(pageUrl) ?? findImageUrl(html, pageUrl);
     if (!imageUrl) {
-      // No usable image on this page — vision layer cannot help.
+      // Neither a screenshot service nor a usable page image — vision can't help.
       return ZERO_RESULT;
     }
 

@@ -399,24 +399,21 @@ export function SupplierSearchDocument({ data }: SupplierSearchDocumentProps) {
                 </div>
               )}
 
-              {/* Price + commercial fields — with graceful fallback */}
+              {/* Price + commercial fields — value-first, then QUOTE REQUIRED on a
+                  quote-on-request page, else hidden (Q3: one rule for every
+                  commercial field — price, selling type, inventory). */}
               {(() => {
                 const hasPrice = selectedSupplier.bidder_unit_price > 0;
-                const hasDelivery = Boolean(selectedSupplier.delivery_time);
-                const hasQty = selectedSupplier.available_qty !== null;
-                const hasSellUnit = selectedSupplier.selling_unit !== null;
-                const hasPack = selectedSupplier.pack_size !== null && selectedSupplier.pack_size > 0;
-                const hasAnyCommercial = hasPrice || hasDelivery || hasQty || hasSellUnit || hasPack;
-
-                if (!hasAnyCommercial) {
-                  return (
-                    <p className="text-[11px] text-gray-600 italic">Please quote the suppliers to know</p>
-                  );
-                }
+                // 0 = unknown — the backend always writes a number here, never null,
+                // so `> 0` (not `!== null`) is the correct "has a real value" test.
+                const hasQty = (selectedSupplier.available_qty ?? 0) > 0;
+                const hasSellUnit =
+                  selectedSupplier.selling_unit === 'per_unit' || selectedSupplier.selling_unit === 'per_pack';
+                const rq = selectedSupplier.requires_quote;   // page sells item but wants a quote request
 
                 return (
                   <>
-                    {/* Price */}
+                    {/* Price — value → QUOTE REQUIRED → hidden */}
                     {hasPrice ? (
                       <div className="text-[11px]">
                         <span className="text-gray-500">Price:</span>{' '}
@@ -425,34 +422,40 @@ export function SupplierSearchDocument({ data }: SupplierSearchDocumentProps) {
                         </span>{' '}
                         <span className="text-gray-500">per unit</span>
                       </div>
-                    ) : selectedSupplier.requires_quote ? (
+                    ) : rq ? (
                       <div className="text-[11px]">
                         <span className="text-gray-500">Price:</span>{' '}
                         <span className="text-amber-400">QUOTE REQUIRED</span>
                       </div>
                     ) : null}
 
-                    {/* Selling Type */}
-                    {selectedSupplier.selling_unit === 'per_pack' && selectedSupplier.pack_size && (
+                    {/* Selling Type — value → QUOTE REQUIRED → hidden */}
+                    {hasSellUnit ? (
                       <div className="text-[11px] text-gray-300">
                         <Package className="w-3 h-3 inline-block mr-1 text-gray-500" />
-                        Sold per Pack — 1 pack = {selectedSupplier.pack_size} units
+                        {selectedSupplier.selling_unit === 'per_pack' && selectedSupplier.pack_size
+                          ? `Sold per Pack — 1 pack = ${selectedSupplier.pack_size} units`
+                          : 'Sold per Unit'}
                       </div>
-                    )}
-                    {selectedSupplier.selling_unit === 'per_unit' && (
-                      <div className="text-[11px] text-gray-300">
-                        <Package className="w-3 h-3 inline-block mr-1 text-gray-500" />
-                        Sold per Unit
+                    ) : rq ? (
+                      <div className="text-[11px]">
+                        <span className="text-gray-500">Selling Type:</span>{' '}
+                        <span className="text-amber-400">QUOTE REQUIRED</span>
                       </div>
-                    )}
+                    ) : null}
 
-                    {/* Inventory */}
-                    {selectedSupplier.available_qty !== null && (
+                    {/* Inventory — value → QUOTE REQUIRED → hidden */}
+                    {hasQty ? (
                       <div className="text-[11px] text-gray-300">
                         <span className="text-gray-500">Inventory:</span>{' '}
                         <span className="text-yellow-500">{selectedSupplier.available_qty} available</span>
                       </div>
-                    )}
+                    ) : rq ? (
+                      <div className="text-[11px]">
+                        <span className="text-gray-500">Inventory:</span>{' '}
+                        <span className="text-amber-400">QUOTE REQUIRED</span>
+                      </div>
+                    ) : null}
                   </>
                 );
               })()}
@@ -504,8 +507,14 @@ export function SupplierSearchDocument({ data }: SupplierSearchDocumentProps) {
               <div>
                 <h3 className="text-[11px] font-semibold text-gray-400 mb-1">Logistics & Contact</h3>
                 <div className="space-y-1">
+                  {/* Delivery — value → QUOTE REQUIRED → N/A (matches the upper-panel DeliveryCell). */}
                   <p className="text-[11px] text-gray-300">
-                    <span className="text-gray-500">Delivery Time:</span> {selectedSupplier.delivery_time || 'N/A'}
+                    <span className="text-gray-500">Delivery Time:</span>{' '}
+                    {selectedSupplier.delivery_time
+                      ? selectedSupplier.delivery_time
+                      : selectedSupplier.requires_quote
+                        ? <span className="text-amber-400">QUOTE REQUIRED</span>
+                        : 'N/A'}
                   </p>
                   {selectedSupplier.contact_email && (
                     <a href={`mailto:${selectedSupplier.contact_email}`} className="flex items-center gap-1 text-blue-400 hover:underline text-[11px]">
