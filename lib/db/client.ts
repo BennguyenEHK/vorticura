@@ -73,6 +73,58 @@ if (process.env.NODE_ENV !== 'production') globalForDb.__qfPool = pool;
 export const db = drizzle(pool, { schema });
 
 // =============================================
+// 🔁 TRANSIENT-ERROR RETRY WRAPPER
+// =============================================
+
+/** Error messages that indicate a transient Neon WebSocket connection failure. */
+const RETRYABLE_DB_MESSAGES = [
+  'WebSocket was closed before the connection was established',
+  'Connection terminated due to connection timeout',
+  'Connection terminated unexpectedly',
+  'read ECONNRESET',
+];
+
+/** True when the error (or its nested cause) looks like a transient Neon connection failure. */
+function isRetryableDbError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  const cause = (err as { cause?: unknown }).cause;
+  const causeMsg = cause instanceof Error ? cause.message
+    : cause != null ? String(cause) : '';
+  return RETRYABLE_DB_MESSAGES.some(
+    (pattern) => msg.includes(pattern) || causeMsg.includes(pattern),
+  );
+}
+
+/**
+ * Execute `fn` and retry up to `maxAttempts` times on transient Neon WebSocket
+ * errors. Non-retryable errors are rethrown immediately.
+ *
+ * @param fn           Async factory that runs one DB operation.
+ * @param maxAttempts  Total attempts including the first (default 3).
+ */
+export async function withDbRetry<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 3,
+): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (!isRetryableDbError(err) || attempt === maxAttempts) throw err;
+      // Back-off: 200 ms, 400 ms between retries.
+      await new Promise<void>((resolve) => setTimeout(resolve, attempt * 200));
+      console.warn(
+        `[db] transient connection error on attempt ${attempt}/${maxAttempts}, retrying —`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+  throw lastErr;
+}
+
+// =============================================
 // 🏥 HEALTH CHECK
 // =============================================
 

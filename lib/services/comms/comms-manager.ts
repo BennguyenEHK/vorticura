@@ -4,7 +4,7 @@
 // Real DB-backed channel and message retrieval.
 // Channels come from email_connections; messages from rfq_analysis.
 
-import { db } from "@/lib/db/client";
+import { db, withDbRetry } from "@/lib/db/client";
 import { emailConnections, rfqAnalysis, customers } from "@/lib/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import type {
@@ -55,21 +55,25 @@ function connectionToChannel(conn: typeof emailConnections.$inferSelect): Channe
 // =============================================
 
 export async function getChannels(companyId: number): Promise<Channel[]> {
-  const conns = await db
-    .select()
-    .from(emailConnections)
-    .where(eq(emailConnections.companyId, companyId));
+  const conns = await withDbRetry(() =>
+    db
+      .select()
+      .from(emailConnections)
+      .where(eq(emailConnections.companyId, companyId))
+  );
   return conns.map(connectionToChannel);
 }
 
 export async function getChannelById(channelId: string): Promise<Channel | null> {
   const id = parseInt(channelId, 10);
   if (isNaN(id)) return null;
-  const [conn] = await db
-    .select()
-    .from(emailConnections)
-    .where(eq(emailConnections.connectionId, id))
-    .limit(1);
+  const [conn] = await withDbRetry(() =>
+    db
+      .select()
+      .from(emailConnections)
+      .where(eq(emailConnections.connectionId, id))
+      .limit(1)
+  );
   return conn ? connectionToChannel(conn) : null;
 }
 
@@ -95,11 +99,13 @@ export async function updateChannelStatus(
     : status === "error" ? "expired"
     : "paused";
 
-  const [updated] = await db
-    .update(emailConnections)
-    .set({ status: dbStatus })
-    .where(eq(emailConnections.connectionId, id))
-    .returning();
+  const [updated] = await withDbRetry(() =>
+    db
+      .update(emailConnections)
+      .set({ status: dbStatus })
+      .where(eq(emailConnections.connectionId, id))
+      .returning()
+  );
 
   return updated ? connectionToChannel(updated) : null;
 }
@@ -116,32 +122,36 @@ export async function getRecentMessages(
   const offset = request?.offset ?? 0;
 
   // Find first active connection so we have a 'to' address
-  const [activeConn] = await db
-    .select({ connectionId: emailConnections.connectionId, emailAddress: emailConnections.emailAddress })
-    .from(emailConnections)
-    .where(and(
-      eq(emailConnections.companyId, companyId),
-      eq(emailConnections.status, "active")
-    ))
-    .limit(1);
+  const [activeConn] = await withDbRetry(() =>
+    db
+      .select({ connectionId: emailConnections.connectionId, emailAddress: emailConnections.emailAddress })
+      .from(emailConnections)
+      .where(and(
+        eq(emailConnections.companyId, companyId),
+        eq(emailConnections.status, "active")
+      ))
+      .limit(1)
+  );
 
   // Recent RFQs joined with customer info for sender details
-  const rows = await db
-    .select({
-      rfqId:           rfqAnalysis.rfqId,
-      rfqReference:    rfqAnalysis.rfqReference,
-      subject:         rfqAnalysis.subject,
-      analysisContent: rfqAnalysis.analysisContent,
-      createdAt:       rfqAnalysis.createdAt,
-      customerName:    customers.companyName,
-      customerEmail:   customers.email,
-    })
-    .from(rfqAnalysis)
-    .leftJoin(customers, eq(customers.rfqId, rfqAnalysis.rfqId))
-    .where(eq(rfqAnalysis.companyId, companyId))
-    .orderBy(desc(rfqAnalysis.createdAt))
-    .limit(limit)
-    .offset(offset);
+  const rows = await withDbRetry(() =>
+    db
+      .select({
+        rfqId:           rfqAnalysis.rfqId,
+        rfqReference:    rfqAnalysis.rfqReference,
+        subject:         rfqAnalysis.subject,
+        analysisContent: rfqAnalysis.analysisContent,
+        createdAt:       rfqAnalysis.createdAt,
+        customerName:    customers.companyName,
+        customerEmail:   customers.email,
+      })
+      .from(rfqAnalysis)
+      .leftJoin(customers, eq(customers.rfqId, rfqAnalysis.rfqId))
+      .where(eq(rfqAnalysis.companyId, companyId))
+      .orderBy(desc(rfqAnalysis.createdAt))
+      .limit(limit)
+      .offset(offset)
+  );
 
   const channelId = activeConn ? String(activeConn.connectionId) : "";
   const toAddr    = activeConn?.emailAddress ?? "";
