@@ -45,6 +45,7 @@ export function SearchPhaseDashboard({ rfqId }: { rfqId: number | null }) {
           live={state.live}
           dead={state.dead}
           blocked={state.blocked}
+          timedOut={state.timedOut}
         />
         <LogStream lines={logTail} />
       </div>

@@ -17,7 +17,7 @@
 export type LayerId = 1 | 2 | 3 | 4;
 
 /** URL liveness classification (mirrors LivenessStatus in liveness.ts). */
-export type SourceStatus = 'live' | 'dead' | 'blocked';
+export type SourceStatus = 'live' | 'dead' | 'blocked' | 'timeout';
 
 /** Page classification carried through from the search scorer. */
 export type DashboardPageType = 'product' | 'tech_spec';
@@ -107,6 +107,7 @@ export interface SearchDashboardState {
   live: number;
   dead: number;
   blocked: number;
+  timedOut: number;
 
   // INTERNAL — not rendered directly
   queriesFired: number;
@@ -132,6 +133,7 @@ export function initialDashboardState(): SearchDashboardState {
     live: 0,
     dead: 0,
     blocked: 0,
+    timedOut: 0,
     queriesFired: 0,
     density: {},
   };

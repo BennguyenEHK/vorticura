@@ -59,6 +59,7 @@ function applyEvent(s: SearchDashboardState, e: SearchProgressEvent): void {
     case 'liveness':
       if (e.status === 'live') s.live += 1;
       else if (e.status === 'dead') s.dead += 1;
+      else if (e.status === 'timeout') s.timedOut += 1;
       else s.blocked += 1;
       break;
     case 'density':

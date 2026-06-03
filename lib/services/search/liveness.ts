@@ -15,7 +15,7 @@
  * Uses per-host caching to avoid re-walking the ladder on repeated URLs.
  */
 
-export type LivenessStatus = 'live' | 'dead' | 'blocked';
+export type LivenessStatus = 'live' | 'dead' | 'blocked' | 'timeout';
 
 export interface LivenessResult {
   /** Classification of URL state: 'live'=2xx, 'dead'=404/410, 'blocked'=other non-2xx/network/timeout */
@@ -128,6 +128,7 @@ async function fetchWithProfile(
       redirect: 'follow',
       headers: profile.headers,
       signal: AbortSignal.timeout(timeoutMs),
+      cache: 'no-store' as RequestCache,
     });
     return { response, lastHttpStatus: response.status };
   } catch {
@@ -160,42 +161,46 @@ async function probeHeadRequest(
 }
 
 /**
- * Process a successful 2xx response: extract and validate HTML content.
- * Returns the LivenessResult if valid HTML was found, or null to continue escalation.
+ * Read the response body safely and classify the page.
+ * Checks Content-Type BEFORE reading to avoid streaming large non-HTML files
+ * (PDFs, images) that would timeout. Wraps body.text() in try-catch so a
+ * stream timeout returns 'timeout' instead of crashing the pipeline.
  */
-function processSuccessResponse(
+async function readAndClassify(
   response: Response,
-  body: string
-): LivenessResult | null {
+): Promise<LivenessResult> {
   const contentType = response.headers.get('content-type') ?? '';
   const isHtml =
     contentType.startsWith('text/html') ||
     contentType.startsWith('application/xhtml+xml');
+  // mightBeHtml: empty Content-Type or text/* could still be HTML served with wrong header
+  const mightBeHtml = !contentType || contentType.startsWith('text/');
 
-  if (!isHtml) {
-    // Some industrial/legacy servers return incorrect or missing Content-Type.
-    // Sniff the first 512 chars of the body for HTML markers before giving up.
-    const peek = body.slice(0, 512).trimStart().toLowerCase();
-    const looksLikeHtml = peek.startsWith('<!doctype') || peek.startsWith('<html');
-    if (!looksLikeHtml) {
-      // Non-HTML content type (PDF, image, etc.) on a 2xx response:
-      // Treat as blocked so caller falls back to Tavily raw_content.
-      return {
-        status: 'blocked',
-        httpStatus: response.status,
-        html: null,
-      };
-    }
-    // Body is HTML despite wrong Content-Type — fall through to parse it.
+  // Fast path: skip body read for types that cannot be HTML (PDF, images, etc.)
+  // to avoid AbortSignal timeout firing during large-file streaming.
+  if (!isHtml && !mightBeHtml) {
+    return { status: 'blocked', httpStatus: response.status, html: null };
   }
 
-  // Valid HTML: cap body and return as live.
-  const cappedHtml = body.slice(0, 500_000);
-  return {
-    status: 'live',
-    httpStatus: response.status,
-    html: cappedHtml,
-  };
+  // Read body — may timeout on slow connections. Guard with try-catch.
+  let body: string;
+  try {
+    body = await response.text();
+  } catch {
+    // AbortError / TimeoutError during body streaming — classify as timeout.
+    return { status: 'timeout', httpStatus: response.status, html: null };
+  }
+
+  if (!isHtml) {
+    // Content-Type was empty or text/* — sniff first 512 chars for HTML markers.
+    const peek = body.slice(0, 512).trimStart().toLowerCase();
+    if (!peek.startsWith('<!doctype') && !peek.startsWith('<html')) {
+      return { status: 'blocked', httpStatus: response.status, html: null };
+    }
+  }
+
+  // Valid HTML.
+  return { status: 'live', httpStatus: response.status, html: body.slice(0, 500_000) };
 }
 
 /**
@@ -230,15 +235,7 @@ export async function checkLiveness(
     }
 
     if (response.ok) {
-      const body = await response.text();
-      const result = processSuccessResponse(response, body);
-      if (result) return result;
-      // Treat non-HTML 2xx as blocked (fall through).
-      return {
-        status: 'blocked',
-        httpStatus: response.status,
-        html: null,
-      };
+      return await readAndClassify(response);
     }
 
     if (response.status === 404 || response.status === 410) {
@@ -296,25 +293,13 @@ export async function checkLiveness(
 
     if (response.ok) {
       // 2xx response: check if it's HTML.
-      const body = await response.text();
-      const result = processSuccessResponse(response, body);
-      if (result && result.status === 'live') {
-        // Cache the winning profile for this host.
-        if (host) {
-          hostProfileCache.set(host, i);
-        }
-        return result;
-      }
-      // Non-HTML 2xx: treat as blocked but do NOT escalate further
-      // (we got a response; no WAF indication). Cache this for the host.
+      const result = await readAndClassify(response);
+      // Cache the profile on any successful response (regardless of HTML status).
       if (host) {
         hostProfileCache.set(host, i);
       }
-      return {
-        status: 'blocked',
-        httpStatus: response.status,
-        html: null,
-      };
+      // Return result directly — readAndClassify always returns a LivenessResult.
+      return result;
     }
 
     if (response.status === 404 || response.status === 410) {

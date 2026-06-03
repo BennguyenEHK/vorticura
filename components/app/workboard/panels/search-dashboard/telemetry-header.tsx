@@ -11,6 +11,7 @@ interface TelemetryHeaderProps {
   live: number;
   dead: number;
   blocked: number;
+  timedOut: number;
 }
 
 function StatusDot({ color, count, label }: { color: string; count: number; label: string }) {
@@ -23,7 +24,7 @@ function StatusDot({ color, count, label }: { color: string; count: number; labe
   );
 }
 
-export function TelemetryHeader({ sources, live, dead, blocked }: TelemetryHeaderProps) {
+export function TelemetryHeader({ sources, live, dead, blocked, timedOut }: TelemetryHeaderProps) {
   return (
     <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
       <span className="micro-label text-neon-cyan animate-neon-flicker">Live Telemetry Search</span>
@@ -32,6 +33,7 @@ export function TelemetryHeader({ sources, live, dead, blocked }: TelemetryHeade
         <StatusDot color="bg-neon-emerald" count={live} label="live" />
         <StatusDot color="bg-red-500" count={dead} label="dead" />
         <StatusDot color="bg-amber-400" count={blocked} label="blkd" />
+        <StatusDot color="bg-violet-500" count={timedOut} label="t/o" />
       </div>
     </div>
   );

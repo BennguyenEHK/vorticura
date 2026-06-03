@@ -71,8 +71,8 @@ function toLogLine(e: SearchProgressEvent): LogLine | null {
     case 'liveness':
       return {
         id: e.seq, tag: 'LIVENESS', itemId: e.itemId,
-        tone: e.status === 'live' ? 'emerald' : e.status === 'dead' ? 'red' : 'amber',
-        text: `${e.status === 'live' ? '✓' : '✗'} ${e.status}  ${e.host}`,
+        tone: e.status === 'live' ? 'emerald' : e.status === 'dead' ? 'red' : e.status === 'timeout' ? 'violet' : 'amber',
+        text: `${e.status === 'live' ? '✓' : e.status === 'timeout' ? '⏱' : '✗'} ${e.status}  ${e.host}`,
       };
     case 'density':
       return {
