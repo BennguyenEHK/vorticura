@@ -153,12 +153,12 @@ def parse_args():
     p = argparse.ArgumentParser(description='AI Coder CLI (Ollama backend)')
     p.add_argument('--prompt', '-p', default=None, help='Coding task description')
     p.add_argument('--close', action='store_true', help='Shut down the background Ollama server and exit')
-    p.add_argument('--agents', '-a', type=int, default=4, help='Number of parallel agents (default 4)')
+    p.add_argument('--agents', '-a', type=int, default=1, help='Number of parallel agents (default 1)')
     p.add_argument('--model', '-m', default='deepseek-coder:6.7b-instruct', help='Ollama model tag')
     p.add_argument('--max-tokens', type=int, default=1024, dest='max_tokens')
     p.add_argument('--targets', type=str,
                    help='Comma-separated files/folders (optional — auto-extracted from prompt when omitted)')
-    p.add_argument('--plan', action='store_true',
+    p.add_argument('--plan', action='store_true', default=False,
                    help='Generate and print an execution plan, then confirm before running')
     p.add_argument('--yes', '-y', action='store_true',
                    help='Skip all confirmation prompts (for automation)')
