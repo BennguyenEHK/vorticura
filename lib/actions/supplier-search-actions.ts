@@ -36,7 +36,6 @@ import {
   // Per-RFQ cap on the costly Layer-4 vision/screenshot calls.
   createVisionBudget,
   consumeVisionCall,
-  type VisionBudget,
 } from '@/lib/services/search/budget';
 // Task 4 — weighted price disambiguation + Task 3 — homepage fallback.
 import {
@@ -321,7 +320,6 @@ async function extractSupplierForItem(
   query: string,
   item: RfqItemInput,
   budget: SearchBudget,            // per-item circuit-breaker budget
-  visionBudget: VisionBudget,      // per-RFQ cap on costly Layer-4 vision calls (shared across items)
   // The ORIGINAL RFQ requirement — drives substitute match_reasoning.
   originalDescription: string = item.description,
   // Parsed spec for the product-page scorer (exact-model + spec-density layers).
@@ -438,9 +436,10 @@ async function extractSupplierForItem(
     // A page with no name or description is not a usable supplier source.
     if (!supplier_name.trim() || !bidder_description.trim()) continue;
 
-    // Price cascade: manual (raw_content) → structured (HTML) → LLM. `let` so the
-    // vision layer below can fill it in when every text layer came back unknown.
-    let price =
+    // Price cascade: manual (raw_content) → structured (HTML) → LLM. When every
+    // text layer leaves price unknown it stays 0 here; the orchestrator's
+    // POST-SURVIVOR vision pass (Layer 4) attempts recovery on the final rows only.
+    const price =
       f.bidder_unit_price > 0 ? f.bidder_unit_price
       : structuredPrice > 0 ? structuredPrice
       : (llm?.bidder_unit_price ?? 0);
@@ -449,7 +448,7 @@ async function extractSupplierForItem(
     // row honestly reads "unknown currency" instead of silently claiming USD (a
     // VND/MYR page would otherwise be off by ~1000×). The quote layer applies the
     // USD default at quote-build time (quotation-actions: `currency_code || 'USD'`).
-    let currency = f.currency_code || structuredCurrency || llm?.currency_code || '';
+    const currency = f.currency_code || structuredCurrency || llm?.currency_code || '';
     // Task 4 — track which confidence value came through if a price was selected.
     let winningPriceConfidence: number | undefined;
     if (f.bidder_unit_price > 0) {
@@ -458,36 +457,20 @@ async function extractSupplierForItem(
       winningPriceConfidence = structuredPriceConfidence;
     }
 
-    // (2c-vision) LAYER 4 — VISION/IMAGE-TO-TEXT. Last resort: runs ONLY when every
-    //      prior layer left price unknown AND we have live HTML to locate the product
-    //      image. Off by default (SEARCH_VISION_ENABLED) and fail-safe, so this is a
-    //      no-op in production until explicitly enabled — answers the Phase-2 gate.
-    let visionUsed = false;
-    // Gate: attempt vision ONLY when enabled AND the per-RFQ budget has a slot left.
-    // consumeVisionCall reserves the slot BEFORE the costly screenshot+VLM call; the
-    // isVisionEnabled() pre-check avoids burning a slot on a disabled no-op.
-    if (price === 0 && html && isVisionEnabled() && consumeVisionCall(visionBudget)) {
-      emitLayer(item.itemId, 4); // L4 vision/screenshot — a reserved RFQ vision slot
-      // Cast specTokens to string[] for extractFromVision (legacy signature; vision-extract
-      // not yet updated to accept SpecTokenInput[]).
-      const visionSpecTokens = specTokens.map((t) => typeof t === 'string' ? t : t.token);
-      const vision = await extractFromVision(html, cand.snippet.url, visionSpecTokens);
-      if (vision.price > 0) {
-        price = vision.price;
-        currency = vision.currency || currency;   // keep cascade currency if vision gave none
-        visionUsed = true;
-      }
-    }
+    // (2c-vision) LAYER 4 — moved OUT of per-candidate extraction. Vision/screenshot
+    //      price recovery now runs ONCE per surviving row in a POST-SURVIVOR pass in
+    //      the orchestrator (see processSupplierSearch), so the bounded per-RFQ vision
+    //      budget is spent only on real survivors that still lack a price — never
+    //      raced away on transient candidate pages that get dropped downstream.
     const delivery_time = f.delivery_time || llm?.delivery_time || '';
     const contact_email = f.contact_email || llm?.contact_email || '';
     const contact_phone = f.contact_phone || llm?.contact_phone || '';
     const available_qty = f.available_qty > 0 ? f.available_qty : (llm?.available_qty ?? 0);
 
-    // Provenance — which layer supplied the price. Vision wins the label only when
-    // it actually filled the price (it runs after all text layers returned 0).
+    // Provenance — which deterministic layer supplied the price. The post-survivor
+    // vision pass relabels this to 'vision' on the rows it recovers a price for.
     const track =
-      visionUsed ? 'vision'
-      : f.bidder_unit_price > 0 ? (manualUsed ? (llm ? 'manual+llm' : 'manual') : 'manual')
+      f.bidder_unit_price > 0 ? (manualUsed ? (llm ? 'manual+llm' : 'manual') : 'manual')
       : structuredPrice > 0 ? (llm ? 'structured+llm' : 'structured')
       : 'llm';
 
@@ -780,6 +763,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
               budget: createBudget(),
               itemId: baseItem.itemId,
               parsed,
+              specTokens,
               fromMemory: true,
             };
           }
@@ -796,7 +780,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
             baseItem,
             effectiveQueries,
             budget,
-            (q, b) => extractSupplierForItem(q, baseItem, b, visionBudget, baseItem.description, parsed, false, specTokens),
+            (q, b) => extractSupplierForItem(q, baseItem, b, baseItem.description, parsed, false, specTokens),
           );
 
           // (3c) ALT OUTER LOOP — bounded substitute discovery. If the item is
@@ -821,7 +805,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
               baseItem,
               replanQueries,
               budget,
-              (q, b) => extractSupplierForItem(q, baseItem, b, visionBudget, baseItem.description, replan.parsed ?? parsed, true, specTokens),
+              (q, b) => extractSupplierForItem(q, baseItem, b, baseItem.description, replan.parsed ?? parsed, true, specTokens),
             );
             for (const r of altResult.rows) {
               if (!collected.has(r.source_url)) collected.set(r.source_url, r);
@@ -841,7 +825,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
           }
 
           const mergedResult = { ...result, rows: [...collected.values()] };
-          return { result: mergedResult, budget, itemId: baseItem.itemId, parsed, fromMemory: false };
+          return { result: mergedResult, budget, itemId: baseItem.itemId, parsed, specTokens, fromMemory: false };
         });
       }),
     );
@@ -858,6 +842,48 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     // urls; isProductPage rejects homepages/PDFs/listings even if the LLM slipped.
     // searchOneQuery already filters to verified product pages before extraction.
     const productPageItems = beforeUrlGuards.filter((r) => isUsableSourceRow(r) && isProductPage(r.source_url));
+
+    // (3a-vision) LAYER 4 — POST-SURVIVOR VISION PRICE RECOVERY.
+    //   Vision runs ONCE per SURVIVING row that still has no price, AFTER the
+    //   dedup / stock / URL-guard selection — so the bounded per-RFQ vision budget
+    //   (SEARCH_VISION_CAP) is spent only on real survivors that need a price, in a
+    //   deterministic item_id order, never raced away on transient/dropped candidate
+    //   pages during extraction. The screenshot path needs only the URL (no html), so
+    //   JS-rendered prices (configurator/"buy" pages) and bot-blocked pages are both
+    //   recoverable. On a hit the row is relabelled 'vision' and its requires_quote
+    //   flag is cleared — a real price supersedes any "request a quote" CTA.
+    //   Fail-safe: extractFromVision never throws.
+    if (isVisionEnabled()) {
+      const specTokensByItem = new Map<number, SpecTokenInput[]>();
+      for (const r of rawItemResults) specTokensByItem.set(r.itemId, r.specTokens);
+
+      const needsVision = productPageItems
+        .filter((r) => r.bidder_unit_price === 0 && r.source_url)
+        .sort((a, b) => a.item_id - b.item_id);
+
+      for (const row of needsVision) {
+        if (!consumeVisionCall(visionBudget)) break;   // per-RFQ vision cap reached
+        emitLayer(row.item_id, 4);                      // L4 vision/screenshot — a reserved RFQ slot
+        const tokens = (specTokensByItem.get(row.item_id) ?? []).map((t) => (typeof t === 'string' ? t : t.token));
+        const vision = await extractFromVision('', row.source_url, tokens);
+        if (vision.price > 0) {
+          row.bidder_unit_price = vision.price;
+          row.currency_code = vision.currency || row.currency_code;
+          row.extraction_confidence = 'vision';
+          row.requires_quote = false;                   // recovered price supersedes the quote CTA
+          logSearchStage('extract', {
+            item_id: row.item_id,
+            track: 'vision',
+            source_url: row.source_url,
+            bidder_unit_price: row.bidder_unit_price,
+            currency_code: row.currency_code,
+            available_qty: row.available_qty,
+            requires_quote: false,
+            page_type: row.page_type,
+          });
+        }
+      }
+    }
 
     // (3b1) CONTACT HOMEPAGE FALLBACK — Task 3. Rows with NEITHER email nor phone
     //       get a bounded, fail-safe homepage fallback: derive the origin URL and

@@ -334,8 +334,18 @@ export async function extractFromVision(
       return ZERO_RESULT;
     }
 
-    // Guard: refuse to proceed without both HTML and URL.
-    if (!html || !pageUrl) return ZERO_RESULT;
+    // Guard: a URL is mandatory. HTML is only needed for the DOM-image FALLBACK —
+    // the primary screenshot path (ScreenshotOne / SCREENSHOT_URL_TEMPLATE) renders
+    // from the URL alone, so proceed with html='' when a screenshot service is
+    // configured. This lets the post-survivor vision pass recover prices on pages
+    // liveness returned no HTML for (bot-blocked 403s) and on JS-rendered prices that
+    // never appear in the server HTML at all (e.g. configurator/buy pages).
+    if (!pageUrl) return ZERO_RESULT;
+    const hasScreenshotService = !!(
+      process.env.SCREENSHOTONE_ACCESS_KEY ||
+      process.env.SCREENSHOT_URL_TEMPLATE?.includes('{{url}}')
+    );
+    if (!html && !hasScreenshotService) return ZERO_RESULT;
 
     // --- Step 1: choose the image the model will read ---
     // Prefer a FULL-PAGE SCREENSHOT (ScreenshotOne / template) when configured: it
