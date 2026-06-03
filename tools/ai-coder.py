@@ -512,8 +512,10 @@ def call_ollama(model: str, system: str, user: str, max_tokens: int, temperature
 
 
 def _ollama_reachable() -> bool:
+    # Any HTTP response (including 500) means Ollama is listening.
+    # Only a connection error means it is not running.
     try:
-        requests.get(f"{OLLAMA_BASE}/api/tags", timeout=3).raise_for_status()
+        requests.get(f"{OLLAMA_BASE}/api/tags", timeout=3)
         return True
     except Exception:
         return False
@@ -536,6 +538,15 @@ def shutdown_ollama():
 
 
 def ensure_ollama_running(model: str):
+    # Warn early if OLLAMA_MODELS points to a non-existent path — this causes
+    # Ollama to return HTTP 500 on every request even though it is running.
+    models_dir = os.environ.get('OLLAMA_MODELS', '')
+    if models_dir and not os.path.exists(os.path.splitdrive(models_dir)[0] + os.sep):
+        print(f'[warn] OLLAMA_MODELS="{models_dir}" — drive does not exist.')
+        print( '       Unset it or point it to a valid path, e.g.:')
+        print( '         $env:OLLAMA_MODELS = "D:\\models"   (PowerShell)')
+        print( '       Ollama will return HTTP 500 for every request until this is fixed.')
+
     if _ollama_reachable():
         print('[ollama] already running')
     else:
@@ -558,8 +569,13 @@ def ensure_ollama_running(model: str):
             sys.exit(1)
 
     try:
-        resp      = requests.get(f"{OLLAMA_BASE}/api/tags", timeout=5)
-        available = [m['name'] for m in resp.json().get('models', [])]
+        resp = requests.get(f"{OLLAMA_BASE}/api/tags", timeout=5)
+        data = resp.json()
+        if 'error' in data:
+            print(f'[ollama] server error: {data["error"]}')
+            print( '        Requests will fail until the root cause is fixed (see warn above).')
+            return
+        available = [m['name'] for m in data.get('models', [])]
         base_name = model.split(':')[0]
         if not any(m.startswith(base_name) for m in available):
             print(f"[warn] Model '{model}' not pulled yet.")
