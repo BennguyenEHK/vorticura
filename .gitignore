@@ -52,7 +52,6 @@ tmpclaude-*
 # diagnostic / dev-only scripts (contain DB connection logic, not for repo)
 /scripts/diagnose-email-connections.mjs
 
-# Local AI coder secrets and outputs
-/tools/ai-coder.py
+# Local AI coder outputs (runtime artifacts, not source)
 /tools/output/
 .env.local
