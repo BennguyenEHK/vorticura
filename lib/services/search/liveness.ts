@@ -101,6 +101,147 @@ const HEADER_PROFILES: HeaderProfile[] = [
  */
 const hostProfileCache = new Map<string, number | 'blocked'>();
 
+// ---------------------------------------------------------------------------
+// Run-scoped exact-URL liveness cache
+// ---------------------------------------------------------------------------
+
+/**
+ * Exact-URL liveness cache.
+ *
+ * KEYING RULE — the cache key is the FULL URL after stripping the `#fragment`
+ * only. Query strings are significant and are preserved as-is. This means:
+ *
+ *   https://example.com/product-a   → key A
+ *   https://example.com/product-b   → key B  (always an independent fetch)
+ *   https://example.com/p?pn=X      → key C  (query string kept)
+ *   https://example.com/p?pn=Y      → key D  (different key from C)
+ *   https://example.com/p#section   → key E  (fragment stripped → same as https://example.com/p)
+ *
+ * Independence guarantee: a 'dead' or 'blocked' result for product-a NEVER
+ * affects the lookup for product-b, because they are different keys.
+ *
+ * Do NOT "optimize" this into host-keying — that would break product SKU
+ * queries that differ only in path or query string.
+ */
+const livenessCache = new Map<string, { result: LivenessResult; expires: number }>();
+
+/** In-flight de-duplication: concurrent identical-URL requests share one fetch. */
+const livenessFlight = new Map<string, Promise<LivenessResult>>();
+
+/** Maximum cached entries before simple FIFO eviction kicks in. */
+const LIVENESS_CACHE_MAX = 64;
+
+/** TTL in milliseconds; configurable via env, default 5 minutes. */
+function getLivenessTtlMs(): number {
+  const env = process.env.LIVENESS_CACHE_TTL_MS;
+  const parsed = env ? parseInt(env, 10) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 300_000;
+}
+
+/**
+ * Normalize a URL to its cache key:
+ * - Strip the `#fragment` component only.
+ * - Preserve the full path and query string.
+ * - On parse failure, return the raw string unchanged.
+ */
+function toLivenessCacheKey(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.hash = '';
+    return parsed.href;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Evict the oldest inserted entry when the cache is at capacity.
+ * Map preserves insertion order, so the first key is the oldest.
+ */
+function evictOldestLivenessEntry(): void {
+  const firstKey = livenessCache.keys().next().value;
+  if (firstKey !== undefined) {
+    livenessCache.delete(firstKey);
+  }
+}
+
+/**
+ * checkLivenessCached — like checkLiveness, but with a run-scoped in-memory cache.
+ *
+ * Cache key: exact URL with `#fragment` stripped (path + query string preserved).
+ * TTL: LIVENESS_CACHE_TTL_MS env var, default 300000 ms (5 min).
+ * Capacity: max 64 entries; oldest-inserted entry evicted on overflow (FIFO).
+ *
+ * Concurrency: concurrent calls for the same URL share a single in-flight fetch
+ * via a de-dup Promise map. A failed fetch never poisons the cache — the
+ * in-flight entry is removed on rejection and the error propagates as a miss,
+ * falling back to checkLiveness.
+ *
+ * Fail-open: any error in the cache layer falls back to checkLiveness directly.
+ *
+ * KEYING GUARANTEE — see module-level doc above. In short:
+ *   https://example.com/product-a  ≠  https://example.com/product-b
+ * One being 'dead' or 'blocked' NEVER suppresses a fetch for the other.
+ */
+export async function checkLivenessCached(
+  url: string,
+  timeoutMs?: number
+): Promise<LivenessResult> {
+  try {
+    const key = toLivenessCacheKey(url);
+    const now = Date.now();
+
+    // Cache hit: return if fresh.
+    const cached = livenessCache.get(key);
+    if (cached && cached.expires > now) {
+      return cached.result;
+    }
+
+    // De-dup: if an identical URL is already in-flight, share its Promise.
+    const inflight = livenessFlight.get(key);
+    if (inflight) {
+      return await inflight;
+    }
+
+    // Miss: fetch, store, return.
+    const fetchPromise = checkLiveness(url, timeoutMs).then(
+      (result) => {
+        // Remove from in-flight map before caching.
+        livenessFlight.delete(key);
+
+        // Evict oldest entry if at capacity.
+        if (livenessCache.size >= LIVENESS_CACHE_MAX) {
+          evictOldestLivenessEntry();
+        }
+
+        livenessCache.set(key, { result, expires: Date.now() + getLivenessTtlMs() });
+        return result;
+      },
+      (err) => {
+        // On rejection: remove the in-flight entry so the next caller retries.
+        livenessFlight.delete(key);
+        throw err;
+      }
+    );
+
+    livenessFlight.set(key, fetchPromise);
+    return await fetchPromise;
+  } catch {
+    // Fail-open: any unexpected error in the cache layer falls back to a direct call.
+    return checkLiveness(url, timeoutMs);
+  }
+}
+
+/**
+ * Clear the liveness cache and in-flight de-dup map.
+ * The orchestrator should call this at the start of each run to ensure
+ * deterministic fetches (no stale results from a previous run).
+ */
+export function clearLivenessCache(): void {
+  livenessCache.clear();
+  livenessFlight.clear();
+}
+
 /**
  * Extract the host from a URL for caching purposes.
  */

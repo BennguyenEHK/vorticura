@@ -300,6 +300,214 @@ function collectOpenGraph(
 }
 
 // =============================================
+// Structured metadata extraction (supplier name, description, etc.)
+// =============================================
+
+/**
+ * Lightweight metadata fields extracted structurally from page HTML.
+ * Used by the orchestrator to skip a per-page LLM call when all fields are present.
+ *
+ * - supplierName: best vendor/seller name available in structured data.
+ * - description:  og:description → meta[name="description"] → JSON-LD Product.description → productName.
+ * - siteName:     og:site_name → JSON-LD Organization/WebSite name → ''.
+ * - productName:  JSON-LD Product.name → og:title → <title> → ''.
+ */
+export interface HtmlMeta {
+  supplierName: string;
+  description: string;
+  siteName: string;
+  productName: string;
+}
+
+/** Trim, collapse whitespace, and cap a string to ~300 chars. */
+function normMeta(v: string | undefined | null): string {
+  if (!v) return '';
+  return v.trim().replace(/\s+/g, ' ').slice(0, 300);
+}
+
+/**
+ * Walk a JSON-LD node tree and extract supplier/site-name and product metadata.
+ * Returns a partial HtmlMeta with fields populated from the best candidates found.
+ *
+ * Precedence per field (resolved after the full walk, not eagerly):
+ *   supplierName: Offer.seller.name → Product.brand.name → top-level Organization.name
+ *   siteName:     Organization.name or WebSite.name (top-level or @graph)
+ *   productName:  Product.name
+ *   description:  Product.description
+ *
+ * Wrapped in try/catch; on any error returns the partial result accumulated so far.
+ */
+function extractMetaFromJsonLd(node: unknown): Partial<HtmlMeta> {
+  // Collect candidates at each precedence tier before resolving.
+  // Precedence tiers for supplierName (lower index = higher priority):
+  //   0 = Offer.seller.name, 1 = Product.brand.name, 2 = Organization.name
+  const supplierTiers: [string, string, string] = ['', '', ''];
+  let siteName    = '';
+  let productName = '';
+  let description = '';
+
+  try {
+    const walk = (n: unknown): void => {
+      if (Array.isArray(n)) {
+        for (const item of n) walk(item);
+        return;
+      }
+      if (typeof n !== 'object' || n === null) return;
+
+      const obj = n as Record<string, unknown>;
+
+      // Recurse into @graph arrays.
+      if (Array.isArray(obj['@graph'])) {
+        for (const item of obj['@graph']) walk(item);
+      }
+
+      const type = obj['@type'];
+      const typeStr = (Array.isArray(type) ? type.join(' ') : String(type ?? '')).toLowerCase();
+
+      const isProduct = typeStr.includes('product');
+      const isOrg     = typeStr.includes('organization');
+      const isSite    = typeStr.includes('website');
+      const isOffer   = typeStr.includes('offer');
+
+      // Organization / WebSite — siteName candidates (tier 2 for supplierName).
+      if (isOrg || isSite) {
+        const name = obj['name'];
+        if (typeof name === 'string' && name.trim()) {
+          if (!siteName) siteName = normMeta(name);
+          // Also fill tier-2 supplierName from org/site name.
+          if (!supplierTiers[2]) supplierTiers[2] = normMeta(name);
+        }
+      }
+
+      // Offer — seller.name is tier-0 (highest priority) for supplierName.
+      if (isOffer) {
+        const seller = obj['seller'];
+        if (typeof seller === 'object' && seller !== null) {
+          const sellerName = (seller as Record<string, unknown>)['name'];
+          if (typeof sellerName === 'string' && sellerName.trim()) {
+            if (!supplierTiers[0]) supplierTiers[0] = normMeta(sellerName);
+          }
+        }
+      }
+
+      // Product — productName, description, brand.name (tier-1 supplierName).
+      if (isProduct) {
+        const name = obj['name'];
+        if (typeof name === 'string' && name.trim()) {
+          if (!productName) productName = normMeta(name);
+        }
+
+        const desc = obj['description'];
+        if (typeof desc === 'string' && desc.trim()) {
+          if (!description) description = normMeta(desc);
+        }
+
+        // brand.name — tier-1 supplierName (seller beats brand).
+        const brand = obj['brand'];
+        if (typeof brand === 'object' && brand !== null) {
+          const brandName = (brand as Record<string, unknown>)['name'];
+          if (typeof brandName === 'string' && brandName.trim()) {
+            if (!supplierTiers[1]) supplierTiers[1] = normMeta(brandName);
+          }
+        }
+
+        // Recurse into offers (may carry seller).
+        const offers = obj['offers'];
+        if (offers !== null && offers !== undefined) {
+          if (Array.isArray(offers)) {
+            for (const offer of offers) walk(offer);
+          } else {
+            walk(offers);
+          }
+        }
+      }
+    };
+
+    walk(node);
+  } catch {
+    // Malformed structure — return whatever was accumulated.
+  }
+
+  // Resolve supplierName by precedence tier.
+  const supplierName = supplierTiers[0] || supplierTiers[1] || supplierTiers[2] || '';
+
+  const result: Partial<HtmlMeta> = {};
+  if (supplierName) result.supplierName = supplierName;
+  if (siteName)     result.siteName     = siteName;
+  if (productName)  result.productName  = productName;
+  if (description)  result.description  = description;
+  return result;
+}
+
+/**
+ * Extract supplier/product metadata structurally from page HTML using cheerio.
+ *
+ * Sources (in precedence order per field — see HtmlMeta for field rules):
+ *   - OpenGraph meta tags (og:site_name, og:title, og:description).
+ *   - Standard meta[name="description"].
+ *   - JSON-LD (Product, Offer, Organization, WebSite nodes).
+ *   - <title> element (productName fallback).
+ *
+ * Never throws — on any error or empty html all fields return ''.
+ * Input is capped to HTML_BYTE_CAP before parsing (same as extractFromHtml).
+ */
+export function extractMetaFromHtml(html: string): HtmlMeta {
+  const empty: HtmlMeta = { supplierName: '', description: '', siteName: '', productName: '' };
+
+  if (!html) return empty;
+
+  try {
+    // Cap input to bound cheerio parse cost on very large pages.
+    const htmlChunk = html.slice(0, HTML_BYTE_CAP);
+    const $ = cheerio.load(htmlChunk);
+
+    // --- OpenGraph signals ---
+    const ogSiteName   = normMeta($('meta[property="og:site_name"]').attr('content'));
+    const ogTitle      = normMeta($('meta[property="og:title"]').attr('content'));
+    const ogDesc       = normMeta($('meta[property="og:description"]').attr('content'));
+    const metaDesc     = normMeta($('meta[name="description"]').attr('content'));
+    const titleText    = normMeta($('title').first().text());
+
+    // --- JSON-LD signals ---
+    const jsonLdMeta: Partial<HtmlMeta> = {};
+    $('script[type="application/ld+json"]').each((_i, el) => {
+      try {
+        const raw = $(el).html() ?? '';
+        if (!raw.trim()) return;
+        const parsed: unknown = JSON.parse(raw);
+        const partial = extractMetaFromJsonLd(parsed);
+        // Merge: first non-empty value per field wins.
+        if (!jsonLdMeta.siteName    && partial.siteName)    jsonLdMeta.siteName    = partial.siteName;
+        if (!jsonLdMeta.supplierName && partial.supplierName) jsonLdMeta.supplierName = partial.supplierName;
+        if (!jsonLdMeta.productName  && partial.productName)  jsonLdMeta.productName  = partial.productName;
+        if (!jsonLdMeta.description  && partial.description)  jsonLdMeta.description  = partial.description;
+      } catch {
+        // Malformed JSON-LD block — skip and continue.
+      }
+    });
+
+    // --- Resolve per-field with stated precedence ---
+
+    // siteName: og:site_name → JSON-LD org/site name → ''.
+    const siteName = ogSiteName || jsonLdMeta.siteName || '';
+
+    // productName: JSON-LD Product.name → og:title → <title> → ''.
+    const productName = jsonLdMeta.productName || ogTitle || titleText || '';
+
+    // description: og:description → meta[name="description"] → JSON-LD Product.description → productName → ''.
+    const description = ogDesc || metaDesc || jsonLdMeta.description || productName || '';
+
+    // supplierName: JSON-LD Offer.seller.name → Product.brand.name → Org.name → og:site_name → ''.
+    const supplierName = jsonLdMeta.supplierName || siteName || '';
+
+    return { supplierName, description, siteName, productName };
+  } catch {
+    // Top-level guard: never throw.
+    return empty;
+  }
+}
+
+// =============================================
 // Main: extractFromHtml
 // =============================================
 

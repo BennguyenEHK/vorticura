@@ -71,8 +71,8 @@ import {
 import type { ParsedSpec } from '@/lib/ai-agent/schemas/query-plan';
 // Extraction cascade — Layer 0 (URL liveness pre-gate) + Layer 2 (structured-HTML
 // price via cheerio JSON-LD/microdata/OG). Replaces the dead text-only microdata layer.
-import { checkLiveness } from '@/lib/services/search/liveness';
-import { extractFromHtml } from '@/lib/services/search/html-extract';
+import { checkLivenessCached, clearLivenessCache } from '@/lib/services/search/liveness';
+import { extractFromHtml, extractMetaFromHtml } from '@/lib/services/search/html-extract';
 // Layer 4 (vision/image-to-text) — last-resort price recovery from the product
 // image when text/HTML/LLM layers all came back price-unknown. Env-gated OFF by
 // default (SEARCH_VISION_ENABLED) and fail-safe (never throws).
@@ -368,7 +368,7 @@ async function extractSupplierForItem(
     //       when live (2xx), hands us the real HTML for the structured layer.
     //       404/410 = truly dead → drop. 403/503/timeout = blocked → keep the
     //       candidate on Tavily raw_content (bot-proof), just skip HTML enhancement.
-    const live = await checkLiveness(cand.snippet.url);
+    const live = await checkLivenessCached(cand.snippet.url);
     // Dashboard: report this source's health (feeds live/dead/blocked counters).
     emitLiveness(item.itemId, live.status, safeHost(cand.snippet.url));
     if (live.status === 'dead') { deadUrls++; continue; }
@@ -407,12 +407,32 @@ async function extractSupplierForItem(
       }
     }
 
-    // (2c) LAYER 3 — LLM GAP-FILL. Always runs (supplier_name + description are
-    //      never regex-extractable); also recovers price/contact the deterministic
-    //      layers missed. consumeLlmCall reserves the call BEFORE the model; a spent
-    //      budget skips the LLM and the page degrades to deterministic-only.
+    // (2c-meta) B1 — STRUCTURED METADATA. Pull the two LLM-only load-bearing fields
+    //      (supplier_name + description) straight from the page's structured data
+    //      (og:site_name / JSON-LD seller·brand·org, og:description / meta description /
+    //      Product.description) so the costly L3 LLM can be SKIPPED when the
+    //      deterministic layers already have a price AND metadata supplies name + desc.
+    const meta = html
+      ? extractMetaFromHtml(html)
+      : { supplierName: '', description: '', siteName: '', productName: '' };
+
+    // (2c) LAYER 3 — LLM GAP-FILL. Recovers supplier_name + description (and any
+    //      price/contact the deterministic layers missed). consumeLlmCall reserves the
+    //      call BEFORE the model; a spent budget skips the LLM and the page degrades to
+    //      deterministic-only.
+    //
+    //      B1 SKIP GATE — skip the LLM entirely (saving a ~5-7s round-trip + tokens, and
+    //      PRESERVING the per-item LLM budget for pages that need it) when ALL hold:
+    //        (a) a DETERMINISTIC price was found (manual or structured — an LLM-only
+    //            price would need the LLM anyway, so it does not qualify);
+    //        (b) structured metadata supplied BOTH supplier_name AND description; and
+    //        (c) this is NOT a substitute round (substitutes need the LLM's
+    //            match_reasoning to justify the non-exact match).
+    const deterministicPrice = manual.fields.bidder_unit_price > 0 || structuredPrice > 0;
+    const canSkipLlm = !isSubstitute && deterministicPrice && meta.supplierName !== '' && meta.description !== '';
+
     let llm: SupplierExtraction | null = null;
-    if (consumeLlmCall(budget)) {
+    if (!canSkipLlm && consumeLlmCall(budget)) {
       emitLayer(item.itemId, 3); // L3 LLM gap-fill — a reserved budget call
       const llmStart = Date.now();
       try {
@@ -428,15 +448,18 @@ async function extractSupplierForItem(
         llm = null;
       }
       console.log(`[ai-server] item=${item.itemId} gap-fill latency=${Date.now() - llmStart}ms`);
+    } else if (canSkipLlm) {
+      console.log(`[supplier-search] item=${item.itemId} L3 LLM skipped (deterministic price + structured name/description)`);
     }
 
     // (2d) MERGE — deterministic price wins in cascade order: manual (raw_content)
-    //      → structured (HTML) → LLM. Currency follows the same precedence. Fields
-    //      the regex layer can't do (name/description/compliance/notes/packaging/
-    //      reasoning) always come from the LLM.
+    //      → structured (HTML) → LLM. Currency follows the same precedence. The two
+    //      fields the regex layers can't do (name + description) come from the LLM when
+    //      it ran, otherwise from B1 structured metadata; remaining LLM-only fields
+    //      (compliance/notes/packaging/reasoning) are simply empty on a skipped page.
     const f = manual.fields;
-    const supplier_name = llm?.supplier_name ?? '';
-    const bidder_description = llm?.bidder_description ?? '';
+    const supplier_name = llm?.supplier_name || meta.supplierName || '';
+    const bidder_description = llm?.bidder_description || meta.description || '';
     // A page with no name or description is not a usable supplier source.
     if (!supplier_name.trim() || !bidder_description.trim()) continue;
 
@@ -614,7 +637,7 @@ async function contactHomepageFallback(row: ItemSourceRow): Promise<void> {
       if (row.contact_email && row.contact_phone) break;
 
       const homeUrl = origin + path;
-      const live = await checkLiveness(homeUrl);
+      const live = await checkLivenessCached(homeUrl);
       // Dashboard: homepage-fallback probes are real source checks too.
       emitLiveness(Number(row.item_id) || 0, live.status, safeHost(homeUrl));
 
@@ -741,6 +764,10 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     // extract/density emit below; emitRunStart resets the client dashboard and carries
     // the budget denominators (per-item LLM cap, per-RFQ vision cap) for the layer bars.
     enterSearchRun(rfq_id ?? 0);
+    // B3 — reset the run-scoped exact-URL liveness cache so each run starts clean
+    // (no stale cross-run fetch results). Within the run, identical URLs are served
+    // from cache / de-duped; distinct URLs (different path OR query) are always fetched.
+    clearLivenessCache();
     emitRunStart(itemRows.length, createBudget().maxLlmCalls, visionBudget.maxVisionCalls);
 
     // (3) Per-item DENSITY LOOP with one budget per item (Stage 11+).
