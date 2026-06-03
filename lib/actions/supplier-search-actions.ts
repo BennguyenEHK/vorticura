@@ -686,9 +686,21 @@ async function contactHomepageFallback(row: ItemSourceRow): Promise<void> {
  * AgentItemSummary structure may not always be fully populated.
  */
 function buildSearchText(row: Record<string, unknown>): string {
+  // The raw company_description is the AUTHORITATIVE verbatim source — it carries the
+  // exact identifiers (manufacturer part numbers / model codes / SKUs) that the AI
+  // enrichment summary can paraphrase away. We therefore ALWAYS include it so the
+  // query planner can parse the exact part number into parsed.model (a weight-3
+  // disambiguation token + the quoted lead search query) instead of silently losing
+  // it. The agent_item_summary axes are then appended for richer functional /
+  // equivalent-search context. (Previously the summary REPLACED the description when
+  // present, which dropped any part number the LLM didn't echo into an axis.)
+  const parts: string[] = [];
+
+  const companyDescription = String(row.companyDescription || '').trim();
+  if (companyDescription) parts.push(companyDescription);
+
   const summary = row.agentItemSummary;
   if (summary !== null && summary !== undefined && typeof summary === 'object') {
-    const parts: string[] = [];
     for (const val of Object.values(summary as Record<string, unknown>)) {
       if (Array.isArray(val)) {
         for (const v of val) {
@@ -698,11 +710,21 @@ function buildSearchText(row: Record<string, unknown>): string {
         parts.push(val.trim());
       }
     }
-    const serialized = parts.join('; ');
-    if (serialized) return serialized;
   }
-  // Fall back to raw company description when summary is absent or empty.
-  return String(row.companyDescription || '');
+
+  // Dedupe (case-insensitive) while preserving order so the verbatim description and
+  // any axis that merely repeats it don't double up in the planner's input.
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+  for (const p of parts) {
+    const key = p.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      deduped.push(p);
+    }
+  }
+
+  return deduped.join('; ');
 }
 
 // ---------------------------------------------

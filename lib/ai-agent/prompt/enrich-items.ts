@@ -25,6 +25,7 @@ Output schema:
 Rules:
 - Return one object per input item, with the SAME item_id.
 - Each axis is an array of short bullet strings (1-4 bullets). Keep bullets terse and factual.
+- In "identification", ALWAYS preserve any manufacturer part number, model code, or SKU VERBATIM (exactly as written — same characters, punctuation, and case) whenever one appears in the item description. These codes are the primary supplier-matching identifiers and must never be paraphrased, normalized, or omitted.
 - Base every statement on the item description and the RFQ context provided. Do NOT invent specifications that are not implied. If an axis cannot be determined, return an empty array [] for it.
 - Do not add fields beyond the schema.`;
 
