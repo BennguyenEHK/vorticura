@@ -32,14 +32,16 @@ const OUT_OF_STOCK_REGEX =
 // -----------
 // Stock quantity extraction patterns
 // -----------
-// Matches: "123 in stock", "stock: 123", "123 available", "qty available: 123", "in stock: 123"
+// Matches: "123 in stock", "stock: 123", "123 available to ship", "qty available: 123", "in stock: 123"
 // Handles commas: "1,234 in stock" → 1234
+// Note: "available" pattern requires stock-quantity context to avoid matching "2 available models"
 const QTY_PATTERNS = [
   /(\d{1,3}(?:,\d{3})*)\s+in\s+stock/i,
   /stock:\s*(\d{1,3}(?:,\d{3})*)/i,
-  /(\d{1,3}(?:,\d{3})*)\s+available/i,
+  /(\d{1,3}(?:,\d{3})*)\s+available(?:\s+to\s+(?:ship|order|buy)|\s+(?:in\s+stock|now|immediately|for\s+(?:immediate\s+)?(?:shipment|delivery|order))|\s*[,\.;\r\n]|$)/i,
   /qty\s+available:\s*(\d{1,3}(?:,\d{3})*)/i,
   /in\s+stock:\s*(\d{1,3}(?:,\d{3})*)/i,
+  /available\s*:\s*(\d{1,3}(?:,\d{3})*)/i,
 ];
 
 // -----------
@@ -68,7 +70,7 @@ const PRODUCT_TERMS_REGEX = new RegExp(PRODUCT_TERMS.join('|'), 'i');
 /**
  * Decide whether a candidate page should be dropped before extraction.
  * requiredQty = the RFQ item's required quantity.
- * buffer defaults to 5 (mirrors the existing qty+5 stock rule in supplier-search-actions.ts).
+ * buffer defaults to 1 (small margin for small-qty items).
  *
  * Rules (apply in order; first match wins):
  * 1. OUT OF STOCK — if content contains out-of-stock phrase → eliminate('out_of_stock')
@@ -83,7 +85,7 @@ const PRODUCT_TERMS_REGEX = new RegExp(PRODUCT_TERMS.join('|'), 'i');
 export function eliminatePage(
   input: EliminateInput,
   requiredQty: number,
-  buffer: number = 5,
+  buffer: number = 1,
 ): EliminateResult {
   const content = input.content || '';
 

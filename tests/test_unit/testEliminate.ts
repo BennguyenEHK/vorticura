@@ -47,10 +47,10 @@ expect('qty below required (comma)', '1,200 in stock product item', 5000, true, 
 expect('stock: N below required', 'stock: 2 product item', 10, true, 'qty_below_required');
 
 // ---- Qty boundary (requiredQty + buffer): exactly at floor is NOT eliminated ----
-// required 10 + buffer 5 = 15; stated 15 → allowed (not < 15).
-expect('qty exactly at floor survives', '15 in stock product item price', 10, false, undefined);
-// stated 14 → eliminated (< 15).
-expect('qty one below floor eliminated', '14 in stock product item', 10, true, 'qty_below_required');
+// required 10 + buffer 1 = 11; stated 11 → allowed (not < 11).
+expect('qty exactly at floor survives', '11 in stock product item price', 10, false, undefined);
+// stated 10 → eliminated (< 11).
+expect('qty one below floor eliminated', '10 in stock product item', 10, true, 'qty_below_required');
 
 // ---- Unknown qty bypass (no stated quantity → never eliminate on qty) ----
 expect('unknown qty bypasses qty rule', 'Great product, buy now, add to cart', 9999, false, undefined);

@@ -165,8 +165,10 @@ function parseNumeric(token: string): number {
 function expandContextWindow(content: string, matchIndex: number, priceText: string, baseWindow: string): string {
   // Already have a base window from ±60 chars. Try to expand by including
   // complete lines/cells around it. Delimiters: \n, |, •, ►, .
-  const windowStart = content.indexOf(baseWindow);
-  const windowEnd = windowStart >= 0 ? windowStart + baseWindow.length : matchIndex + priceText.length + 60;
+  // Use matchIndex directly — indexOf would find the first occurrence of the
+  // window string, which may be a different price mention than the one matched.
+  const windowStart = Math.max(0, matchIndex - 60);
+  const windowEnd = matchIndex + priceText.length + 60;
 
   // Expand backward to a preceding newline or delimiter, with a bound.
   let expandStart = Math.max(0, windowStart - 120);

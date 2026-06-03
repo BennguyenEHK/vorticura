@@ -16,7 +16,11 @@ import type { TavilySnippet } from './tavily-client';
 // that pasted the entire company_description into the search. Those entries
 // poisoned the cache. The v2 namespace orphans them so they TTL out naturally
 // while the new semantic-tier cache fills up clean.
-const CACHE_PREFIX = 'search:v2:';
+//
+// v3 bump: an evaluation run cached empty or low-quality Tavily results under v2.
+// With 7-day TTL, these stale entries will poison subsequent queries on the same
+// namespaces. The v3 namespace forces fresh lookups going forward.
+const CACHE_PREFIX = 'search:v3:';
 const DEFAULT_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days — matches the doc spec
 
 // Stable, short cache key — sha1 keeps the key length predictable regardless

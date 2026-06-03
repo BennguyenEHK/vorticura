@@ -173,13 +173,20 @@ function processSuccessResponse(
     contentType.startsWith('application/xhtml+xml');
 
   if (!isHtml) {
-    // Non-HTML content type (PDF, image, etc.) on a 2xx response:
-    // Treat as blocked so caller falls back to Tavily raw_content.
-    return {
-      status: 'blocked',
-      httpStatus: response.status,
-      html: null,
-    };
+    // Some industrial/legacy servers return incorrect or missing Content-Type.
+    // Sniff the first 512 chars of the body for HTML markers before giving up.
+    const peek = body.slice(0, 512).trimStart().toLowerCase();
+    const looksLikeHtml = peek.startsWith('<!doctype') || peek.startsWith('<html');
+    if (!looksLikeHtml) {
+      // Non-HTML content type (PDF, image, etc.) on a 2xx response:
+      // Treat as blocked so caller falls back to Tavily raw_content.
+      return {
+        status: 'blocked',
+        httpStatus: response.status,
+        html: null,
+      };
+    }
+    // Body is HTML despite wrong Content-Type — fall through to parse it.
   }
 
   // Valid HTML: cap body and return as live.
