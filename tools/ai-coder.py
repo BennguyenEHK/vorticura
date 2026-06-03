@@ -158,6 +158,10 @@ def parse_args():
     p.add_argument('--max-tokens', type=int, default=1024, dest='max_tokens')
     p.add_argument('--targets', type=str,
                    help='Comma-separated files/folders (optional — auto-extracted from prompt when omitted)')
+    p.add_argument('--query', '-q', action='store_true', default=False,
+                   help='Read-only: run model and print output — no file writes')
+    p.add_argument('--delete', action='store_true', default=False,
+                   help='Delete the resolved target files (requires --targets or paths in prompt)')
     p.add_argument('--plan', action='store_true', default=False,
                    help='Generate and print an execution plan, then confirm before running')
     p.add_argument('--yes', '-y', action='store_true',
@@ -600,14 +604,6 @@ def save_output(outdir: str, idx: int, role: str, text: str) -> str:
     return fname
 
 
-# ── Delete detection ───────────────────────────────────────────────────────────
-_DELETE_KEYWORDS = {'delete', 'remove', 'erase', 'clean', 'drop', 'destroy', 'purge', 'unlink', 'wipe'}
-
-def detect_delete_intent(prompt: str) -> bool:
-    words = set(re.split(r'\W+', prompt.lower()))
-    return bool(words & _DELETE_KEYWORDS)
-
-
 # ── Main ───────────────────────────────────────────────────────────────────────
 def main():
     args = parse_args()
@@ -631,7 +627,7 @@ def main():
             print('[targets] No file targets found — agent will run without file context')
 
     # ── Delete flow ──────────────────────────────────────────────────────────
-    if detect_delete_intent(args.prompt):
+    if args.delete:
         paths_to_delete = [p for p in targets if os.path.isfile(p)]
         if not paths_to_delete:
             print('[delete] No existing files resolved from targets.')
@@ -694,7 +690,8 @@ def main():
                 sys.exit(0)
 
     mode_label = (
-        'auto-apply' if _do_apply
+        'query' if args.query
+        else 'auto-apply' if _do_apply
         else 'multi-file' if _multi_file
         else f'{agents} agent(s)'
     )
@@ -754,7 +751,10 @@ def main():
     # ── Write-back ───────────────────────────────────────────────────────────
     written_files: List[str] = []
 
-    if _do_apply and final_output:
+    if args.query:
+        print(f'\n{final_output}\n')
+
+    elif _do_apply and final_output:
         code = extract_code(final_output)
         if apply_to_file(targets[0], code):
             written_files.append(targets[0])
@@ -797,7 +797,7 @@ def main():
     # ── Session log ──────────────────────────────────────────────────────────
     log_session({
         'timestamp':     time.strftime('%Y-%m-%dT%H:%M:%S'),
-        'action':        'edit',
+        'action':        'query' if args.query else 'edit',
         'prompt':        args.prompt,
         'targets':       targets,
         'model':         args.model,
