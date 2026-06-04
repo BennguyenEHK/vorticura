@@ -73,6 +73,8 @@ import type { ParsedSpec } from '@/lib/ai-agent/schemas/query-plan';
 // price via cheerio JSON-LD/microdata/OG). Replaces the dead text-only microdata layer.
 import { checkLivenessCached, clearLivenessCache } from '@/lib/services/search/liveness';
 import { extractFromHtml, extractMetaFromHtml } from '@/lib/services/search/html-extract';
+import { firecrawlFetch } from '@/lib/services/search/firecrawl-client';
+import { extractMetaFromFirecrawl } from '@/lib/services/search/html-extract';
 // Layer 4 (vision/image-to-text) — last-resort price recovery from the product
 // image when text/HTML/LLM layers all came back price-unknown. Env-gated OFF by
 // default (SEARCH_VISION_ENABLED) and fail-safe (never throws).
@@ -374,6 +376,11 @@ async function extractSupplierForItem(
     if (live.status === 'dead') { deadUrls++; continue; }
     const html = live.html;   // non-null only when status === 'live'
 
+    // L2 HTML source: Firecrawl rendered DOM (bypasses WAF, captures JS-rendered prices).
+    // Falls back to live.html from L0 when Firecrawl is unavailable or times out.
+    const fcResult = await firecrawlFetch(cand.snippet.url);
+    const htmlForL2 = fcResult?.html ?? html;
+
     const content = cand.snippet.content || cand.snippet.snippet || '';
 
     // (2a) LAYER 1 — MANUAL regex on Tavily raw_content (text). specTokens drive
@@ -394,9 +401,9 @@ async function extractSupplierForItem(
     let structuredPrice = 0;
     let structuredCurrency = '';
     let structuredPriceConfidence: number | undefined;
-    if (manual.fields.bidder_unit_price === 0 && html) {
-      emitLayer(item.itemId, 2); // L2 structured HTML — only when live HTML present
-      const s = extractFromHtml(html, specTokens);
+    if (manual.fields.bidder_unit_price === 0 && htmlForL2) {
+      emitLayer(item.itemId, 2); // L2 structured HTML — Firecrawl HTML preferred, live.html fallback
+      const s = extractFromHtml(htmlForL2, specTokens);
       if (s.price > 0) {
         structuredPrice = s.price;
         structuredCurrency = s.currency;
@@ -412,9 +419,9 @@ async function extractSupplierForItem(
     //      (og:site_name / JSON-LD seller·brand·org, og:description / meta description /
     //      Product.description) so the costly L3 LLM can be SKIPPED when the
     //      deterministic layers already have a price AND metadata supplies name + desc.
-    const meta = html
-      ? extractMetaFromHtml(html)
-      : { supplierName: '', description: '', siteName: '', productName: '' };
+    const meta = fcResult
+      ? extractMetaFromFirecrawl(fcResult.meta as Record<string, unknown>)
+      : (html ? extractMetaFromHtml(html) : { supplierName: '', description: '', siteName: '', productName: '' });
 
     // (2c) LAYER 3 — LLM GAP-FILL. Recovers supplier_name + description (and any
     //      price/contact the deterministic layers missed). consumeLlmCall reserves the

@@ -300,6 +300,65 @@ function collectOpenGraph(
 }
 
 // =============================================
+// Source D: data-price-amount (Firecrawl JS-rendered DOM)
+// =============================================
+
+/**
+ * Source D — data-price-amount: Magento / WooCommerce rendered-DOM price
+ * containers. Firecrawl returns JS-executed HTML where price nodes like
+ * <span data-price-amount="5084.93" data-price-type="finalPrice"> are
+ * directly accessible in the DOM. A plain fetch leaves these values inside
+ * a <script> tag that Source A never sees.
+ *
+ * Priority: data-price-type="finalPrice" candidates are pushed first
+ * (the customer-facing unit price); tier/special prices follow as secondary
+ * candidates for selectBestPrice to compare against spec tokens.
+ */
+function collectDataPriceAmount(
+  $: cheerio.CheerioAPI,
+  candidates: PriceCandidate[],
+): void {
+  try {
+    const final: PriceCandidate[] = [];
+    const other: PriceCandidate[] = [];
+
+    $('[data-price-amount]').each((_i, el) => {
+      try {
+        const $el = $(el);
+        const rawPrice = $el.attr('data-price-amount');
+        if (!rawPrice) return;
+
+        const value = parsePrice(rawPrice);
+        if (isNaN(value) || value <= 0) return;
+
+        const priceType = $el.attr('data-price-type') ?? '';
+
+        // Context: nearest Schema.org Offer scope or price-box container.
+        const $scope = $el.closest('[itemprop="offers"], .price-box, .product-info-price');
+        const context = ($scope.length ? $scope.text() : $el.parent().text())
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 120);
+
+        const candidate: PriceCandidate = { value, currency: '', context };
+        if (priceType === 'finalPrice') {
+          final.push(candidate);
+        } else {
+          other.push(candidate);
+        }
+      } catch {
+        // Skip malformed element.
+      }
+    });
+
+    // finalPrice candidates lead (most authoritative); tier/special prices follow.
+    candidates.push(...final, ...other);
+  } catch {
+    // Source D failure is not fatal.
+  }
+}
+
+// =============================================
 // Structured metadata extraction (supplier name, description, etc.)
 // =============================================
 
@@ -544,6 +603,9 @@ export function extractFromHtml(html: string, specTokens?: SpecTokenInput[]): St
     // Source C: OpenGraph product price meta tags.
     collectOpenGraph($, candidates);
 
+    // Source D: data-price-amount (Firecrawl JS-rendered DOM price containers).
+    collectDataPriceAmount($, candidates);
+
     const best = selectBestPrice(candidates, specTokens);
     const result: StructuredExtract = {
       price: best?.value ?? 0,
@@ -556,5 +618,55 @@ export function extractFromHtml(html: string, specTokens?: SpecTokenInput[]): St
   } catch {
     // Top-level guard: never throw.
     return { price: 0, currency: '' };
+  }
+}
+
+// =============================================
+// Firecrawl metadata extraction
+// =============================================
+
+/**
+ * Extract supplier/product metadata from a Firecrawl DocumentMetadata object.
+ *
+ * Firecrawl strips <meta> and <script> tags from the rendered HTML but pre-parses
+ * them into a metadata object. This function reads that object directly, covering
+ * both the typed camelCase fields (ogTitle, ogSiteName) emitted by newer SDK
+ * versions AND the colon-keyed strings (og:title, og:site_name) returned by the
+ * live API (both forms observed in production; we check both to be safe).
+ *
+ * Field precedence mirrors extractMetaFromHtml:
+ *   supplierName : og:site_name → ''
+ *   description  : og:description → description → productName → ''
+ *   siteName     : og:site_name → ''
+ *   productName  : og:title → title → ''
+ *
+ * Never throws — on any error all fields return ''.
+ */
+export function extractMetaFromFirecrawl(metadata: Record<string, unknown>): HtmlMeta {
+  const empty: HtmlMeta = { supplierName: '', description: '', siteName: '', productName: '' };
+  if (!metadata || typeof metadata !== 'object') return empty;
+
+  try {
+    // Read a field trying camelCase first (typed SDK), then colon-key (live API).
+    const pick = (camel: string, colonKey: string): string =>
+      normMeta(
+        (metadata[camel] as string | undefined) ??
+        (metadata[colonKey] as string | undefined),
+      );
+
+    const ogSiteName  = pick('ogSiteName',    'og:site_name');
+    const ogTitle     = pick('ogTitle',       'og:title');
+    const ogDesc      = pick('ogDescription', 'og:description');
+    const metaDesc    = normMeta(metadata['description'] as string | undefined);
+    const titleText   = normMeta(metadata['title'] as string | undefined);
+
+    const siteName    = ogSiteName;
+    const productName = ogTitle || titleText;
+    const description = ogDesc || metaDesc || productName;
+    const supplierName = siteName;
+
+    return { supplierName, description, siteName, productName };
+  } catch {
+    return empty;
   }
 }

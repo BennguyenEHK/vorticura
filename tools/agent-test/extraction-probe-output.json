@@ -1,0 +1,5049 @@
+[
+  {
+    "id": 1,
+    "item_id": 1,
+    "host": "cranefs.com",
+    "url": "https://www.cranefs.com/product/check-valves/147xu",
+    "db_price": "0.0000",
+    "db_requires_quote": true,
+    "db_track": "llm",
+    "db_supplier_name": "Crane Fluid Systems",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "147XU Swing Check Valve - Cast Steel. 2\" to 24\". Class 150. Carbon Steel. Swing check valves prevent reversal of flow through the pipeline. Can be installed in horizontal or vertical, upward flow piping. Offer low resistance to flow and are particularly suited to low velocity service. Seat ring is seal welded to eliminate leak paths.",
+    "db_contact_email": "",
+    "db_contact_phone": "",
+    "db_available_qty": 0,
+    "db_compliance": "Meets all specs",
+    "db_notes": "No product page found",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "tech_spec",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 273303,
+    "raw": {
+      "jsonLdPrice": false,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": false,
+      "hasAnyPriceSignal": false
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "",
+    "manualPhone": "(1473) 277 300",
+    "manualQty": 0,
+    "structuredPrice": 0,
+    "structuredCurrency": "",
+    "metaSupplierName": "Crane Fluid Systems",
+    "metaDescription": "147XU Swing Check Valve - Cast Steel Class 150 Steel Swing Check Valve",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": false,
+    "pageType": "tech_spec",
+    "llmRan": true,
+    "llmPrice": 0,
+    "llmCurrency": "USD",
+    "llmRequiresQuote": true,
+    "llmSupplierName": "Crane Fluid Systems",
+    "llmDescription": "147XU Swing Check Valve - Cast Steel",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "Meets all specs",
+    "llmNotes": "No specific price or stock information provided on the page.",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": true,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0,
+    "finalCurrency": "USD",
+    "finalTrack": "llm",
+    "finalRequiresQuote": true,
+    "finalSupplierName": "Crane Fluid Systems",
+    "finalDescription": "147XU Swing Check Valve - Cast Steel",
+    "finalDelivery": "",
+    "finalEmail": "",
+    "finalPhone": "(1473) 277 300",
+    "finalQty": 0,
+    "finalCompliance": "Meets all specs",
+    "finalNotes": "No specific price or stock information provided on the page.",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "tech_spec",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "requires_quote",
+        "stored": true,
+        "extracted": true,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "USD",
+        "status": "="
+      },
+      {
+        "field": "page_type",
+        "stored": "tech_spec",
+        "extracted": "tech_spec",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "Crane Fluid Systems",
+        "extracted": "Crane Fluid Systems",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "147XU Swing Check Valve - Cast Steel. 2\" to 24\". Class 150. Carbon Steel. Swing check valves prevent reversal of flow through the pipeline. Can be installed in horizontal or vertical, upward flow piping. Offer low resistance to flow and are particularly suited to low velocity service. Seat ring is seal welded to eliminate leak paths.",
+        "extracted": "147XU Swing Check Valve - Cast Steel",
+        "status": "≠"
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "",
+        "extracted": "(1473) 277 300",
+        "status": "+"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "Meets all specs",
+        "extracted": "Meets all specs",
+        "status": "="
+      },
+      {
+        "field": "notes",
+        "stored": "No product page found",
+        "extracted": "No specific price or stock information provided on the page.",
+        "status": "≠"
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 3,
+    "regressions": 0,
+    "verdict": "GENUINE_QUOTE_ONLY"
+  },
+  {
+    "id": 2,
+    "item_id": 1,
+    "host": "braecosales.com.au",
+    "url": "https://www.braecosales.com.au/product/147xu-swing-check-valve-wcb-class-150",
+    "db_price": "0.0000",
+    "db_requires_quote": true,
+    "db_track": "llm",
+    "db_supplier_name": "Braeco Sales",
+    "db_currency": "AUD",
+    "db_delivery_time": "",
+    "db_description": "147XU Swing Check Valve, WCB, Class 150, RF, JVPC Spec A5R",
+    "db_contact_email": "sales@braecosales.com.au",
+    "db_contact_phone": "+61 (8) 9445 1600",
+    "db_available_qty": 0,
+    "db_compliance": "Meets all specs",
+    "db_notes": "Exact match for the required check valve.",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 233832,
+    "raw": {
+      "jsonLdPrice": false,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": true,
+      "hasAnyPriceSignal": false
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "sales@braecosales.com.au",
+    "manualPhone": "",
+    "manualQty": 0,
+    "structuredPrice": 0,
+    "structuredCurrency": "",
+    "metaSupplierName": "Braeco Sales",
+    "metaDescription": "We have a huge variety of valves, actuators & accessories. Get the 147XU-Swing Check Valve (WCB, Class 150).",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": false,
+    "pageType": "product",
+    "llmRan": true,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": true,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0,
+    "finalCurrency": "",
+    "finalTrack": "none",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "Braeco Sales",
+    "finalDescription": "We have a huge variety of valves, actuators & accessories. Get the 147XU-Swing Check Valve (WCB, Class 150).",
+    "finalDelivery": "",
+    "finalEmail": "sales@braecosales.com.au",
+    "finalPhone": "",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "product",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "requires_quote",
+        "stored": true,
+        "extracted": false,
+        "status": "≠"
+      },
+      {
+        "field": "currency_code",
+        "stored": "AUD",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "product",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "Braeco Sales",
+        "extracted": "Braeco Sales",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "147XU Swing Check Valve, WCB, Class 150, RF, JVPC Spec A5R",
+        "extracted": "We have a huge variety of valves, actuators & accessories. Get the 147XU-Swing Check Valve (WCB, Class 150).",
+        "status": "≠"
+      },
+      {
+        "field": "contact_email",
+        "stored": "sales@braecosales.com.au",
+        "extracted": "sales@braecosales.com.au",
+        "status": "="
+      },
+      {
+        "field": "contact_phone",
+        "stored": "+61 (8) 9445 1600",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "Meets all specs",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "notes",
+        "stored": "Exact match for the required check valve.",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 6,
+    "regressions": 4,
+    "verdict": "GENUINE_QUOTE_ONLY"
+  },
+  {
+    "id": 3,
+    "item_id": 1,
+    "host": "porterpipe.com",
+    "url": "https://www.porterpipe.com/1071632/product/n/crane-14147xu",
+    "db_price": "0.0000",
+    "db_requires_quote": true,
+    "db_track": "llm",
+    "db_supplier_name": "Porter Pipe & Supply Company",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "CRANE® 147XU-14 147 Swing Check Valve, 14 in, Flanged, 150 lb, Cast Steel Body. CRANE® swing check valves prevent reversal of flow through pipe lines. Most CRANE® swing check valves can be installed in horizontal or vertical, upward flow, piping. They offer low resistance to flow and are particularly suited to low velocity service. CRANE® Swing Check Valve, Series: 147, 14 in, Flanged, 285 psi Pressure, 150 lb, -20 to 100 deg F, No Low Lead Compliance, 31 in Inlet to Outlet Length, 15 in Top to Inlet Center, Cast Steel Body, 410 Stainless Steel Trim",
+    "db_contact_email": "",
+    "db_contact_phone": "(630) 543-8145",
+    "db_available_qty": 0,
+    "db_compliance": "Meets all specs",
+    "db_notes": "Login required to see availability and price.",
+    "db_selling_unit": "per_unit",
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "blocked",
+    "httpStatus": 403,
+    "htmlLen": 0,
+    "raw": {
+      "jsonLdPrice": false,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": false,
+      "hasAnyPriceSignal": false
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "",
+    "manualPhone": "",
+    "manualQty": 0,
+    "structuredPrice": 0,
+    "structuredCurrency": "",
+    "metaSupplierName": "",
+    "metaDescription": "",
+    "metaHasName": false,
+    "metaHasDesc": false,
+    "detectedQuoteRequest": false,
+    "pageType": "-",
+    "llmRan": false,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": true,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0,
+    "finalCurrency": "",
+    "finalTrack": "none",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "",
+    "finalDescription": "",
+    "finalDelivery": "",
+    "finalEmail": "",
+    "finalPhone": "",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "-",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "requires_quote",
+        "stored": true,
+        "extracted": false,
+        "status": "≠"
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "-",
+        "status": "≠"
+      },
+      {
+        "field": "supplier_name",
+        "stored": "Porter Pipe & Supply Company",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "bidder_description",
+        "stored": "CRANE® 147XU-14 147 Swing Check Valve, 14 in, Flanged, 150 lb, Cast Steel Body. CRANE® swing check valves prevent reversal of flow through pipe lines. Most CRANE® swing check valves can be installed in horizontal or vertical, upward flow, piping. They offer low resistance to flow and are particularly suited to low velocity service. CRANE® Swing Check Valve, Series: 147, 14 in, Flanged, 285 psi Pressure, 150 lb, -20 to 100 deg F, No Low Lead Compliance, 31 in Inlet to Outlet Length, 15 in Top to Inlet Center, Cast Steel Body, 410 Stainless Steel Trim",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "(630) 543-8145",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "Meets all specs",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "notes",
+        "stored": "Login required to see availability and price.",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "selling_unit",
+        "stored": "per_unit",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 9,
+    "regressions": 7,
+    "verdict": "NO_PRICE_NO_SIGNAL"
+  },
+  {
+    "id": 4,
+    "item_id": 2,
+    "host": "apiint.com",
+    "url": "https://apiint.com/product/class-150-forged-steel-raised-face-slip-on-flanges",
+    "db_price": "0.0000",
+    "db_requires_quote": false,
+    "db_track": "llm",
+    "db_supplier_name": "API International, Inc.",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "Find imported and domestic (AIS) Class 150 Forged Steel Raised Face Slip-On Flanges at API International, Inc. These flanges are available in dimensions and tolerances per ASME B16.5 standard.",
+    "db_contact_email": "",
+    "db_contact_phone": "",
+    "db_available_qty": 0,
+    "db_compliance": "",
+    "db_notes": "No product page found",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "tech_spec",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 340096,
+    "raw": {
+      "jsonLdPrice": false,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": true,
+      "hasAnyPriceSignal": false
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "",
+    "manualPhone": "503.692.3800",
+    "manualQty": 0,
+    "structuredPrice": 0,
+    "structuredCurrency": "",
+    "metaSupplierName": "API International, Inc.",
+    "metaDescription": "Find imported and domestic (AIS) Class 150 Forged Steel Raised Face Slip-On Flanges at API International, Inc. These flanges are available in dimensions and tolerances per ASME B16.5 standard.",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": true,
+    "pageType": "tech_spec",
+    "llmRan": true,
+    "llmPrice": 0,
+    "llmCurrency": "USD",
+    "llmRequiresQuote": true,
+    "llmSupplierName": "API International, Inc.",
+    "llmDescription": "Class 150 Forged Steel Raised Face Slip-On Flanges",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "503.692.3800",
+    "llmQty": 0,
+    "llmCompliance": "Meets all specs",
+    "llmNotes": "No product page found",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": true,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0,
+    "finalCurrency": "USD",
+    "finalTrack": "llm",
+    "finalRequiresQuote": true,
+    "finalSupplierName": "API International, Inc.",
+    "finalDescription": "Class 150 Forged Steel Raised Face Slip-On Flanges",
+    "finalDelivery": "",
+    "finalEmail": "",
+    "finalPhone": "503.692.3800",
+    "finalQty": 0,
+    "finalCompliance": "Meets all specs",
+    "finalNotes": "No product page found",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "tech_spec",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "requires_quote",
+        "stored": false,
+        "extracted": true,
+        "status": "≠"
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "USD",
+        "status": "="
+      },
+      {
+        "field": "page_type",
+        "stored": "tech_spec",
+        "extracted": "tech_spec",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "API International, Inc.",
+        "extracted": "API International, Inc.",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "Find imported and domestic (AIS) Class 150 Forged Steel Raised Face Slip-On Flanges at API International, Inc. These flanges are available in dimensions and tolerances per ASME B16.5 standard.",
+        "extracted": "Class 150 Forged Steel Raised Face Slip-On Flanges",
+        "status": "≠"
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "",
+        "extracted": "503.692.3800",
+        "status": "+"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "",
+        "extracted": "Meets all specs",
+        "status": "+"
+      },
+      {
+        "field": "notes",
+        "stored": "No product page found",
+        "extracted": "No product page found",
+        "status": "="
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 4,
+    "regressions": 0,
+    "verdict": "GENUINE_QUOTE_ONLY"
+  },
+  {
+    "id": 5,
+    "item_id": 2,
+    "host": "apiint.com",
+    "url": "https://apiint.com/product/class-150-forged-steel-raised-face-blind-flanges",
+    "db_price": "0.0000",
+    "db_requires_quote": false,
+    "db_track": "llm",
+    "db_supplier_name": "API International, Inc.",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "Find imported and domestic (AIS) Class 150 Forged Steel Raised Face Blind Flanges at API International, Inc. These flanges are available in dimensions and tolerances per ASME B16.5 standard.",
+    "db_contact_email": "",
+    "db_contact_phone": "",
+    "db_available_qty": 0,
+    "db_compliance": "",
+    "db_notes": "No product page found",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "tech_spec",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 340315,
+    "raw": {
+      "jsonLdPrice": false,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": true,
+      "hasAnyPriceSignal": false
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "",
+    "manualPhone": "503.692.3800",
+    "manualQty": 0,
+    "structuredPrice": 0,
+    "structuredCurrency": "",
+    "metaSupplierName": "API International, Inc.",
+    "metaDescription": "Find imported and domestic (AIS) Class 150 Forged Steel Raised Face Blind Flanges at API International, Inc. These flanges are available in dimensions and tolerances per ASME B16.5 standard.",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": true,
+    "pageType": "tech_spec",
+    "llmRan": true,
+    "llmPrice": 0,
+    "llmCurrency": "USD",
+    "llmRequiresQuote": true,
+    "llmSupplierName": "API International, Inc.",
+    "llmDescription": "Class 150 Forged Steel Raised Face Blind Flanges",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "503.692.3800",
+    "llmQty": 0,
+    "llmCompliance": "Meets all specs",
+    "llmNotes": "No product page found",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": true,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0,
+    "finalCurrency": "USD",
+    "finalTrack": "llm",
+    "finalRequiresQuote": true,
+    "finalSupplierName": "API International, Inc.",
+    "finalDescription": "Class 150 Forged Steel Raised Face Blind Flanges",
+    "finalDelivery": "",
+    "finalEmail": "",
+    "finalPhone": "503.692.3800",
+    "finalQty": 0,
+    "finalCompliance": "Meets all specs",
+    "finalNotes": "No product page found",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "tech_spec",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "requires_quote",
+        "stored": false,
+        "extracted": true,
+        "status": "≠"
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "USD",
+        "status": "="
+      },
+      {
+        "field": "page_type",
+        "stored": "tech_spec",
+        "extracted": "tech_spec",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "API International, Inc.",
+        "extracted": "API International, Inc.",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "Find imported and domestic (AIS) Class 150 Forged Steel Raised Face Blind Flanges at API International, Inc. These flanges are available in dimensions and tolerances per ASME B16.5 standard.",
+        "extracted": "Class 150 Forged Steel Raised Face Blind Flanges",
+        "status": "≠"
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "",
+        "extracted": "503.692.3800",
+        "status": "+"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "",
+        "extracted": "Meets all specs",
+        "status": "+"
+      },
+      {
+        "field": "notes",
+        "stored": "No product page found",
+        "extracted": "No product page found",
+        "status": "="
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 4,
+    "regressions": 0,
+    "verdict": "GENUINE_QUOTE_ONLY"
+  },
+  {
+    "id": 6,
+    "item_id": 2,
+    "host": "haihaogroup.com",
+    "url": "https://haihaogroup.com/dimensions-of-class-150-blanks-for-use-with-raised-face-flanges.html",
+    "db_price": "0.0000",
+    "db_requires_quote": false,
+    "db_track": "llm",
+    "db_supplier_name": "Hebei Haihao High Pressure Flange & Pipe Fitting Group Co.",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "The dimensions of Class 150 blanks for use with raised face (RF) flanges are standardized under the ASME B16.48 standard.",
+    "db_contact_email": "sales@haihaogroup.com",
+    "db_contact_phone": "",
+    "db_available_qty": 0,
+    "db_compliance": "",
+    "db_notes": "No product page found",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 58613,
+    "raw": {
+      "jsonLdPrice": false,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": false,
+      "hasAnyPriceSignal": false
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "sales@haihaogroup.com",
+    "manualPhone": "+0086 -15022501638",
+    "manualQty": 0,
+    "structuredPrice": 0,
+    "structuredCurrency": "",
+    "metaSupplierName": "Hebei Haihao High Pressure Flange & Pipe Fitting Group Co.",
+    "metaDescription": "The dimensions of Class 150 blanks for use with raised face (RF) flanges are standardized under the ASME B16.48 standard.",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": false,
+    "pageType": "product",
+    "llmRan": true,
+    "llmPrice": 0,
+    "llmCurrency": "USD",
+    "llmRequiresQuote": true,
+    "llmSupplierName": "Hebei Haihao High Pressure Flange & Pipe Fitting Group Co.",
+    "llmDescription": "Dimensions of Class 150 blanks for use with raised face (RF) flanges are standardized under the ASME B16.48 standard. These blanks, including spectacle blinds, spades, and spacers, are designed to fit raised face flanges in piping systems, ensuring proper sealing and isolation when required.",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "Meets all specs",
+    "llmNotes": "No product page found",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": true,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0,
+    "finalCurrency": "USD",
+    "finalTrack": "llm",
+    "finalRequiresQuote": true,
+    "finalSupplierName": "Hebei Haihao High Pressure Flange & Pipe Fitting Group Co.",
+    "finalDescription": "Dimensions of Class 150 blanks for use with raised face (RF) flanges are standardized under the ASME B16.48 standard. These blanks, including spectacle blinds, spades, and spacers, are designed to fit raised face flanges in piping systems, ensuring proper sealing and isolation when required.",
+    "finalDelivery": "",
+    "finalEmail": "sales@haihaogroup.com",
+    "finalPhone": "+0086 -15022501638",
+    "finalQty": 0,
+    "finalCompliance": "Meets all specs",
+    "finalNotes": "No product page found",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "product",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "requires_quote",
+        "stored": false,
+        "extracted": true,
+        "status": "≠"
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "USD",
+        "status": "="
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "product",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "Hebei Haihao High Pressure Flange & Pipe Fitting Group Co.",
+        "extracted": "Hebei Haihao High Pressure Flange & Pipe Fitting Group Co.",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "The dimensions of Class 150 blanks for use with raised face (RF) flanges are standardized under the ASME B16.48 standard.",
+        "extracted": "Dimensions of Class 150 blanks for use with raised face (RF) flanges are standardized under the ASME B16.48 standard. These blanks, including spectacle blinds, spades, and spacers, are designed to fit raised face flanges in piping systems, ensuring proper sealing and isolation when required.",
+        "status": "≠"
+      },
+      {
+        "field": "contact_email",
+        "stored": "sales@haihaogroup.com",
+        "extracted": "sales@haihaogroup.com",
+        "status": "="
+      },
+      {
+        "field": "contact_phone",
+        "stored": "",
+        "extracted": "+0086 -15022501638",
+        "status": "+"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "",
+        "extracted": "Meets all specs",
+        "status": "+"
+      },
+      {
+        "field": "notes",
+        "stored": "No product page found",
+        "extracted": "No product page found",
+        "status": "="
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 4,
+    "regressions": 0,
+    "verdict": "GENUINE_QUOTE_ONLY"
+  },
+  {
+    "id": 7,
+    "item_id": 2,
+    "host": "cad.bonneyforge.com",
+    "url": "https://cad.bonneyforge.com/viewitems/standard-part-numbers---cast-steel-valves/category-1179",
+    "db_price": "0.0000",
+    "db_requires_quote": false,
+    "db_track": "llm",
+    "db_supplier_name": "Bonney Forge",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "Browse Gate Valves - Class 150 in the Bonney Forge catalog including Item #,Size,Connection Type,Material,Class,Weight,Cv",
+    "db_contact_email": "",
+    "db_contact_phone": "(800) 345-7546",
+    "db_available_qty": 0,
+    "db_compliance": "",
+    "db_notes": "No product page found",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 104772,
+    "raw": {
+      "jsonLdPrice": false,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": false,
+      "hasAnyPriceSignal": false
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "",
+    "manualPhone": "(800) 345-7546",
+    "manualQty": 0,
+    "structuredPrice": 0,
+    "structuredCurrency": "",
+    "metaSupplierName": "Bonney Forge",
+    "metaDescription": "Browse All Categories in the Bonney Forge catalog including Forged Steel Valves,Cast Steel Valves,Forged Steel Fittings & Unions,Branch Connections",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": false,
+    "pageType": "tech_spec",
+    "llmRan": true,
+    "llmPrice": 0,
+    "llmCurrency": "USD",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "No product page found",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": true,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0,
+    "finalCurrency": "USD",
+    "finalTrack": "llm",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "Bonney Forge",
+    "finalDescription": "Browse All Categories in the Bonney Forge catalog including Forged Steel Valves,Cast Steel Valves,Forged Steel Fittings & Unions,Branch Connections",
+    "finalDelivery": "",
+    "finalEmail": "",
+    "finalPhone": "(800) 345-7546",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "No product page found",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "tech_spec",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "requires_quote",
+        "stored": false,
+        "extracted": false,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "USD",
+        "status": "="
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "tech_spec",
+        "status": "≠"
+      },
+      {
+        "field": "supplier_name",
+        "stored": "Bonney Forge",
+        "extracted": "Bonney Forge",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "Browse Gate Valves - Class 150 in the Bonney Forge catalog including Item #,Size,Connection Type,Material,Class,Weight,Cv",
+        "extracted": "Browse All Categories in the Bonney Forge catalog including Forged Steel Valves,Cast Steel Valves,Forged Steel Fittings & Unions,Branch Connections",
+        "status": "≠"
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "(800) 345-7546",
+        "extracted": "(800) 345-7546",
+        "status": "="
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "notes",
+        "stored": "No product page found",
+        "extracted": "No product page found",
+        "status": "="
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 2,
+    "regressions": 0,
+    "verdict": "NO_PRICE_NO_SIGNAL"
+  },
+  {
+    "id": 8,
+    "item_id": 2,
+    "host": "compressedgasvalve.com",
+    "url": "https://compressedgasvalve.com/valve-stainless-steel-gate-flanged-2-ansi-class-150.html",
+    "db_price": "4406.9400",
+    "db_requires_quote": false,
+    "db_track": "manual",
+    "db_supplier_name": "Compressed Gas Valve",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "Valve Stainless Steel Gate Flanged 2\" ANSI Class 150#",
+    "db_contact_email": "",
+    "db_contact_phone": "",
+    "db_available_qty": 0,
+    "db_compliance": "",
+    "db_notes": "",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 109830,
+    "raw": {
+      "jsonLdPrice": true,
+      "microdataPrice": true,
+      "ogPrice": true,
+      "currencyNumCount": 16,
+      "currencyNumSamples": [
+        "$0.00",
+        "$5,084.93",
+        "$4,406.94"
+      ],
+      "quoteCta": true,
+      "hasAnyPriceSignal": true
+    },
+    "manualPrice": 4406.94,
+    "manualDelivery": "",
+    "manualEmail": "customerservice@compressedgasvalve.com",
+    "manualPhone": "",
+    "manualQty": 0,
+    "structuredPrice": 5084.93,
+    "structuredCurrency": "USD",
+    "metaSupplierName": "Compressed Gas Valve",
+    "metaDescription": "Valve Stainless Steel Gate Flanged 2\" ANSI Class 150#",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": false,
+    "pageType": "product",
+    "llmRan": false,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": false,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 4406.94,
+    "finalCurrency": "USD",
+    "finalTrack": "manual",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "Compressed Gas Valve",
+    "finalDescription": "Valve Stainless Steel Gate Flanged 2\" ANSI Class 150#",
+    "finalDelivery": "",
+    "finalEmail": "customerservice@compressedgasvalve.com",
+    "finalPhone": "",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "product",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 4406.94,
+        "extracted": 4406.94,
+        "status": "="
+      },
+      {
+        "field": "requires_quote",
+        "stored": false,
+        "extracted": false,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "USD",
+        "status": "="
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "product",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "Compressed Gas Valve",
+        "extracted": "Compressed Gas Valve",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "Valve Stainless Steel Gate Flanged 2\" ANSI Class 150#",
+        "extracted": "Valve Stainless Steel Gate Flanged 2\" ANSI Class 150#",
+        "status": "="
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "customerservice@compressedgasvalve.com",
+        "status": "+"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "notes",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 1,
+    "regressions": 0,
+    "verdict": "PRICE_MANUAL"
+  },
+  {
+    "id": 9,
+    "item_id": 3,
+    "host": "assuredautomation.com",
+    "url": "https://assuredautomation.com/ball-valves",
+    "db_price": "0.0000",
+    "db_requires_quote": false,
+    "db_track": "llm",
+    "db_supplier_name": "Assured Automation",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "Assured Automation offers ball valves in many different materials and end connections. 2-way & 3-way ball valves.",
+    "db_contact_email": "",
+    "db_contact_phone": "",
+    "db_available_qty": 0,
+    "db_compliance": "",
+    "db_notes": "No product page found",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 94947,
+    "raw": {
+      "jsonLdPrice": false,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": false,
+      "hasAnyPriceSignal": false
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "",
+    "manualPhone": "",
+    "manualQty": 0,
+    "structuredPrice": 0,
+    "structuredCurrency": "",
+    "metaSupplierName": "Assured Automation",
+    "metaDescription": "Assured Automation offers ball valves in many different materials and end connections. 2-way & 3-way ball valves.",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": false,
+    "pageType": "product",
+    "llmRan": true,
+    "llmPrice": 0,
+    "llmCurrency": "USD",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "No product page found",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": true,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0,
+    "finalCurrency": "USD",
+    "finalTrack": "llm",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "Assured Automation",
+    "finalDescription": "Assured Automation offers ball valves in many different materials and end connections. 2-way & 3-way ball valves.",
+    "finalDelivery": "",
+    "finalEmail": "",
+    "finalPhone": "",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "No product page found",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "product",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "requires_quote",
+        "stored": false,
+        "extracted": false,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "USD",
+        "status": "="
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "product",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "Assured Automation",
+        "extracted": "Assured Automation",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "Assured Automation offers ball valves in many different materials and end connections. 2-way & 3-way ball valves.",
+        "extracted": "Assured Automation offers ball valves in many different materials and end connections. 2-way & 3-way ball valves.",
+        "status": "="
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "notes",
+        "stored": "No product page found",
+        "extracted": "No product page found",
+        "status": "="
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 0,
+    "regressions": 0,
+    "verdict": "NO_PRICE_NO_SIGNAL"
+  },
+  {
+    "id": 10,
+    "item_id": 3,
+    "host": "kinvalve.com",
+    "url": "https://www.kinvalve.com/class-150-ball-valve",
+    "db_price": "0.0000",
+    "db_requires_quote": true,
+    "db_track": "llm",
+    "db_supplier_name": "Kinvalve",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "High-quality ball valve to handle pressure ranges of up to 150 PSI. Made with the highest quality stainless steel, carbon steel, and other special allow steel you opt for. Comes with an anti-blowout stem, anti-static devices, a fire-safe design, and includes an optional ISO 5211 mounting pad for easy actuation. 150# ball valve is designed with ASME flanged ends with RF or FF faces. Available in different body configurations for your requirements. Optional ISO 5211 Mounting Pad to Equip with Electric or Pneumatic Actuators.",
+    "db_contact_email": "sales@kinvalve.com",
+    "db_contact_phone": "+86-186 5751 1184",
+    "db_available_qty": 0,
+    "db_compliance": "Meets all specs",
+    "db_notes": "No product page found",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 52673,
+    "raw": {
+      "jsonLdPrice": false,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": false,
+      "hasAnyPriceSignal": false
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "sales@kinvalve.com",
+    "manualPhone": "+86-186 5751 1184",
+    "manualQty": 0,
+    "structuredPrice": 0,
+    "structuredCurrency": "",
+    "metaSupplierName": "Kinvalve",
+    "metaDescription": "150# Ball Valve is Designed as the ASME Standard with Stainless Steel or Carbon Steel Body, Available in Customized Features. Contact Now.",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": false,
+    "pageType": "tech_spec",
+    "llmRan": true,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": true,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0,
+    "finalCurrency": "",
+    "finalTrack": "none",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "Kinvalve",
+    "finalDescription": "150# Ball Valve is Designed as the ASME Standard with Stainless Steel or Carbon Steel Body, Available in Customized Features. Contact Now.",
+    "finalDelivery": "",
+    "finalEmail": "sales@kinvalve.com",
+    "finalPhone": "+86-186 5751 1184",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "tech_spec",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "requires_quote",
+        "stored": true,
+        "extracted": false,
+        "status": "≠"
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "tech_spec",
+        "status": "≠"
+      },
+      {
+        "field": "supplier_name",
+        "stored": "Kinvalve",
+        "extracted": "Kinvalve",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "High-quality ball valve to handle pressure ranges of up to 150 PSI. Made with the highest quality stainless steel, carbon steel, and other special allow steel you opt for. Comes with an anti-blowout stem, anti-static devices, a fire-safe design, and includes an optional ISO 5211 mounting pad for easy actuation. 150# ball valve is designed with ASME flanged ends with RF or FF faces. Available in different body configurations for your requirements. Optional ISO 5211 Mounting Pad to Equip with Electric or Pneumatic Actuators.",
+        "extracted": "150# Ball Valve is Designed as the ASME Standard with Stainless Steel or Carbon Steel Body, Available in Customized Features. Contact Now.",
+        "status": "≠"
+      },
+      {
+        "field": "contact_email",
+        "stored": "sales@kinvalve.com",
+        "extracted": "sales@kinvalve.com",
+        "status": "="
+      },
+      {
+        "field": "contact_phone",
+        "stored": "+86-186 5751 1184",
+        "extracted": "+86-186 5751 1184",
+        "status": "="
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "Meets all specs",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "notes",
+        "stored": "No product page found",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 6,
+    "regressions": 3,
+    "verdict": "NO_PRICE_NO_SIGNAL"
+  },
+  {
+    "id": 11,
+    "item_id": 3,
+    "host": "flangegasketboltkits.com",
+    "url": "https://www.flangegasketboltkits.com/bs-5351-side-entry-ball-valve-api-6d-2-48-inch-150-2500-lb.html",
+    "db_price": "0.0100",
+    "db_requires_quote": false,
+    "db_track": "structured",
+    "db_supplier_name": "China Topper",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "BS 5351 Side Entry Ball Valve Plant in China: API 6D, ANSI B16.34, 2 Inch and Above, Class 150-2500 LB, PN20-PN420, Carbon, Stainless, Alloy Steel.",
+    "db_contact_email": "sales@flangegasketboltkits.com",
+    "db_contact_phone": "+86 592 5819200",
+    "db_available_qty": 0,
+    "db_compliance": "",
+    "db_notes": "[price match: low-confidence variant]",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 73516,
+    "raw": {
+      "jsonLdPrice": true,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": true,
+      "hasAnyPriceSignal": true
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "",
+    "manualPhone": "+86 592 5819200",
+    "manualQty": 0,
+    "structuredPrice": 0.01,
+    "structuredCurrency": "USD",
+    "metaSupplierName": "China Topper",
+    "metaDescription": "BS 5351 Side Entry Ball Valve Plant in China: API 6D, ANSI B16.34, 2 Inch and Above, Class 150-2500 LB, PN20-PN420, Carbon, Stainless, Alloy Steel.",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": true,
+    "pageType": "product",
+    "llmRan": false,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": false,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0.01,
+    "finalCurrency": "USD",
+    "finalTrack": "structured",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "China Topper",
+    "finalDescription": "BS 5351 Side Entry Ball Valve Plant in China: API 6D, ANSI B16.34, 2 Inch and Above, Class 150-2500 LB, PN20-PN420, Carbon, Stainless, Alloy Steel.",
+    "finalDelivery": "",
+    "finalEmail": "",
+    "finalPhone": "+86 592 5819200",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "product",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0.01,
+        "extracted": 0.01,
+        "status": "="
+      },
+      {
+        "field": "requires_quote",
+        "stored": false,
+        "extracted": false,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "USD",
+        "status": "="
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "product",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "China Topper",
+        "extracted": "China Topper",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "BS 5351 Side Entry Ball Valve Plant in China: API 6D, ANSI B16.34, 2 Inch and Above, Class 150-2500 LB, PN20-PN420, Carbon, Stainless, Alloy Steel.",
+        "extracted": "BS 5351 Side Entry Ball Valve Plant in China: API 6D, ANSI B16.34, 2 Inch and Above, Class 150-2500 LB, PN20-PN420, Carbon, Stainless, Alloy Steel.",
+        "status": "="
+      },
+      {
+        "field": "contact_email",
+        "stored": "sales@flangegasketboltkits.com",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "+86 592 5819200",
+        "extracted": "+86 592 5819200",
+        "status": "="
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "notes",
+        "stored": "[price match: low-confidence variant]",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 2,
+    "regressions": 2,
+    "verdict": "PRICE_STRUCTURED"
+  },
+  {
+    "id": 12,
+    "item_id": 3,
+    "host": "flangegasketboltkits.com",
+    "url": "https://www.flangegasketboltkits.com/api-600-globe-valve-api-602-2-24-inch-150-1500-lb-bw-end.html",
+    "db_price": "0.0100",
+    "db_requires_quote": false,
+    "db_track": "structured",
+    "db_supplier_name": "China Topper",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "API 600 Globe Valve Manufacturer: API 602, ANSI B16.34, API 598, API 607, 2-24 Inch, Class 150-1500LB, Carbon, Stainless, Alloy Steel, Flanged, BW Ends.",
+    "db_contact_email": "sales@flangegasketboltkits.com",
+    "db_contact_phone": "+86 592 5819200",
+    "db_available_qty": 0,
+    "db_compliance": "",
+    "db_notes": "[price match: low-confidence variant]",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 73575,
+    "raw": {
+      "jsonLdPrice": true,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": true,
+      "hasAnyPriceSignal": true
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "",
+    "manualPhone": "+86 592 5819200",
+    "manualQty": 0,
+    "structuredPrice": 0.01,
+    "structuredCurrency": "USD",
+    "metaSupplierName": "China Topper",
+    "metaDescription": "API 600 Globe Valve Manufacturer: API 602, ANSI B16.34, API 598, API 607, 2-24 Inch, Class 150-1500LB, Carbon, Stainless, Alloy Steel, Flanged, BW Ends.",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": true,
+    "pageType": "product",
+    "llmRan": false,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": false,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0.01,
+    "finalCurrency": "USD",
+    "finalTrack": "structured",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "China Topper",
+    "finalDescription": "API 600 Globe Valve Manufacturer: API 602, ANSI B16.34, API 598, API 607, 2-24 Inch, Class 150-1500LB, Carbon, Stainless, Alloy Steel, Flanged, BW Ends.",
+    "finalDelivery": "",
+    "finalEmail": "",
+    "finalPhone": "+86 592 5819200",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "product",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0.01,
+        "extracted": 0.01,
+        "status": "="
+      },
+      {
+        "field": "requires_quote",
+        "stored": false,
+        "extracted": false,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "USD",
+        "status": "="
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "product",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "China Topper",
+        "extracted": "China Topper",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "API 600 Globe Valve Manufacturer: API 602, ANSI B16.34, API 598, API 607, 2-24 Inch, Class 150-1500LB, Carbon, Stainless, Alloy Steel, Flanged, BW Ends.",
+        "extracted": "API 600 Globe Valve Manufacturer: API 602, ANSI B16.34, API 598, API 607, 2-24 Inch, Class 150-1500LB, Carbon, Stainless, Alloy Steel, Flanged, BW Ends.",
+        "status": "="
+      },
+      {
+        "field": "contact_email",
+        "stored": "sales@flangegasketboltkits.com",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "+86 592 5819200",
+        "extracted": "+86 592 5819200",
+        "status": "="
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "notes",
+        "stored": "[price match: low-confidence variant]",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 2,
+    "regressions": 2,
+    "verdict": "PRICE_STRUCTURED"
+  },
+  {
+    "id": 13,
+    "item_id": 3,
+    "host": "forgevalves.com",
+    "url": "https://www.forgevalves.com/forged-steel-globe-valves-api-602-ansi-b16-34-1-2-2-inch.html",
+    "db_price": "0.0100",
+    "db_requires_quote": false,
+    "db_track": "structured",
+    "db_supplier_name": "Forge",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "China Forged Steel Globe Valves Supplier: API 602, ANSI B16.34 Design, 1/2-2 Inch, Class 150 LB - 2500 LB, Y-Pattern, Socket Weld Ends to ASME B16.11.",
+    "db_contact_email": "sales@forgevalves.com",
+    "db_contact_phone": "0086 592 5819200",
+    "db_available_qty": 0,
+    "db_compliance": "",
+    "db_notes": "[price match: low-confidence variant]",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 56447,
+    "raw": {
+      "jsonLdPrice": true,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": true,
+      "hasAnyPriceSignal": true
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "",
+    "manualPhone": "86 592 5819200",
+    "manualQty": 0,
+    "structuredPrice": 0.01,
+    "structuredCurrency": "USD",
+    "metaSupplierName": "Forge",
+    "metaDescription": "China Forged Steel Globe Valves Supplier: API 602, ANSI B16.34 Design, 1/2-2 Inch, Class 150 LB - 2500 LB, Y-Pattern, Socket Weld Ends to ASME B16.11.",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": true,
+    "pageType": "tech_spec",
+    "llmRan": false,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": false,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0.01,
+    "finalCurrency": "USD",
+    "finalTrack": "structured",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "Forge",
+    "finalDescription": "China Forged Steel Globe Valves Supplier: API 602, ANSI B16.34 Design, 1/2-2 Inch, Class 150 LB - 2500 LB, Y-Pattern, Socket Weld Ends to ASME B16.11.",
+    "finalDelivery": "",
+    "finalEmail": "",
+    "finalPhone": "86 592 5819200",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "tech_spec",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0.01,
+        "extracted": 0.01,
+        "status": "="
+      },
+      {
+        "field": "requires_quote",
+        "stored": false,
+        "extracted": false,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "USD",
+        "status": "="
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "tech_spec",
+        "status": "≠"
+      },
+      {
+        "field": "supplier_name",
+        "stored": "Forge",
+        "extracted": "Forge",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "China Forged Steel Globe Valves Supplier: API 602, ANSI B16.34 Design, 1/2-2 Inch, Class 150 LB - 2500 LB, Y-Pattern, Socket Weld Ends to ASME B16.11.",
+        "extracted": "China Forged Steel Globe Valves Supplier: API 602, ANSI B16.34 Design, 1/2-2 Inch, Class 150 LB - 2500 LB, Y-Pattern, Socket Weld Ends to ASME B16.11.",
+        "status": "="
+      },
+      {
+        "field": "contact_email",
+        "stored": "sales@forgevalves.com",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "0086 592 5819200",
+        "extracted": "86 592 5819200",
+        "status": "≠"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "notes",
+        "stored": "[price match: low-confidence variant]",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 4,
+    "regressions": 2,
+    "verdict": "PRICE_STRUCTURED"
+  },
+  {
+    "id": 14,
+    "item_id": 4,
+    "host": "coastal-industries.com",
+    "url": "https://coastal-industries.com/bettis-seal-kit/cb415",
+    "db_price": "0.0000",
+    "db_requires_quote": true,
+    "db_track": "llm",
+    "db_supplier_name": "Coastal Industries",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "Bettis CB415 Seal & Service Kits. We currently have the largest inventory of hydraulic seal kits for Bettis actuators and we usually have both high temperature and standard temperature actuator service kits in stock for CB415 series actuators. All CB415 series seal kits are assembled with our high standards of quality to make sure you do not have problems getting your actuator back in service.",
+    "db_contact_email": "",
+    "db_contact_phone": "(281) 204-1308",
+    "db_available_qty": 0,
+    "db_compliance": "Meets all specs",
+    "db_notes": "Certified Quality. ISO certified facilities. Material specifications conform to industry-recognized standards.",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "blocked",
+    "httpStatus": 0,
+    "htmlLen": 0,
+    "raw": {
+      "jsonLdPrice": false,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": false,
+      "hasAnyPriceSignal": false
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "",
+    "manualPhone": "",
+    "manualQty": 0,
+    "structuredPrice": 0,
+    "structuredCurrency": "",
+    "metaSupplierName": "",
+    "metaDescription": "",
+    "metaHasName": false,
+    "metaHasDesc": false,
+    "detectedQuoteRequest": false,
+    "pageType": "-",
+    "llmRan": false,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": true,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0,
+    "finalCurrency": "",
+    "finalTrack": "none",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "",
+    "finalDescription": "",
+    "finalDelivery": "",
+    "finalEmail": "",
+    "finalPhone": "",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "-",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "requires_quote",
+        "stored": true,
+        "extracted": false,
+        "status": "≠"
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "-",
+        "status": "≠"
+      },
+      {
+        "field": "supplier_name",
+        "stored": "Coastal Industries",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "bidder_description",
+        "stored": "Bettis CB415 Seal & Service Kits. We currently have the largest inventory of hydraulic seal kits for Bettis actuators and we usually have both high temperature and standard temperature actuator service kits in stock for CB415 series actuators. All CB415 series seal kits are assembled with our high standards of quality to make sure you do not have problems getting your actuator back in service.",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "(281) 204-1308",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "Meets all specs",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "notes",
+        "stored": "Certified Quality. ISO certified facilities. Material specifications conform to industry-recognized standards.",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 8,
+    "regressions": 6,
+    "verdict": "NO_PRICE_NO_SIGNAL"
+  },
+  {
+    "id": 15,
+    "item_id": 4,
+    "host": "coastal-industries.com",
+    "url": "https://coastal-industries.com/bettis-seal-kit-series/cb",
+    "db_price": "0.0000",
+    "db_requires_quote": true,
+    "db_track": "llm",
+    "db_supplier_name": "NKD/Coastal Industrial",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "Bettis CB Series Seal & Service Kits. We currently have the largest inventory of hydraulic & pneumatic seal kits for Bettis actuators and we have high-temperature, low-temperature, and standard-temperature actuator service kits in stock for CB series actuators. All CB series seal kits are assembled with our high standards of quality using all USA-made components to make sure you do not have problems getting your actuator back in service.",
+    "db_contact_email": "",
+    "db_contact_phone": "(281) 204-1308",
+    "db_available_qty": 0,
+    "db_compliance": "Meets all specs",
+    "db_notes": "Certified Quality. Manufacturing partners operate under ISO certified facilities.",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "blocked",
+    "httpStatus": 0,
+    "htmlLen": 0,
+    "raw": {
+      "jsonLdPrice": false,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": false,
+      "hasAnyPriceSignal": false
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "",
+    "manualPhone": "",
+    "manualQty": 0,
+    "structuredPrice": 0,
+    "structuredCurrency": "",
+    "metaSupplierName": "",
+    "metaDescription": "",
+    "metaHasName": false,
+    "metaHasDesc": false,
+    "detectedQuoteRequest": false,
+    "pageType": "-",
+    "llmRan": false,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": true,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0,
+    "finalCurrency": "",
+    "finalTrack": "none",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "",
+    "finalDescription": "",
+    "finalDelivery": "",
+    "finalEmail": "",
+    "finalPhone": "",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "-",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "requires_quote",
+        "stored": true,
+        "extracted": false,
+        "status": "≠"
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "-",
+        "status": "≠"
+      },
+      {
+        "field": "supplier_name",
+        "stored": "NKD/Coastal Industrial",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "bidder_description",
+        "stored": "Bettis CB Series Seal & Service Kits. We currently have the largest inventory of hydraulic & pneumatic seal kits for Bettis actuators and we have high-temperature, low-temperature, and standard-temperature actuator service kits in stock for CB series actuators. All CB series seal kits are assembled with our high standards of quality using all USA-made components to make sure you do not have problems getting your actuator back in service.",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "(281) 204-1308",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "Meets all specs",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "notes",
+        "stored": "Certified Quality. Manufacturing partners operate under ISO certified facilities.",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 8,
+    "regressions": 6,
+    "verdict": "NO_PRICE_NO_SIGNAL"
+  },
+  {
+    "id": 16,
+    "item_id": 4,
+    "host": "spacx.nl",
+    "url": "https://www.spacx.nl/shop/service-kits/standard-service-kit-for-bettis-cbb315",
+    "db_price": "420.1000",
+    "db_requires_quote": false,
+    "db_track": "manual",
+    "db_supplier_name": "Spacx Actuators & Controls",
+    "db_currency": "EUR",
+    "db_delivery_time": "6-8 weeks",
+    "db_description": "Service kits consist of all soft parts. Necessary to service your actuator. Not included are spare parts. Bettis partnumer: VA153762",
+    "db_contact_email": "info@spacx.nl",
+    "db_contact_phone": "+31 (0)6 83 44 08 66",
+    "db_available_qty": 0,
+    "db_compliance": "",
+    "db_notes": "",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 60137,
+    "raw": {
+      "jsonLdPrice": false,
+      "microdataPrice": true,
+      "ogPrice": false,
+      "currencyNumCount": 2,
+      "currencyNumSamples": [
+        "€ 420,10",
+        "€ 0,00"
+      ],
+      "quoteCta": false,
+      "hasAnyPriceSignal": true
+    },
+    "manualPrice": 420.1,
+    "manualDelivery": "6-8 weeks",
+    "manualEmail": "",
+    "manualPhone": "",
+    "manualQty": 0,
+    "structuredPrice": 420.1,
+    "structuredCurrency": "EUR",
+    "metaSupplierName": "Spacx Actuators & Controls",
+    "metaDescription": "Service kits consist of all soft parts. Necessary to service your actuator. Not included are spare parts. Bettis partnumer: VA153762",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": false,
+    "pageType": "product",
+    "llmRan": false,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": false,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 420.1,
+    "finalCurrency": "EUR",
+    "finalTrack": "manual",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "Spacx Actuators & Controls",
+    "finalDescription": "Service kits consist of all soft parts. Necessary to service your actuator. Not included are spare parts. Bettis partnumer: VA153762",
+    "finalDelivery": "6-8 weeks",
+    "finalEmail": "",
+    "finalPhone": "",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "product",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 420.1,
+        "extracted": 420.1,
+        "status": "="
+      },
+      {
+        "field": "requires_quote",
+        "stored": false,
+        "extracted": false,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "EUR",
+        "extracted": "EUR",
+        "status": "="
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "product",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "Spacx Actuators & Controls",
+        "extracted": "Spacx Actuators & Controls",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "Service kits consist of all soft parts. Necessary to service your actuator. Not included are spare parts. Bettis partnumer: VA153762",
+        "extracted": "Service kits consist of all soft parts. Necessary to service your actuator. Not included are spare parts. Bettis partnumer: VA153762",
+        "status": "="
+      },
+      {
+        "field": "contact_email",
+        "stored": "info@spacx.nl",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "+31 (0)6 83 44 08 66",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "6-8 weeks",
+        "extracted": "6-8 weeks",
+        "status": "="
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "notes",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 2,
+    "regressions": 2,
+    "verdict": "PRICE_MANUAL"
+  },
+  {
+    "id": 17,
+    "item_id": 4,
+    "host": "spacx.nl",
+    "url": "https://www.spacx.nl/shop/service-kits/service-kits-bettis",
+    "db_price": "0.0000",
+    "db_requires_quote": true,
+    "db_track": "llm",
+    "db_supplier_name": "Spacx Actuators & Controls",
+    "db_currency": "EUR",
+    "db_delivery_time": "",
+    "db_description": "STANDARD TEMP SERV. KITS BETTIS CBB - Standard Service Kit CBB415/CBB415-SR/M3",
+    "db_contact_email": "info@spacx.nl",
+    "db_contact_phone": "",
+    "db_available_qty": 0,
+    "db_compliance": "Meets all specs",
+    "db_notes": "No product page found",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 57855,
+    "raw": {
+      "jsonLdPrice": false,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": false,
+      "hasAnyPriceSignal": false
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "",
+    "manualPhone": "",
+    "manualQty": 0,
+    "structuredPrice": 0,
+    "structuredCurrency": "",
+    "metaSupplierName": "Spacx Actuators & Controls",
+    "metaDescription": "STANDARD TEMP SERV. KITS BETTIS CBA 300 - Standard Service Kit CBA730/CBA730-SR/M3 - Standard Service Kit CBA830/CBA830-SR/M3 - Standard Service Kit CBA930/CBA930-SR/M3 - Standard Service Kit CBA1030/CBA1030-SR/M3",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": false,
+    "pageType": "product",
+    "llmRan": true,
+    "llmPrice": 0,
+    "llmCurrency": "EUR",
+    "llmRequiresQuote": true,
+    "llmSupplierName": "Spacx Actuators & Controls",
+    "llmDescription": "Service Kits Bettis",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "Meets all specs",
+    "llmNotes": "No product page found",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": true,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0,
+    "finalCurrency": "EUR",
+    "finalTrack": "llm",
+    "finalRequiresQuote": true,
+    "finalSupplierName": "Spacx Actuators & Controls",
+    "finalDescription": "Service Kits Bettis",
+    "finalDelivery": "",
+    "finalEmail": "",
+    "finalPhone": "",
+    "finalQty": 0,
+    "finalCompliance": "Meets all specs",
+    "finalNotes": "No product page found",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "product",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "requires_quote",
+        "stored": true,
+        "extracted": true,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "EUR",
+        "extracted": "EUR",
+        "status": "="
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "product",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "Spacx Actuators & Controls",
+        "extracted": "Spacx Actuators & Controls",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "STANDARD TEMP SERV. KITS BETTIS CBB - Standard Service Kit CBB415/CBB415-SR/M3",
+        "extracted": "Service Kits Bettis",
+        "status": "≠"
+      },
+      {
+        "field": "contact_email",
+        "stored": "info@spacx.nl",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "Meets all specs",
+        "extracted": "Meets all specs",
+        "status": "="
+      },
+      {
+        "field": "notes",
+        "stored": "No product page found",
+        "extracted": "No product page found",
+        "status": "="
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 2,
+    "regressions": 1,
+    "verdict": "GENUINE_QUOTE_ONLY"
+  },
+  {
+    "id": 18,
+    "item_id": 5,
+    "host": "caps.com.au",
+    "url": "https://www.caps.com.au/product/air/air-treatment/auto-drains",
+    "db_price": "0.0000",
+    "db_requires_quote": false,
+    "db_track": "llm",
+    "db_supplier_name": "CAPS Compete Air and Power Solutions Australia",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "The goal of condensate auto drains is to remove the condensate from the pressurised air system safely and at a low expense.",
+    "db_contact_email": "",
+    "db_contact_phone": "",
+    "db_available_qty": 0,
+    "db_compliance": "",
+    "db_notes": "No product page found",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 91798,
+    "raw": {
+      "jsonLdPrice": false,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": true,
+      "hasAnyPriceSignal": false
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "",
+    "manualPhone": "",
+    "manualQty": 0,
+    "structuredPrice": 0,
+    "structuredCurrency": "",
+    "metaSupplierName": "CAPS Compete Air and Power Solutions Australia",
+    "metaDescription": "The goal of condensate auto drains is to remove the condensate from the pressurised air system safely and at a low expense.",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": false,
+    "pageType": "product",
+    "llmRan": true,
+    "llmPrice": 0,
+    "llmCurrency": "AUD",
+    "llmRequiresQuote": true,
+    "llmSupplierName": "CAPS Compete Air and Power Solutions Australia",
+    "llmDescription": "Auto Drains - CAPS Australia",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "Meets all specs",
+    "llmNotes": "No product page found",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": true,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0,
+    "finalCurrency": "AUD",
+    "finalTrack": "llm",
+    "finalRequiresQuote": true,
+    "finalSupplierName": "CAPS Compete Air and Power Solutions Australia",
+    "finalDescription": "Auto Drains - CAPS Australia",
+    "finalDelivery": "",
+    "finalEmail": "",
+    "finalPhone": "",
+    "finalQty": 0,
+    "finalCompliance": "Meets all specs",
+    "finalNotes": "No product page found",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "product",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "requires_quote",
+        "stored": false,
+        "extracted": true,
+        "status": "≠"
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "AUD",
+        "status": "≠"
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "product",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "CAPS Compete Air and Power Solutions Australia",
+        "extracted": "CAPS Compete Air and Power Solutions Australia",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "The goal of condensate auto drains is to remove the condensate from the pressurised air system safely and at a low expense.",
+        "extracted": "Auto Drains - CAPS Australia",
+        "status": "≠"
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "",
+        "extracted": "Meets all specs",
+        "status": "+"
+      },
+      {
+        "field": "notes",
+        "stored": "No product page found",
+        "extracted": "No product page found",
+        "status": "="
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 4,
+    "regressions": 0,
+    "verdict": "GENUINE_QUOTE_ONLY"
+  },
+  {
+    "id": 19,
+    "item_id": 5,
+    "host": "vspneumatic.com",
+    "url": "https://www.vspneumatic.com/auto-drain-valve.html",
+    "db_price": "0.0000",
+    "db_requires_quote": true,
+    "db_track": "llm",
+    "db_supplier_name": "V.S. Enterprises",
+    "db_currency": "INR",
+    "db_delivery_time": "",
+    "db_description": "Compressed air systems work hard. But moisture and contaminants build up fast. That’s where an auto drain valve saves the day. At VS Enterprises, we supply reliable, easy-to-use auto drain valves to Traders in Noida, designed to keep your air system clean and efficient without manual effort. Our automatic drain valves quietly remove water, oil, and other waste from your air compressors, filters, and receivers. No constant checking. No system damage. Just simple, clean air.",
+    "db_contact_email": "",
+    "db_contact_phone": "+91-9871118371",
+    "db_available_qty": 0,
+    "db_compliance": "Meets all specs",
+    "db_notes": "No product page found",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "tech_spec",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 164232,
+    "raw": {
+      "jsonLdPrice": false,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": true,
+      "hasAnyPriceSignal": false
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "vsent7@gmail.com",
+    "manualPhone": "+91-9871118371",
+    "manualQty": 0,
+    "structuredPrice": 0,
+    "structuredCurrency": "",
+    "metaSupplierName": "V.S. Enterprises",
+    "metaDescription": "V.S. Enterprises leading Auto Drain Valve Manufacturers in Noida, Since 2013. Premium Quality Auto Drain Valve Suppliers Trader in India, Get latest factory price for Auto Drain Valve . Call +91-9871118371, ✓Fast Delivery ✓Good Price ✓Premium Quality",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": true,
+    "pageType": "tech_spec",
+    "llmRan": true,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": true,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0,
+    "finalCurrency": "",
+    "finalTrack": "none",
+    "finalRequiresQuote": true,
+    "finalSupplierName": "V.S. Enterprises",
+    "finalDescription": "V.S. Enterprises leading Auto Drain Valve Manufacturers in Noida, Since 2013. Premium Quality Auto Drain Valve Suppliers Trader in India, Get latest factory price for Auto Drain Valve . Call +91-9871118371, ✓Fast Delivery ✓Good Price ✓Premium Quality",
+    "finalDelivery": "",
+    "finalEmail": "vsent7@gmail.com",
+    "finalPhone": "+91-9871118371",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "tech_spec",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "requires_quote",
+        "stored": true,
+        "extracted": true,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "INR",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "page_type",
+        "stored": "tech_spec",
+        "extracted": "tech_spec",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "V.S. Enterprises",
+        "extracted": "V.S. Enterprises",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "Compressed air systems work hard. But moisture and contaminants build up fast. That’s where an auto drain valve saves the day. At VS Enterprises, we supply reliable, easy-to-use auto drain valves to Traders in Noida, designed to keep your air system clean and efficient without manual effort. Our automatic drain valves quietly remove water, oil, and other waste from your air compressors, filters, and receivers. No constant checking. No system damage. Just simple, clean air.",
+        "extracted": "V.S. Enterprises leading Auto Drain Valve Manufacturers in Noida, Since 2013. Premium Quality Auto Drain Valve Suppliers Trader in India, Get latest factory price for Auto Drain Valve . Call +91-9871118371, ✓Fast Delivery ✓Good Price ✓Premium Quality",
+        "status": "≠"
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "vsent7@gmail.com",
+        "status": "+"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "+91-9871118371",
+        "extracted": "+91-9871118371",
+        "status": "="
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "Meets all specs",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "notes",
+        "stored": "No product page found",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 5,
+    "regressions": 3,
+    "verdict": "GENUINE_QUOTE_ONLY"
+  },
+  {
+    "id": 20,
+    "item_id": 6,
+    "host": "bray.com",
+    "url": "https://www.bray.com/valves-actuators-controls/ball-valves/flanged-valves/series-f15-f30-ball-valve",
+    "db_price": "0.0000",
+    "db_requires_quote": true,
+    "db_track": "llm",
+    "db_supplier_name": "Bray International",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "Series F15/F30 Flanged Floating Ball Valves are investment cast, ASME B16.34 Class 150 & Class 300 full port ball valves. They are available in a variety of optional trims and configurations, including V-ball control valve trims, and are used in virtually every industry across the globe. Series F15/F30 ball valves offer exceptional value and dependable operation across a wide range of service conditions in a rugged flanged ball valve design. ½” – 2” sizes feature Bray’s Smart Stem™ technology with integral live load packing. 2 ½” – 12” sizes utilize an independent packing gland which can be easily adjusted without removing mounting hardware or operator.",
+    "db_contact_email": "",
+    "db_contact_phone": "",
+    "db_available_qty": 0,
+    "db_compliance": "Meets all specs",
+    "db_notes": "Requires a quote for pricing and availability.",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "tech_spec",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 166067,
+    "raw": {
+      "jsonLdPrice": false,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": true,
+      "hasAnyPriceSignal": false
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "",
+    "manualPhone": "",
+    "manualQty": 0,
+    "structuredPrice": 0,
+    "structuredCurrency": "",
+    "metaSupplierName": "Default",
+    "metaDescription": "The Flow-Tek F15/F30 flanged ball valves is ideally suited for industrial applications, featuring a floating ball design for low torque and increased cycle.",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": true,
+    "pageType": "tech_spec",
+    "llmRan": true,
+    "llmPrice": 0,
+    "llmCurrency": "USD",
+    "llmRequiresQuote": true,
+    "llmSupplierName": "Bray International",
+    "llmDescription": "Ball Valve: Flanged Flow-Tek F15/F30 | Bray",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "Meets all specs",
+    "llmNotes": "No specific stock or price information available; requires a quote.",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": true,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0,
+    "finalCurrency": "USD",
+    "finalTrack": "llm",
+    "finalRequiresQuote": true,
+    "finalSupplierName": "Bray International",
+    "finalDescription": "Ball Valve: Flanged Flow-Tek F15/F30 | Bray",
+    "finalDelivery": "",
+    "finalEmail": "",
+    "finalPhone": "",
+    "finalQty": 0,
+    "finalCompliance": "Meets all specs",
+    "finalNotes": "No specific stock or price information available; requires a quote.",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "tech_spec",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "requires_quote",
+        "stored": true,
+        "extracted": true,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "USD",
+        "status": "="
+      },
+      {
+        "field": "page_type",
+        "stored": "tech_spec",
+        "extracted": "tech_spec",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "Bray International",
+        "extracted": "Bray International",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "Series F15/F30 Flanged Floating Ball Valves are investment cast, ASME B16.34 Class 150 & Class 300 full port ball valves. They are available in a variety of optional trims and configurations, including V-ball control valve trims, and are used in virtually every industry across the globe. Series F15/F30 ball valves offer exceptional value and dependable operation across a wide range of service conditions in a rugged flanged ball valve design. ½” – 2” sizes feature Bray’s Smart Stem™ technology with integral live load packing. 2 ½” – 12” sizes utilize an independent packing gland which can be easily adjusted without removing mounting hardware or operator.",
+        "extracted": "Ball Valve: Flanged Flow-Tek F15/F30 | Bray",
+        "status": "≠"
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "Meets all specs",
+        "extracted": "Meets all specs",
+        "status": "="
+      },
+      {
+        "field": "notes",
+        "stored": "Requires a quote for pricing and availability.",
+        "extracted": "No specific stock or price information available; requires a quote.",
+        "status": "≠"
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 2,
+    "regressions": 0,
+    "verdict": "GENUINE_QUOTE_ONLY"
+  },
+  {
+    "id": 21,
+    "item_id": 6,
+    "host": "flangegasketboltkits.com",
+    "url": "https://www.flangegasketboltkits.com/ansi-b16-34-fully-welded-ball-valve-1-2-24-inch-150-2500-lb.html",
+    "db_price": "0.0100",
+    "db_requires_quote": false,
+    "db_track": "structured",
+    "db_supplier_name": "China Topper",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "ANSI B16.34 Fully Welded Ball Valve Producer: API 6D, 1/2-24 Inch, Class 150-2500 LB, Carbon, Stainless, Alloy, Duplex Steel, Aluminium Bronze, BW Ends.",
+    "db_contact_email": "sales@flangegasketboltkits.com",
+    "db_contact_phone": "+86 592 5819200",
+    "db_available_qty": 0,
+    "db_compliance": "",
+    "db_notes": "[price match: low-confidence variant]",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 73489,
+    "raw": {
+      "jsonLdPrice": true,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": true,
+      "hasAnyPriceSignal": true
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "",
+    "manualPhone": "+86 592 5819200",
+    "manualQty": 0,
+    "structuredPrice": 0.01,
+    "structuredCurrency": "USD",
+    "metaSupplierName": "China Topper",
+    "metaDescription": "ANSI B16.34 Fully Welded Ball Valve Producer: API 6D, 1/2-24 Inch, Class 150-2500 LB, Carbon, Stainless, Alloy, Duplex Steel, Aluminium Bronze, BW Ends.",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": true,
+    "pageType": "product",
+    "llmRan": false,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": false,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0.01,
+    "finalCurrency": "USD",
+    "finalTrack": "structured",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "China Topper",
+    "finalDescription": "ANSI B16.34 Fully Welded Ball Valve Producer: API 6D, 1/2-24 Inch, Class 150-2500 LB, Carbon, Stainless, Alloy, Duplex Steel, Aluminium Bronze, BW Ends.",
+    "finalDelivery": "",
+    "finalEmail": "",
+    "finalPhone": "+86 592 5819200",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "product",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0.01,
+        "extracted": 0.01,
+        "status": "="
+      },
+      {
+        "field": "requires_quote",
+        "stored": false,
+        "extracted": false,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "USD",
+        "status": "="
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "product",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "China Topper",
+        "extracted": "China Topper",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "ANSI B16.34 Fully Welded Ball Valve Producer: API 6D, 1/2-24 Inch, Class 150-2500 LB, Carbon, Stainless, Alloy, Duplex Steel, Aluminium Bronze, BW Ends.",
+        "extracted": "ANSI B16.34 Fully Welded Ball Valve Producer: API 6D, 1/2-24 Inch, Class 150-2500 LB, Carbon, Stainless, Alloy, Duplex Steel, Aluminium Bronze, BW Ends.",
+        "status": "="
+      },
+      {
+        "field": "contact_email",
+        "stored": "sales@flangegasketboltkits.com",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "+86 592 5819200",
+        "extracted": "+86 592 5819200",
+        "status": "="
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "notes",
+        "stored": "[price match: low-confidence variant]",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 2,
+    "regressions": 2,
+    "verdict": "PRICE_STRUCTURED"
+  },
+  {
+    "id": 22,
+    "item_id": 6,
+    "host": "buyfittingsonline.com",
+    "url": "https://www.buyfittingsonline.com/wcb-carbon-steel-flanged-ball-valve-150-api-607-sm2515cff01-5",
+    "db_price": "40.0000",
+    "db_requires_quote": false,
+    "db_track": "manual",
+    "db_supplier_name": "BFO BuyFittingsOnline.com",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "FREE shipping over $99! Easy shop all stainless steel fittings, pipe fittings, flanges, valves, pipe nipples, camlocks & more.",
+    "db_contact_email": "",
+    "db_contact_phone": "",
+    "db_available_qty": 0,
+    "db_compliance": "",
+    "db_notes": "[price match: low-confidence variant]",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 500000,
+    "raw": {
+      "jsonLdPrice": true,
+      "microdataPrice": false,
+      "ogPrice": true,
+      "currencyNumCount": 11,
+      "currencyNumSamples": [
+        "$99",
+        "$450.30",
+        "$285.12",
+        "$185.67",
+        "$494.88",
+        "$860.46"
+      ],
+      "quoteCta": true,
+      "hasAnyPriceSignal": true
+    },
+    "manualPrice": 40,
+    "manualDelivery": "",
+    "manualEmail": "bfo@qmctechnologies.com",
+    "manualPhone": "",
+    "manualQty": 0,
+    "structuredPrice": 450.3,
+    "structuredCurrency": "USD",
+    "metaSupplierName": "BFO BuyFittingsOnline.com",
+    "metaDescription": "FREE shipping over $99! Easy shop all stainless steel fittings, pipe fittings, flanges, valves, pipe nipples, camlocks & more.",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": true,
+    "pageType": "tech_spec",
+    "llmRan": false,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": false,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 40,
+    "finalCurrency": "USD",
+    "finalTrack": "manual",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "BFO BuyFittingsOnline.com",
+    "finalDescription": "FREE shipping over $99! Easy shop all stainless steel fittings, pipe fittings, flanges, valves, pipe nipples, camlocks & more.",
+    "finalDelivery": "",
+    "finalEmail": "bfo@qmctechnologies.com",
+    "finalPhone": "",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "tech_spec",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 40,
+        "extracted": 40,
+        "status": "="
+      },
+      {
+        "field": "requires_quote",
+        "stored": false,
+        "extracted": false,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "USD",
+        "status": "="
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "tech_spec",
+        "status": "≠"
+      },
+      {
+        "field": "supplier_name",
+        "stored": "BFO BuyFittingsOnline.com",
+        "extracted": "BFO BuyFittingsOnline.com",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "FREE shipping over $99! Easy shop all stainless steel fittings, pipe fittings, flanges, valves, pipe nipples, camlocks & more.",
+        "extracted": "FREE shipping over $99! Easy shop all stainless steel fittings, pipe fittings, flanges, valves, pipe nipples, camlocks & more.",
+        "status": "="
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "bfo@qmctechnologies.com",
+        "status": "+"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "notes",
+        "stored": "[price match: low-confidence variant]",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 3,
+    "regressions": 1,
+    "verdict": "PRICE_MANUAL"
+  },
+  {
+    "id": 23,
+    "item_id": 6,
+    "host": "buyfittingsonline.com",
+    "url": "https://www.buyfittingsonline.com/wcb-carbon-steel-flanged-ball-valve-150-api-607-sm2515cff04",
+    "db_price": "40.0000",
+    "db_requires_quote": false,
+    "db_track": "manual",
+    "db_supplier_name": "BFO BuyFittingsOnline.com",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "FREE shipping over $99! Easy shop all stainless steel fittings, pipe fittings, flanges, valves, pipe nipples, camlocks & more.",
+    "db_contact_email": "",
+    "db_contact_phone": "",
+    "db_available_qty": 0,
+    "db_compliance": "",
+    "db_notes": "[price match: low-confidence variant]",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 500000,
+    "raw": {
+      "jsonLdPrice": true,
+      "microdataPrice": false,
+      "ogPrice": true,
+      "currencyNumCount": 11,
+      "currencyNumSamples": [
+        "$99",
+        "$1,703.94",
+        "$4,751.19",
+        "$494.88",
+        "$3,303.30",
+        "$285.12"
+      ],
+      "quoteCta": true,
+      "hasAnyPriceSignal": true
+    },
+    "manualPrice": 40,
+    "manualDelivery": "",
+    "manualEmail": "bfo@qmctechnologies.com",
+    "manualPhone": "",
+    "manualQty": 0,
+    "structuredPrice": 1703.94,
+    "structuredCurrency": "USD",
+    "metaSupplierName": "BFO BuyFittingsOnline.com",
+    "metaDescription": "FREE shipping over $99! Easy shop all stainless steel fittings, pipe fittings, flanges, valves, pipe nipples, camlocks & more.",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": true,
+    "pageType": "tech_spec",
+    "llmRan": false,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": false,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 40,
+    "finalCurrency": "USD",
+    "finalTrack": "manual",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "BFO BuyFittingsOnline.com",
+    "finalDescription": "FREE shipping over $99! Easy shop all stainless steel fittings, pipe fittings, flanges, valves, pipe nipples, camlocks & more.",
+    "finalDelivery": "",
+    "finalEmail": "bfo@qmctechnologies.com",
+    "finalPhone": "",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "tech_spec",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 40,
+        "extracted": 40,
+        "status": "="
+      },
+      {
+        "field": "requires_quote",
+        "stored": false,
+        "extracted": false,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "USD",
+        "status": "="
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "tech_spec",
+        "status": "≠"
+      },
+      {
+        "field": "supplier_name",
+        "stored": "BFO BuyFittingsOnline.com",
+        "extracted": "BFO BuyFittingsOnline.com",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "FREE shipping over $99! Easy shop all stainless steel fittings, pipe fittings, flanges, valves, pipe nipples, camlocks & more.",
+        "extracted": "FREE shipping over $99! Easy shop all stainless steel fittings, pipe fittings, flanges, valves, pipe nipples, camlocks & more.",
+        "status": "="
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "bfo@qmctechnologies.com",
+        "status": "+"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "notes",
+        "stored": "[price match: low-confidence variant]",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 3,
+    "regressions": 1,
+    "verdict": "PRICE_MANUAL"
+  },
+  {
+    "id": 24,
+    "item_id": 7,
+    "host": "taylorvalve.com",
+    "url": "https://taylorvalve.com/products/taylor-valve-products/safety-relief-valves/1500-series",
+    "db_price": "0.0000",
+    "db_requires_quote": false,
+    "db_track": "llm",
+    "db_supplier_name": "Taylor Valve Technology",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "8250 Series safety relief valves feature high endurance soft seat that guarantees bubble-tight seal for hundreds of “pops”.",
+    "db_contact_email": "",
+    "db_contact_phone": "",
+    "db_available_qty": 0,
+    "db_compliance": "",
+    "db_notes": "No product page found",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 238662,
+    "raw": {
+      "jsonLdPrice": false,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": false,
+      "hasAnyPriceSignal": false
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "",
+    "manualPhone": "",
+    "manualQty": 0,
+    "structuredPrice": 0,
+    "structuredCurrency": "",
+    "metaSupplierName": "Taylor Valve Technology",
+    "metaDescription": "8250 Series safety relief valves feature high endurance soft seat that guarantees bubble-tight seal for hundreds of “pops”.",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": false,
+    "pageType": "product",
+    "llmRan": true,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": true,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0,
+    "finalCurrency": "",
+    "finalTrack": "none",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "Taylor Valve Technology",
+    "finalDescription": "8250 Series safety relief valves feature high endurance soft seat that guarantees bubble-tight seal for hundreds of “pops”.",
+    "finalDelivery": "",
+    "finalEmail": "",
+    "finalPhone": "",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "product",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "requires_quote",
+        "stored": false,
+        "extracted": false,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "product",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "Taylor Valve Technology",
+        "extracted": "Taylor Valve Technology",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "8250 Series safety relief valves feature high endurance soft seat that guarantees bubble-tight seal for hundreds of “pops”.",
+        "extracted": "8250 Series safety relief valves feature high endurance soft seat that guarantees bubble-tight seal for hundreds of “pops”.",
+        "status": "="
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "notes",
+        "stored": "No product page found",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 2,
+    "regressions": 2,
+    "verdict": "NO_PRICE_NO_SIGNAL"
+  },
+  {
+    "id": 25,
+    "item_id": 8,
+    "host": "aircompressorservices.com",
+    "url": "https://aircompressorservices.com/products/zeks-purge-valve-repair-kit-replacement-630392",
+    "db_price": "205.5000",
+    "db_requires_quote": false,
+    "db_track": "structured",
+    "db_supplier_name": "Zeks",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "Made for Ingersoll Rand and Gardner Denver dryers and built to perform. The Zeks Purge Valve Repair Kit Replacement - 630392 is just one of many Zeks parts available at ACS to help keep your system running smoothly. Order today!",
+    "db_contact_email": "",
+    "db_contact_phone": "",
+    "db_available_qty": 0,
+    "db_compliance": "",
+    "db_notes": "",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 211761,
+    "raw": {
+      "jsonLdPrice": true,
+      "microdataPrice": false,
+      "ogPrice": true,
+      "currencyNumCount": 1,
+      "currencyNumSamples": [
+        "$205.50"
+      ],
+      "quoteCta": true,
+      "hasAnyPriceSignal": true
+    },
+    "manualPrice": 205.5,
+    "manualDelivery": "",
+    "manualEmail": "Info@AirCompressorServices.com",
+    "manualPhone": "877-592-9892",
+    "manualQty": 0,
+    "structuredPrice": 205.5,
+    "structuredCurrency": "USD",
+    "metaSupplierName": "Zeks",
+    "metaDescription": "Made for Ingersoll Rand and Gardner Denver dryers and built to perform. The Zeks Purge Valve Repair Kit Replacement - 630392 is just one of many Zeks parts available at ACS to help keep your system running smoothly. Order today!",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": true,
+    "pageType": "product",
+    "llmRan": false,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": false,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 205.5,
+    "finalCurrency": "USD",
+    "finalTrack": "manual",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "Zeks",
+    "finalDescription": "Made for Ingersoll Rand and Gardner Denver dryers and built to perform. The Zeks Purge Valve Repair Kit Replacement - 630392 is just one of many Zeks parts available at ACS to help keep your system running smoothly. Order today!",
+    "finalDelivery": "",
+    "finalEmail": "Info@AirCompressorServices.com",
+    "finalPhone": "877-592-9892",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "product",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 205.5,
+        "extracted": 205.5,
+        "status": "="
+      },
+      {
+        "field": "requires_quote",
+        "stored": false,
+        "extracted": false,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "USD",
+        "status": "="
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "product",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "Zeks",
+        "extracted": "Zeks",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "Made for Ingersoll Rand and Gardner Denver dryers and built to perform. The Zeks Purge Valve Repair Kit Replacement - 630392 is just one of many Zeks parts available at ACS to help keep your system running smoothly. Order today!",
+        "extracted": "Made for Ingersoll Rand and Gardner Denver dryers and built to perform. The Zeks Purge Valve Repair Kit Replacement - 630392 is just one of many Zeks parts available at ACS to help keep your system running smoothly. Order today!",
+        "status": "="
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "Info@AirCompressorServices.com",
+        "status": "+"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "",
+        "extracted": "877-592-9892",
+        "status": "+"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "notes",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 2,
+    "regressions": 0,
+    "verdict": "PRICE_MANUAL"
+  },
+  {
+    "id": 26,
+    "item_id": 8,
+    "host": "aircompressorstrade.com",
+    "url": "https://www.aircompressorstrade.com/collection/630392-38052932-genuine-original-ingersoll-rand-wch-1-1-2p-o-n-c",
+    "db_price": "2432.0000",
+    "db_requires_quote": false,
+    "db_track": "manual+llm",
+    "db_supplier_name": "Pudding Mechatronic (CPMC China)",
+    "db_currency": "USD",
+    "db_delivery_time": "1-1 weeks",
+    "db_description": "630392=38052932 Genuine Original Ingersoll Rand WCH 1 1/2P.O.N.C.",
+    "db_contact_email": "",
+    "db_contact_phone": "+8618080158435",
+    "db_available_qty": 0,
+    "db_compliance": "Meets all specs",
+    "db_notes": "[price match: low-confidence variant] Reliable China distribution network, international shipping available.",
+    "db_selling_unit": "per_unit",
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "blocked",
+    "httpStatus": 403,
+    "htmlLen": 0,
+    "raw": {
+      "jsonLdPrice": false,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": false,
+      "hasAnyPriceSignal": false
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "",
+    "manualPhone": "",
+    "manualQty": 0,
+    "structuredPrice": 0,
+    "structuredCurrency": "",
+    "metaSupplierName": "",
+    "metaDescription": "",
+    "metaHasName": false,
+    "metaHasDesc": false,
+    "detectedQuoteRequest": false,
+    "pageType": "-",
+    "llmRan": false,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": true,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0,
+    "finalCurrency": "",
+    "finalTrack": "none",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "",
+    "finalDescription": "",
+    "finalDelivery": "",
+    "finalEmail": "",
+    "finalPhone": "",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "-",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 2432,
+        "extracted": 0,
+        "status": "!"
+      },
+      {
+        "field": "requires_quote",
+        "stored": false,
+        "extracted": false,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "-",
+        "status": "≠"
+      },
+      {
+        "field": "supplier_name",
+        "stored": "Pudding Mechatronic (CPMC China)",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "bidder_description",
+        "stored": "630392=38052932 Genuine Original Ingersoll Rand WCH 1 1/2P.O.N.C.",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "+8618080158435",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "1-1 weeks",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "Meets all specs",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "notes",
+        "stored": "[price match: low-confidence variant] Reliable China distribution network, international shipping available.",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "selling_unit",
+        "stored": "per_unit",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 10,
+    "regressions": 9,
+    "verdict": "NO_PRICE_NO_SIGNAL"
+  },
+  {
+    "id": 27,
+    "item_id": 8,
+    "host": "wilhelmsen.com",
+    "url": "https://www.wilhelmsen.com/product-catalogue/products/welding/cold-repair-system/cold-repair-polymer-compounds/leak-stop-pipe-repair-iii",
+    "db_price": "0.0000",
+    "db_requires_quote": false,
+    "db_track": "llm",
+    "db_supplier_name": "Wilhelmsen",
+    "db_currency": "USD",
+    "db_delivery_time": "",
+    "db_description": "Water activated cold curing product for emergency repairs.",
+    "db_contact_email": "",
+    "db_contact_phone": "",
+    "db_available_qty": 0,
+    "db_compliance": "",
+    "db_notes": "No product page found",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "tech_spec",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 93325,
+    "raw": {
+      "jsonLdPrice": false,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": true,
+      "hasAnyPriceSignal": false
+    },
+    "manualPrice": 0,
+    "manualDelivery": "",
+    "manualEmail": "",
+    "manualPhone": "",
+    "manualQty": 0,
+    "structuredPrice": 0,
+    "structuredCurrency": "",
+    "metaSupplierName": "Wilhelmsen",
+    "metaDescription": "Water activated cold curing product for emergency repairs.",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": false,
+    "pageType": "tech_spec",
+    "llmRan": true,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": true,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0,
+    "finalCurrency": "",
+    "finalTrack": "none",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "Wilhelmsen",
+    "finalDescription": "Water activated cold curing product for emergency repairs.",
+    "finalDelivery": "",
+    "finalEmail": "",
+    "finalPhone": "",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "tech_spec",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "requires_quote",
+        "stored": false,
+        "extracted": false,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "page_type",
+        "stored": "tech_spec",
+        "extracted": "tech_spec",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "Wilhelmsen",
+        "extracted": "Wilhelmsen",
+        "status": "="
+      },
+      {
+        "field": "bidder_description",
+        "stored": "Water activated cold curing product for emergency repairs.",
+        "extracted": "Water activated cold curing product for emergency repairs.",
+        "status": "="
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "notes",
+        "stored": "No product page found",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 2,
+    "regressions": 2,
+    "verdict": "GENUINE_QUOTE_ONLY"
+  },
+  {
+    "id": 28,
+    "item_id": 9,
+    "host": "jiweivalve.en.made-in-china.com",
+    "url": "https://jiweivalve.en.made-in-china.com/product/XEIYhyWoCfRs/China-GOST-Cast-Steel-Wedge-Gate-Valve-Z41h-16c-Pn16.html",
+    "db_price": "9.0000",
+    "db_requires_quote": false,
+    "db_track": "manual+llm",
+    "db_supplier_name": "Hebei Jiwei Valve Trading Co., Ltd",
+    "db_currency": "USD",
+    "db_delivery_time": "3-3 weeks",
+    "db_description": "GOST Cast Steel Wedge Gate Valve Z41h-16c Pn16 | Customization: Available | Media: Water, Oil, Steam and Non-Corrosive Media | Temperature: Ordinary Temperature",
+    "db_contact_email": "",
+    "db_contact_phone": "",
+    "db_available_qty": 0,
+    "db_compliance": "Meets all specs",
+    "db_notes": "[price match: low-confidence variant] Fast delivery within 15 days. Provides OEM services.",
+    "db_selling_unit": "per_pack",
+    "db_pack_size": null,
+    "db_page_type": "tech_spec",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 214141,
+    "raw": {
+      "jsonLdPrice": true,
+      "microdataPrice": false,
+      "ogPrice": true,
+      "currencyNumCount": 22,
+      "currencyNumSamples": [
+        "$23.00",
+        "$ 23",
+        "$10.00",
+        "$9.00",
+        "$30.00",
+        "$26.00"
+      ],
+      "quoteCta": false,
+      "hasAnyPriceSignal": true
+    },
+    "manualPrice": 9,
+    "manualDelivery": "3-3 weeks",
+    "manualEmail": "",
+    "manualPhone": "",
+    "manualQty": 0,
+    "structuredPrice": 23,
+    "structuredCurrency": "USD",
+    "metaSupplierName": "Made-in-China.com",
+    "metaDescription": "Media: Water, Oil, Steam and Non-Corrosive Media Temperature: Ordinary Temperature Type: Dual-through Material: Carbon Steel Connection Form: Flange Pressure: Low Pressure",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": false,
+    "pageType": "tech_spec",
+    "llmRan": false,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": false,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 9,
+    "finalCurrency": "USD",
+    "finalTrack": "manual",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "Made-in-China.com",
+    "finalDescription": "Media: Water, Oil, Steam and Non-Corrosive Media Temperature: Ordinary Temperature Type: Dual-through Material: Carbon Steel Connection Form: Flange Pressure: Low Pressure",
+    "finalDelivery": "3-3 weeks",
+    "finalEmail": "",
+    "finalPhone": "",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "tech_spec",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 9,
+        "extracted": 9,
+        "status": "="
+      },
+      {
+        "field": "requires_quote",
+        "stored": false,
+        "extracted": false,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "USD",
+        "status": "="
+      },
+      {
+        "field": "page_type",
+        "stored": "tech_spec",
+        "extracted": "tech_spec",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "Hebei Jiwei Valve Trading Co., Ltd",
+        "extracted": "Made-in-China.com",
+        "status": "≠"
+      },
+      {
+        "field": "bidder_description",
+        "stored": "GOST Cast Steel Wedge Gate Valve Z41h-16c Pn16 | Customization: Available | Media: Water, Oil, Steam and Non-Corrosive Media | Temperature: Ordinary Temperature",
+        "extracted": "Media: Water, Oil, Steam and Non-Corrosive Media Temperature: Ordinary Temperature Type: Dual-through Material: Carbon Steel Connection Form: Flange Pressure: Low Pressure",
+        "status": "≠"
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "3-3 weeks",
+        "extracted": "3-3 weeks",
+        "status": "="
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "Meets all specs",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "notes",
+        "stored": "[price match: low-confidence variant] Fast delivery within 15 days. Provides OEM services.",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "selling_unit",
+        "stored": "per_pack",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 5,
+    "regressions": 3,
+    "verdict": "PRICE_MANUAL"
+  },
+  {
+    "id": 29,
+    "item_id": 9,
+    "host": "okorder.com",
+    "url": "https://www.okorder.com/p/gate-valve-cast-steel-pn16-z41h-16c-high-quality_671668.html",
+    "db_price": "0.0000",
+    "db_requires_quote": true,
+    "db_track": "llm",
+    "db_supplier_name": "Okorder.com",
+    "db_currency": "USD",
+    "db_delivery_time": "5-5 weeks",
+    "db_description": "Gate Valve Cast Steel PN16 Z41H-16C High Quality",
+    "db_contact_email": "",
+    "db_contact_phone": "",
+    "db_available_qty": 0,
+    "db_compliance": "Meets all specs",
+    "db_notes": "No product page found",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 163250,
+    "raw": {
+      "jsonLdPrice": false,
+      "microdataPrice": false,
+      "ogPrice": false,
+      "currencyNumCount": 0,
+      "currencyNumSamples": [],
+      "quoteCta": false,
+      "hasAnyPriceSignal": false
+    },
+    "manualPrice": 0,
+    "manualDelivery": "5-5 weeks",
+    "manualEmail": "",
+    "manualPhone": "+86 10-6879-6519",
+    "manualQty": 0,
+    "structuredPrice": 0,
+    "structuredCurrency": "",
+    "metaSupplierName": "",
+    "metaDescription": "Gate Valve Cast Steel PN16 Z41H-16C High Quality - Buy Gate Valve from suppliers, Manufacturers - Okorder.com",
+    "metaHasName": false,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": true,
+    "pageType": "product",
+    "llmRan": true,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": true,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 0,
+    "finalCurrency": "",
+    "finalTrack": "none",
+    "finalRequiresQuote": true,
+    "finalSupplierName": "",
+    "finalDescription": "Gate Valve Cast Steel PN16 Z41H-16C High Quality - Buy Gate Valve from suppliers, Manufacturers - Okorder.com",
+    "finalDelivery": "5-5 weeks",
+    "finalEmail": "",
+    "finalPhone": "+86 10-6879-6519",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "product",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "requires_quote",
+        "stored": true,
+        "extracted": true,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "product",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "Okorder.com",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "bidder_description",
+        "stored": "Gate Valve Cast Steel PN16 Z41H-16C High Quality",
+        "extracted": "Gate Valve Cast Steel PN16 Z41H-16C High Quality - Buy Gate Valve from suppliers, Manufacturers - Okorder.com",
+        "status": "≠"
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "",
+        "extracted": "+86 10-6879-6519",
+        "status": "+"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "5-5 weeks",
+        "extracted": "5-5 weeks",
+        "status": "="
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "Meets all specs",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "notes",
+        "stored": "No product page found",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 6,
+    "regressions": 4,
+    "verdict": "GENUINE_QUOTE_ONLY"
+  },
+  {
+    "id": 30,
+    "item_id": 9,
+    "host": "bodavalve.en.made-in-china.com",
+    "url": "https://bodavalve.en.made-in-china.com/product/YEkpKTXdqQrG/China-Z41h-16c-DN150-Carbon-Steel-Body-Hard-Seal-Flange-Connection-Casting-Manual-Electric-Pneumatic-Stainless-Steel-Carbon-Steel-Ss-CF8-Wcb-Flange-Wedge-Gate-Valve.html",
+    "db_price": "0.9500",
+    "db_requires_quote": false,
+    "db_track": "manual+llm",
+    "db_supplier_name": "Boda Valve",
+    "db_currency": "USD",
+    "db_delivery_time": "4-6 weeks",
+    "db_description": "Z41h-16c DN150 Carbon Steel Body Hard Seal Flange Connection Casting Manual Electric/Pneumatic Stainless Steel/Carbon Steel/Ss CF8/Wcb Flange Wedge Gate Valve",
+    "db_contact_email": "",
+    "db_contact_phone": "",
+    "db_available_qty": 0,
+    "db_compliance": "Meets all specs",
+    "db_notes": "[price match: low-confidence variant] No stock quantity or price stated; requires quote.",
+    "db_selling_unit": null,
+    "db_pack_size": null,
+    "db_page_type": "product",
+    "liveStatus": "live",
+    "httpStatus": 200,
+    "htmlLen": 175098,
+    "raw": {
+      "jsonLdPrice": true,
+      "microdataPrice": false,
+      "ogPrice": true,
+      "currencyNumCount": 24,
+      "currencyNumSamples": [
+        "$120.00",
+        "$115.00",
+        "$110.00",
+        "$100.00",
+        "$80.00",
+        "$5.50"
+      ],
+      "quoteCta": false,
+      "hasAnyPriceSignal": true
+    },
+    "manualPrice": 4,
+    "manualDelivery": "",
+    "manualEmail": "",
+    "manualPhone": "",
+    "manualQty": 0,
+    "structuredPrice": 100,
+    "structuredCurrency": "USD",
+    "metaSupplierName": "Zhejiang Boda Valve Manufacturing Co., Ltd",
+    "metaDescription": "Z41h-16c DN150 Carbon Steel Body Hard Seal Flange Connection Casting Manual Electric/Pneumatic Stainless Steel/Carbon Steel/Ss CF8/Wcb Flange Wedge Gate Valve, Find Details and Price about Flange Gate Valve and High Pressure Valve from Zhejiang Boda Valve Manufacturing Co., Ltd.",
+    "metaHasName": true,
+    "metaHasDesc": true,
+    "detectedQuoteRequest": false,
+    "pageType": "product",
+    "llmRan": false,
+    "llmPrice": 0,
+    "llmCurrency": "",
+    "llmRequiresQuote": false,
+    "llmSupplierName": "",
+    "llmDescription": "",
+    "llmDelivery": "",
+    "llmEmail": "",
+    "llmPhone": "",
+    "llmQty": 0,
+    "llmCompliance": "",
+    "llmNotes": "",
+    "llmSellingUnit": "",
+    "llmPackSize": 0,
+    "visionRan": false,
+    "visionPrice": 0,
+    "visionCurrency": "",
+    "finalPrice": 4,
+    "finalCurrency": "USD",
+    "finalTrack": "manual",
+    "finalRequiresQuote": false,
+    "finalSupplierName": "Zhejiang Boda Valve Manufacturing Co., Ltd",
+    "finalDescription": "Z41h-16c DN150 Carbon Steel Body Hard Seal Flange Connection Casting Manual Electric/Pneumatic Stainless Steel/Carbon Steel/Ss CF8/Wcb Flange Wedge Gate Valve, Find Details and Price about Flange Gate Valve and High Pressure Valve from Zhejiang Boda Valve Manufacturing Co., Ltd.",
+    "finalDelivery": "",
+    "finalEmail": "",
+    "finalPhone": "",
+    "finalQty": 0,
+    "finalCompliance": "",
+    "finalNotes": "",
+    "finalSellingUnit": "",
+    "finalPackSize": 0,
+    "finalPageType": "product",
+    "diffs": [
+      {
+        "field": "bidder_unit_price",
+        "stored": 0.95,
+        "extracted": 4,
+        "status": "≠"
+      },
+      {
+        "field": "requires_quote",
+        "stored": false,
+        "extracted": false,
+        "status": "="
+      },
+      {
+        "field": "currency_code",
+        "stored": "USD",
+        "extracted": "USD",
+        "status": "="
+      },
+      {
+        "field": "page_type",
+        "stored": "product",
+        "extracted": "product",
+        "status": "="
+      },
+      {
+        "field": "supplier_name",
+        "stored": "Boda Valve",
+        "extracted": "Zhejiang Boda Valve Manufacturing Co., Ltd",
+        "status": "≠"
+      },
+      {
+        "field": "bidder_description",
+        "stored": "Z41h-16c DN150 Carbon Steel Body Hard Seal Flange Connection Casting Manual Electric/Pneumatic Stainless Steel/Carbon Steel/Ss CF8/Wcb Flange Wedge Gate Valve",
+        "extracted": "Z41h-16c DN150 Carbon Steel Body Hard Seal Flange Connection Casting Manual Electric/Pneumatic Stainless Steel/Carbon Steel/Ss CF8/Wcb Flange Wedge Gate Valve, Find Details and Price about Flange Gate Valve and High Pressure Valve from Zhejiang Boda Valve Manufacturing Co., Ltd.",
+        "status": "≠"
+      },
+      {
+        "field": "contact_email",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "contact_phone",
+        "stored": "",
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "delivery_time",
+        "stored": "4-6 weeks",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "available_qty",
+        "stored": 0,
+        "extracted": 0,
+        "status": "?"
+      },
+      {
+        "field": "compliance_deviation",
+        "stored": "Meets all specs",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "notes",
+        "stored": "[price match: low-confidence variant] No stock quantity or price stated; requires quote.",
+        "extracted": "",
+        "status": "!"
+      },
+      {
+        "field": "selling_unit",
+        "stored": null,
+        "extracted": "",
+        "status": "?"
+      },
+      {
+        "field": "pack_size",
+        "stored": null,
+        "extracted": 0,
+        "status": "?"
+      }
+    ],
+    "diffCount": 6,
+    "regressions": 3,
+    "verdict": "PRICE_MANUAL"
+  }
+]
