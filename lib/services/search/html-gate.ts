@@ -1,6 +1,4 @@
-/* ========================================================================
-   HTML Gate: Fast RegEx-based product page detection & price extraction
-   ======================================================================== */
+/** HTML gate: fast regex product page detection and price extraction. */
 
 export interface MicrodataPrice {
   value: number;
@@ -11,48 +9,44 @@ export interface MicrodataPrice {
 // Detects Schema.org Product itemtype (case-insensitive, http/https).
 const productItemtypePattern = /itemtype\s*=\s*["']https?:\/\/schema\.org\/Product["']/i;
 
-// Detects Open Graph product type (case-insensitive, any quote style).
+// Detects Open Graph product type.
 const ogProductPattern = /<meta\s+property\s*=\s*["']og:type["']\s+content\s*=\s*["']product["']/i;
 
-// Detects Schema.org price property (case-insensitive, any quote style).
-// Bounded: matches up to 100 chars, allowing for attribute variations.
+// Detects Schema.org price property.
 const itempropPricePattern = /itemprop\s*=\s*["']price["']/i;
 
-// Homepage title detection: rejects if title contains Home|Homepage|Welcome|Index (case-insensitive).
-// Bounded: captures title content within first 500 chars, expects closing tag within 100 chars.
+// Rejects title containing Home|Homepage|Welcome|Index.
 const homepageTitlePattern = /<title[^>]{0,100}>(Home|Homepage|Welcome|Index)[^<]{0,100}<\/title>/i;
 
-// Meta itemprop="price" with content attribute. Bounded: up to 100 chars between meta tag markers.
+// Meta itemprop="price" with content attribute.
 const metaIttempropPricePattern = /<meta\s+itemprop\s*=\s*["']price["']\s+content\s*=\s*["']([^"']{0,50})["']/i;
 
-// Open Graph product:price:amount. Bounded: up to 100 chars between meta tag markers.
+// Open Graph product:price:amount.
 const ogPriceAmountPattern = /<meta\s+property\s*=\s*["']product:price:amount["']\s+content\s*=\s*["']([^"']{0,50})["']/i;
 
-// Schema.org inline price in span. Bounded: up to 100 chars between span tags.
+// Schema.org inline price in span.
 const spanPricePattern = /<span[^>]{0,100}itemprop\s*=\s*["']price["'][^>]{0,100}>\s*([^<]{0,50})<\/span>/i;
 
-// Currency detection patterns for priceCurrency. Bounded: up to 200 chars to find sibling.
+// Currency from priceCurrency itemprop.
 const priceCurrencyPattern = /itemprop\s*=\s*["']priceCurrency["']\s+content\s*=\s*["']([A-Z]{2,3})["']/i;
 
-// Open Graph currency pattern. Bounded: up to 200 chars to find sibling.
+// Currency from Open Graph property.
 const ogCurrencyPattern = /property\s*=\s*["']product:price:currency["']\s+content\s*=\s*["']([A-Z]{2,3})["']/i;
 
 /**
- * isLikelyProductPage: Fast gate to reject non-product pages via RegEx.
- *
- * Operates on first 16384 chars (signal density highest at top).
- * Returns true if Product schema detected, unless title is a homepage.
- * Default false (safe rejection for ambiguous pages).
+ * Fast gate to reject non-product pages via regex.
+ * Operates on first 16384 chars. Returns true if Product schema detected,
+ * unless title looks like a homepage.
  */
 export function isLikelyProductPage(html: string): boolean {
   const chunk = html.slice(0, 16384);
 
-  // Short-circuit: if title looks like homepage, reject even if Product schema present.
+  // Reject if title looks like homepage, even with Product schema.
   if (homepageTitlePattern.test(chunk)) {
     return false;
   }
 
-  // Return true if any product signal is detected.
+  // True if any product signal detected.
   return (
     productItemtypePattern.test(chunk) ||
     ogProductPattern.test(chunk) ||
@@ -61,11 +55,9 @@ export function isLikelyProductPage(html: string): boolean {
 }
 
 /**
- * extractMicrodataPrice: Extract price and currency from microdata patterns.
- *
- * Operates on first 16384 chars.
- * Tries patterns in order: meta itemprop, og:price, span inline.
- * Attempts to find currency sibling; returns null if price is invalid.
+ * Extract price and currency from microdata patterns.
+ * Operates on first 16384 chars. Tries meta itemprop, og:price, span inline.
+ * Returns null if price is missing or invalid.
  */
 export function extractMicrodataPrice(html: string): MicrodataPrice | null {
   const chunk = html.slice(0, 16384);
@@ -94,12 +86,11 @@ export function extractMicrodataPrice(html: string): MicrodataPrice | null {
     }
   }
 
-  // If no price found, return null.
   if (!priceStr) {
     return null;
   }
 
-  // Parse numeric value: strip commas, parseFloat.
+  // Strip commas, then parse float.
   const cleanedPrice = priceStr.replace(/,/g, '');
   const value = parseFloat(cleanedPrice);
 
@@ -108,7 +99,7 @@ export function extractMicrodataPrice(html: string): MicrodataPrice | null {
     return null;
   }
 
-  // Attempt to find currency.
+  // Attempt to find currency sibling.
   let currency: string | undefined;
   let currencyMatch = chunk.match(priceCurrencyPattern);
   if (currencyMatch && currencyMatch[1]) {

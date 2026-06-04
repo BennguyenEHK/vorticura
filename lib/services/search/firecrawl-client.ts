@@ -1,37 +1,21 @@
-/* ========================================================================
-   Firecrawl Client — L2 HTML source for the structured extraction layer.
-
-   Wraps Firecrawl scrape to return the JS-rendered HTML and parsed metadata
-   for a single URL. Used in supplier-search-actions.ts after the L0 liveness
-   check to provide a richer HTML source for L2 (extractFromHtml).
-
-   Why Firecrawl for L2:
-     • Bot-protected pages (403 on direct fetch) are accessible via Firecrawl.
-     • JS-rendered price containers (data-price-amount) appear in the DOM after
-       JS execution, which a basic fetch misses but Firecrawl captures.
-     • <meta> tags are pre-parsed into a structured metadata object, usable
-       directly by extractMetaFromFirecrawl() without cheerio.
-
-   Env gate: FIRECRAWL_API_KEY — if absent, firecrawlFetch() returns null
-   immediately so the caller falls back to live.html without any latency cost.
-   ======================================================================== */
+// Firecrawl client — JS-rendered HTML for Layer 2 extraction.
 
 import { Firecrawl, type DocumentMetadata } from 'firecrawl';
 
-// Re-export DocumentMetadata so callers don't depend on firecrawl directly.
+// Re-export so callers don't depend on firecrawl directly.
 export type { DocumentMetadata as FirecrawlMeta };
 
 export interface FirecrawlResult {
-  /** JS-rendered page HTML — passed to extractFromHtml (L2). */
+  /** JS-rendered HTML — passed to extractFromHtml (L2). */
   html: string;
-  /** Pre-parsed OG / meta fields — passed to extractMetaFromFirecrawl. */
+  /** Pre-parsed OG / meta fields. */
   meta: DocumentMetadata;
 }
 
-/** Timeout for Firecrawl scrape calls. Default 15 s — enough for a JS-heavy page. */
+/** Firecrawl scrape timeout (default 15 s). */
 const FIRECRAWL_TIMEOUT_MS = Number(process.env.FIRECRAWL_TIMEOUT_MS ?? 15_000);
 
-// Singleton client — instantiated once, reused across calls.
+// Singleton client reused across calls.
 let _client: Firecrawl | null = null;
 
 function getClient(): Firecrawl | null {
@@ -46,15 +30,9 @@ function safeHost(url: string): string {
 }
 
 /**
- * Scrape a URL via Firecrawl and return its rendered HTML + parsed metadata.
- *
- * Returns null when:
- *   - FIRECRAWL_API_KEY is not set (silently off, caller uses liveness html)
- *   - Firecrawl returns no html field
- *   - API error or timeout (FIRECRAWL_TIMEOUT_MS, default 15 s)
- *
- * Never throws — all errors are caught and logged at warn level.
- * The caller (supplier-search-actions.ts) falls back to live.html on null.
+ * Scrape URL via Firecrawl; return rendered HTML + metadata.
+ * Returns null when key absent, no html, or on timeout/error.
+ * Never throws.
  */
 export async function firecrawlFetch(url: string): Promise<FirecrawlResult | null> {
   const client = getClient();

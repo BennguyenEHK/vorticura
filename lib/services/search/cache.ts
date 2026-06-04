@@ -1,30 +1,15 @@
-// =============================================
-// SEARCH CACHE — Upstash Redis (key: search:<sha1(query)>)
-// =============================================
-// Reuses the existing Upstash DB. The 'search:' prefix prevents collision
-// with event-bus's 'qfa:' channel namespace.
-//
-// TTL is configurable via SEARCH_CACHE_TTL_SECONDS (default 7 days). Tavily
-// answers are stable for our use-case (supplier pages don't change hourly),
-// so a long TTL drops API spend dramatically without harming freshness.
+// Search cache backed by Upstash Redis (key: search:v3:<sha1(query)>).
+// TTL configurable via SEARCH_CACHE_TTL_SECONDS (default 7 days).
 
 import { createHash } from 'crypto';
 import { getSearchRedis } from './redis-client';
 import type { TavilySnippet } from './tavily-client';
 
-// v2 bump: previous "search:" entries were keyed off full-text Tavily queries
-// that pasted the entire company_description into the search. Those entries
-// poisoned the cache. The v2 namespace orphans them so they TTL out naturally
-// while the new semantic-tier cache fills up clean.
-//
-// v3 bump: an evaluation run cached empty or low-quality Tavily results under v2.
-// With 7-day TTL, these stale entries will poison subsequent queries on the same
-// namespaces. The v3 namespace forces fresh lookups going forward.
+// v3 bump: orphans stale low-quality v2 entries to TTL out naturally.
 const CACHE_PREFIX = 'search:v3:';
-const DEFAULT_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days — matches the doc spec
+const DEFAULT_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
-// Stable, short cache key — sha1 keeps the key length predictable regardless
-// of query length (URL-encoded queries can run hundreds of chars otherwise).
+// sha1 keeps key length predictable regardless of query length.
 function cacheKey(query: string): string {
   return CACHE_PREFIX + createHash('sha1').update(query).digest('hex');
 }
@@ -35,8 +20,8 @@ function ttlSeconds(): number {
 }
 
 /**
- * Returns cached Tavily snippets for `query`, or null on miss / cache outage.
- * Never throws — cache failures must NOT break the search pipeline.
+ * Returns cached Tavily snippets for `query`, or null on miss/outage.
+ * Never throws — cache failures must not break the search pipeline.
  */
 export async function getCachedSearch(query: string): Promise<TavilySnippet[] | null> {
   const redis = getSearchRedis();
@@ -52,15 +37,14 @@ export async function getCachedSearch(query: string): Promise<TavilySnippet[] | 
 }
 
 /**
- * Store snippets under the query key with the configured TTL. Fire-and-forget
- * — caller should not await this on the critical path (we still await here
- * so errors are caught, but the orchestrator can choose to ignore the result).
+ * Store snippets under the query key with configured TTL.
+ * Fire-and-forget safe — orchestrator may ignore the returned promise.
  */
 export async function setCachedSearch(query: string, results: TavilySnippet[]): Promise<void> {
   const redis = getSearchRedis();
   if (!redis) return;
   try {
-    // SETEX = SET with TTL atomically; no race window where the key sits without an expiry.
+    // SETEX sets key + TTL atomically; no window where key lacks expiry.
     await redis.setex(cacheKey(query), ttlSeconds(), JSON.stringify(results));
   } catch (err) {
     console.warn('[search-cache] SETEX failed:', err instanceof Error ? err.message : err);

@@ -1,12 +1,5 @@
-// =============================================
-// SEARCH WEB — single-query search with cache + relevance gate
-// =============================================
-// Public entrypoint for the RAG pipeline. Executes one Tavily query,
-// applies a cache-first strategy, filters results through the product-page
-// relevance gate, and deduplicates by URL.
-//
-// One searchOneQuery() call per composed query string. The supplier-search
-// action is responsible for query construction and concurrency management.
+// Search web — single-query search with cache + relevance gate.
+// One searchOneQuery() call per composed query string.
 
 import pLimit from 'p-limit';
 import { tavilySearch, type TavilySnippet } from './tavily-client';
@@ -20,42 +13,32 @@ import {
 } from './product-page-scorer';
 import { eliminatePage } from './eliminate';
 
-// Re-export ScorerSpec so the orchestrator can import it alongside searchOneQuery.
+// Re-export ScorerSpec so orchestrator can import alongside searchOneQuery.
 export type { ScorerSpec, DetectedFieldMap, PageType };
 
-// ---------------------------------------------
-// Global Tavily concurrency cap
-// ---------------------------------------------
-// The orchestrator runs items through pLimit(RAG_CONCURRENCY); within an item
-// the density loop walks queries sequentially. This module-level limiter is the
-// ABSOLUTE ceiling on simultaneous live Tavily calls across ALL items, so a
-// burst of concurrent items can't overrun Tavily's (free-tier) rate limit.
+// --- Global Tavily concurrency cap ---
+// Module-level limiter: absolute ceiling on simultaneous live Tavily calls.
 // Cache hits bypass the limiter — only live round-trips are gated.
 const SEARCH_QUERY_CONCURRENCY = Number(process.env.SEARCH_QUERY_CONCURRENCY ?? 6);
 const tavilyLimit = pLimit(SEARCH_QUERY_CONCURRENCY);
 
-// Re-export TavilySnippet for consumers that import it from this module.
+// Re-export TavilySnippet for consumers that import from this module.
 export type { TavilySnippet };
 
-// ---------------------------------------------
-// QueryItem — local type (formerly re-exported from query-builder)
-// ---------------------------------------------
+// --- QueryItem ---
 
-/** One item from an RFQ line, used to drive query construction upstream. */
+/** One RFQ line item, used to drive query construction upstream. */
 export interface QueryItem {
   description: string;
   qty?: number;
   uom?: string;
 }
 
-// ---------------------------------------------
-// SearchResult — return type for searchOneQuery
-// ---------------------------------------------
+// --- SearchResult ---
 
 /**
- * One survivor candidate: the snippet plus the per-page signals the redesigned
- * extractor needs — its relevance score, the detected-field map (drives manual
- * extraction), and its page classification (product vs tech-spec).
+ * One survivor candidate: snippet plus per-page signals for the extractor —
+ * relevance score, detected-field map, and page classification.
  */
 export interface ScoredCandidate {
   snippet: TavilySnippet;
@@ -67,26 +50,17 @@ export interface ScoredCandidate {
 export interface SearchResult {
   /** Verified, deduplicated product-page snippets (ranked best-first). */
   snippets: TavilySnippet[];
-  /** Same survivors as `snippets`, enriched with per-page detected-map + pageType. */
+  /** Survivors enriched with detected-map + pageType. */
   candidates: ScoredCandidate[];
-  /** Number of live Tavily API calls made (0 = cache hit, 1 = cache miss). */
+  /** Live Tavily API calls made (0 = cache hit, 1 = cache miss). */
   tavilyCalls: number;
 }
 
-// ---------------------------------------------
-// Persist-gate URL guard — shared with the orchestrator
-// ---------------------------------------------
-// Candidate filtering at SEARCH time is now done by the weighted scorer
-// (product-page-scorer.ts), which keeps ugly-slug product pages, PDFs and
-// distributor listings that the old binary reject-list wrongly dropped.
-//
-// This function survives only as the lightweight PERSIST-time guard: after the
-// LLM has extracted a row, it defends against a hallucinated source_url (empty
-// string or a bare homepage). It deliberately stays loose — anything that
-// already passed the scorer should pass here too.
+// --- Persist-gate URL guard ---
+// Lightweight guard applied AFTER LLM extraction to reject hallucinated URLs.
+// Stays deliberately loose — anything passing the scorer should pass here.
 
-// Editorial / account / transactional surfaces that are never a product source,
-// even if the LLM emits them. Kept intentionally small (scorer is the real gate).
+// Surfaces never a valid product source — kept intentionally small.
 const HARD_JUNK_PREFIXES = [
   '/search', '/blog', '/news', '/about', '/about-us', '/contact',
   '/login', '/signin', '/account', '/cart', '/checkout',
@@ -98,17 +72,15 @@ const HARD_JUNK_INCLUDES = [
 ];
 
 /**
- * True when the URL is structurally usable as a persisted product source:
- * a non-empty, parseable URL with a real path that isn't a bare homepage or an
- * obvious editorial/account surface. PDFs, distributor listings and ugly-slug
- * product pages (e.g. /kf941.html, /pid=12984) all pass — the scorer already
- * vetted relevance upstream.
+ * True when URL is usable as a persisted product source:
+ * non-empty, parseable, real path, not a homepage or editorial surface.
+ * PDFs, distributor listings, ugly-slug pages all pass.
  */
 export function isProductPage(url: string): boolean {
   if (!url) return false;
   try {
     const u = new URL(url);
-    // Reject bare domains / homepages — a "/" pathname is never a product page.
+    // Reject bare domains — "/" pathname is never a product page.
     if (u.pathname.length <= 1) return false;
 
     const path = u.pathname.toLowerCase();
@@ -121,38 +93,26 @@ export function isProductPage(url: string): boolean {
   }
 }
 
-// ---------------------------------------------
-// Public API — single-query search
-// ---------------------------------------------
+// --- Public API: single-query search ---
 
 /**
- * Execute one search query (cache-first), score each result with the weighted
- * product-page classifier, drop everything below KEEP_THRESHOLD, dedup by URL,
- * and return the survivors ranked best-first.
+ * Execute one search query (cache-first), score results, drop below threshold,
+ * dedup by URL, and return survivors ranked best-first.
  *
  * @param query        Composed search string (LLM-planned upstream).
- * @param spec         Parsed RFQ specification (model/size/class/…) used by the
- *                     scorer for exact-model + spec-density signals. Optional.
- * @param requiredQty  The RFQ item's required quantity — drives the pre-extraction
- *                     elimination of pages whose stated stock can't fulfil it.
+ * @param spec         Parsed RFQ spec for exact-model + spec-density signals.
+ * @param requiredQty  RFQ item quantity — used to eliminate under-stocked pages.
  *
- * Pipeline per candidate: classify (2a) → eliminate (2b) → score (2c). Survivors
- * carry their detected-field map + page classification for the hybrid extractor.
- *
- * Cache hit  → tavilyCalls = 0.
- * Cache miss → tavilyCalls = 1 (even if the Tavily call throws).
- *
- * Never throws — a Tavily error returns an empty result so the caller can decide
- * how to handle missing results.
+ * Pipeline per candidate: classify (2a) → eliminate (2b) → score (2c).
+ * Cache hit → tavilyCalls = 0. Cache miss → tavilyCalls = 1.
+ * Never throws — Tavily error returns empty result.
  */
 export async function searchOneQuery(
   query: string,
   spec: ScorerSpec = {},
   requiredQty: number = 0,
-  // rawCandidates: bypass the product-page GATE (eliminate + score-threshold) and
-  // return every deduped snippet, still ranked by score. Used by non-product search
-  // paths (e.g. the contact-recovery loopback) that want supplier CONTACT pages,
-  // which the product-page scorer would otherwise drop below KEEP_THRESHOLD.
+  // rawCandidates: bypass product-page gate; return all deduped snippets ranked.
+  // Used by contact-recovery loopback (needs supplier contact pages).
   opts: { rawCandidates?: boolean } = {},
 ): Promise<SearchResult> {
   // (1) Cache-first lookup.
@@ -171,12 +131,11 @@ export async function searchOneQuery(
       );
       return { snippets: [], candidates: [], tavilyCalls: 1 };
     }
-    // Cache even empty arrays — saves Tavily quota on known-bad queries.
+    // Cache empty arrays too — saves quota on known-bad queries.
     await setCachedSearch(query, snippets);
   }
 
-  // (2) Classify → eliminate → score → dedup. acc is keyed by URL so duplicates
-  // collapse, keeping the highest-scoring occurrence.
+  // (2) Classify → eliminate → score → dedup. Keyed by URL; keep highest score.
   const acc = new Map<string, ScoredCandidate>();
 
   for (const snippet of snippets) {
@@ -185,9 +144,8 @@ export async function searchOneQuery(
     // 2a CLASSIFY — product page vs tech-spec document.
     const pageType = classifyPage(snippet);
 
-    // 2b ELIMINATE — drop out-of-stock / can't-fulfil-qty / non-product pages
-    //    BEFORE the expensive scoring + extraction. Unknown always bypasses.
-    //    Skipped for rawCandidates (contact search isn't looking for product pages).
+    // 2b ELIMINATE — drop out-of-stock / unfulfillable / non-product pages.
+    //    Skipped for rawCandidates (contact search ignores product gate).
     if (!opts.rawCandidates) {
       const elim = eliminatePage(
         { url: snippet.url, title: snippet.title, content: snippet.content || snippet.snippet || '' },
@@ -196,10 +154,8 @@ export async function searchOneQuery(
       if (elim.eliminated) continue;
     }
 
-    // 2c SCORE — weighted relevance; keep only at/above KEEP_THRESHOLD. The
-    //    scorer also emits the detected-field map the hybrid extractor consumes.
-    //    rawCandidates keeps every page (still scored, for ranking) — the contact
-    //    loopback needs supplier contact pages the product gate would reject.
+    // 2c SCORE — keep at/above KEEP_THRESHOLD. Scorer emits detected-field map.
+    //    rawCandidates keeps every page (still scored for ranking).
     const { score, kept, detected } = scoreProductPage(snippet, spec);
     if (!kept && !opts.rawCandidates) continue;
 
@@ -209,8 +165,7 @@ export async function searchOneQuery(
     }
   }
 
-  // (3) Rank best-first so the strongest product pages lead — this front-loads
-  //     the hybrid extractor and the density loop's TARGET_SOURCES cap.
+  // (3) Rank best-first to front-load extractor and density loop TARGET_SOURCES cap.
   const candidates = Array.from(acc.values()).sort((a, b) => b.score - a.score);
   const ranked = candidates.map((c) => c.snippet);
 

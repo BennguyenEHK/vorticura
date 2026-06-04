@@ -1,23 +1,6 @@
-// =============================================
-// SUPPLIER MEMORY — L0 exact-match learned cache (search Tier-0)
-// =============================================
-// Read/write helpers for the supplier_memory table: a normalized RFQ spec
-// (spec_hash) → previously-verified supplier row. On a FRESH exact hit the
-// orchestrator returns the stored suppliers and skips the entire live pipeline
-// (no Tavily search, no LLM planning/extraction).
-//
-// Scope of THIS module (Phase 2, first cut):
-//   • L0 exact-match read (fresh-only) + write (upsert).
-// Deferred (provisioned but not yet wired — see the design spec §3.3/§3.4):
-//   • L1 pgvector near-match seeding.
-//   • verify-on-stale (re-extract the stored URL with 1 LLM call, no web search).
-//     Until that lands, a STALE hit is treated as a miss and re-sourced live,
-//     which transparently refreshes the row — correct, just not yet optimal.
-//
-// Gated by SEARCH_MEMORY_ENABLED so the read path can be killed instantly if a
-// poisoned/stale entry ever surfaces; writes can run while reads are disabled
-// ("shadow" warm-up). Every DB call is wrapped — a memory outage must NEVER
-// break supplier search; it degrades to the live pipeline.
+// Supplier memory: L0 exact-match cache (search Tier-0).
+// spec_hash → previously-verified supplier row.
+// Gated by SEARCH_MEMORY_ENABLED; DB errors degrade to live pipeline.
 
 import { and, eq, gt, sql } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
@@ -25,18 +8,15 @@ import { supplierMemory } from '@/lib/db/schema';
 import type { ParsedSpec } from '@/lib/ai-agent/schemas/query-plan';
 import { specHash } from './spec-hash';
 
-// ---------------------------------------------
-// Configuration
-// ---------------------------------------------
+// --- Configuration ---
 
-/** Master switch — when false, lookupMemory always misses (live pipeline runs). */
+/** Master switch — false means lookupMemory always misses. */
 export function isMemoryEnabled(): boolean {
   const v = (process.env.SEARCH_MEMORY_ENABLED ?? '').toLowerCase();
   return v === '1' || v === 'true' || v === 'on';
 }
 
-/** Independent switch for the write path so writes can warm the table while
- *  reads stay disabled. Defaults to the master switch when unset. */
+/** Write-path switch; defaults to master switch when unset. */
 export function isMemoryWriteEnabled(): boolean {
   const raw = process.env.SEARCH_MEMORY_WRITE;
   if (raw === undefined) return isMemoryEnabled();
@@ -44,23 +24,21 @@ export function isMemoryWriteEnabled(): boolean {
   return v === '1' || v === 'true' || v === 'on';
 }
 
-/** Freshness window — a hit older than this is treated as a miss (re-sourced). */
+/** Hit older than TTL is treated as a miss. */
 function ttlDays(): number {
   const raw = Number(process.env.SEARCH_MEMORY_TTL_DAYS);
   return Number.isFinite(raw) && raw > 0 ? raw : 30;
 }
 
-// ---------------------------------------------
-// Types
-// ---------------------------------------------
+// --- Types ---
 
-/** Tenant scope — supplied by the orchestrator from its WorkspaceContext. */
+/** Tenant scope from the orchestrator's WorkspaceContext. */
 export interface MemoryScope {
   companyId: number;
   userId: number;
 }
 
-/** The cached sourcing fields a memory hit returns (subset of ItemSourceRow). */
+/** Cached sourcing fields returned on a memory hit. */
 export interface MemoryHit {
   supplier_name: string;
   source_url: string;
@@ -73,7 +51,7 @@ export interface MemoryHit {
   pack_size: number;
 }
 
-/** The sourcing fields the orchestrator hands back to be remembered. */
+/** Sourcing fields passed to rememberSupplier. */
 export interface RememberInput {
   supplier_name: string;
   source_url: string;
@@ -86,16 +64,11 @@ export interface RememberInput {
   pack_size: number;
 }
 
-// ---------------------------------------------
-// Read — L0 exact-match (fresh only)
-// ---------------------------------------------
+// --- Read: L0 exact-match (fresh only) ---
 
 /**
- * Return FRESH cached supplier rows for this spec, or null on miss / disabled /
- * empty-spec / DB error. Never throws.
- *
- * A non-empty result means the orchestrator can skip the live pipeline for this
- * item entirely.
+ * Return fresh cached supplier rows, or null on miss/error.
+ * Non-empty result means the live pipeline can be skipped.
  */
 export async function lookupMemory(
   parsed: ParsedSpec,
@@ -104,7 +77,7 @@ export async function lookupMemory(
   if (!isMemoryEnabled()) return null;
 
   const hash = specHash(parsed);
-  if (!hash) return null; // under-specified spec — unsafe to key
+  if (!hash) return null; // under-specified spec
 
   const freshAfter = new Date(Date.now() - ttlDays() * 24 * 60 * 60 * 1000);
 
@@ -139,15 +112,12 @@ export async function lookupMemory(
   }
 }
 
-// ---------------------------------------------
-// Write — upsert on (company_id, spec_hash, source_url)
-// ---------------------------------------------
+// --- Write: upsert on (company_id, spec_hash, source_url) ---
 
 /**
- * Remember one sourced supplier row for this spec. Upserts on the unique
- * (company_id, spec_hash, source_url) key: a re-found vendor bumps hit_count and
- * refreshes last_verified_at + the cached fields. No-op when writes are disabled,
- * the spec is empty, or the row has no source_url. Never throws.
+ * Upsert one supplier row for this spec.
+ * Re-found vendor bumps hit_count and refreshes cached fields.
+ * No-op when writes disabled or source_url is empty. Never throws.
  */
 export async function rememberSupplier(
   parsed: ParsedSpec,
@@ -177,7 +147,7 @@ export async function rememberSupplier(
         availableQty: row.available_qty,
         sellingUnit: row.selling_unit,
         packSize: row.pack_size,
-        hitCount: 1,                 // creation counts as the first hit (re-finds increment)
+        hitCount: 1,                 // first hit; re-finds increment via onConflict
         lastVerifiedAt: new Date(),
       })
       .onConflictDoUpdate({

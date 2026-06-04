@@ -1,18 +1,9 @@
-/* ========================================================================
-   Search Telemetry — structured per-stage event emitter
-   ======================================================================== */
-// Builds and optionally logs a structured record for each named stage of the
-// supplier-search pipeline. Kept as a pure builder + thin side-effecting
-// wrapper so the builder is independently testable without console capture.
+/** Search telemetry — structured per-stage event emitter. */
+// Pure builder + thin side-effecting wrapper; builder is independently testable.
 //
-// Gate: when process.env.SEARCH_TELEMETRY === 'off' the emitter is silent;
-// any other value (including unset) enables output.
-//
-// SEARCH PHASE DASHBOARD TAP: every logSearchStage call ALSO fans the record out
-// to the 'search-progress' event-bus channel (mapped to a typed wire event), so
-// the live UI dashboard receives the same signal the console logs. This sink is
-// gated independently by SEARCH_PROGRESS_STREAM (only 'off' disables) and is fully
-// fail-safe — it never throws into the search pipeline.
+// Gate: SEARCH_TELEMETRY === 'off' silences console output.
+// SEARCH_PROGRESS_STREAM === 'off' disables the dashboard fan-out.
+// Both sinks are independent; dashboard fan-out is always fail-safe.
 
 import { AsyncLocalStorage } from 'async_hooks';
 import { eventBus } from '@/lib/event-bus';
@@ -24,7 +15,7 @@ import type {
   DashboardPageType,
 } from '@/types/search-progress';
 
-/** The discrete stages of the supplier-search pipeline. */
+/** Discrete stages of the supplier-search pipeline. */
 export type SearchStage =
   | 'query-gen'
   | 'raw-search'
@@ -40,16 +31,16 @@ export interface TelemetryRecord {
   [k: string]: unknown;
 }
 
-/** Maximum character length for any top-level string payload value. */
+/** Max character length for any top-level string value. */
 const MAX_STRING_LEN = 300;
 
-/** Maximum element count for any top-level array payload value. */
+/** Max element count for any top-level array value. */
 const MAX_ARRAY_LEN = 5;
 
 /**
- * Clamp a single top-level payload value:
- * - strings longer than 300 chars are truncated to 300 + '…'
- * - arrays longer than 5 elements are trimmed to 5 + a '…(+N more)' marker
+ * Clamp one top-level payload value:
+ * - strings > 300 chars truncated to 300 + '…'
+ * - arrays > 5 elements trimmed + '…(+N more)' marker
  */
 function clampValue(value: unknown): unknown {
   if (typeof value === 'string' && value.length > MAX_STRING_LEN) {
@@ -64,10 +55,7 @@ function clampValue(value: unknown): unknown {
 
 /**
  * Build a telemetry record for the given pipeline stage.
- *
- * - Always sets `ts` (new Date().toISOString()) and `stage`.
- * - Spreads the caller payload AFTER ts/stage so those two are always present.
- * - Clamps top-level string values to 300 chars and arrays to 5 elements.
+ * Always sets `ts` and `stage`; clamps strings to 300 and arrays to 5.
  */
 export function buildTelemetryRecord(
   stage: SearchStage,
@@ -84,33 +72,27 @@ export function buildTelemetryRecord(
   };
 }
 
-/* ========================================================================
-   Search Phase Dashboard — live progress stream (event-bus fan-out)
-   ======================================================================== */
-// The search pipeline runs items concurrently (Promise.all + pLimit) but always
-// within ONE request's async-context tree, so an AsyncLocalStorage store set via
-// enterWith() at the top of processSupplierSearch is inherited by every nested
-// extract/density emit without threading rfqId through dozens of call sites.
-// Concurrent requests get independent context trees, so two parallel runs never
-// cross-contaminate each other's rfqId/seq.
+// --- Search phase dashboard (event-bus fan-out) ---
+// Items run concurrently but within ONE request's async-context tree.
+// AsyncLocalStorage inherits rfqId into nested calls without threading it.
+// Concurrent requests get independent trees — no cross-contamination.
 
 interface SearchRunContext {
   rfqId: number;
-  /** Monotonic sequence — boxed so increments are visible across async hops. */
+  /** Monotonic sequence counter — boxed so increments cross async hops. */
   seqRef: { n: number };
 }
 
 const searchRunStore = new AsyncLocalStorage<SearchRunContext>();
 
-/** True unless the stream is explicitly turned off (mirrors the console gate). */
+/** True unless stream is explicitly turned off. */
 function streamEnabled(): boolean {
   return process.env.SEARCH_PROGRESS_STREAM !== 'off';
 }
 
 /**
- * Open the progress-stream context for one RFQ search run. Call ONCE at the top
- * of processSupplierSearch (after rfq_id is known). enterWith() scopes the store
- * to the current async execution and everything it spawns afterwards.
+ * Open progress-stream context for one RFQ run.
+ * Call once at top of processSupplierSearch after rfq_id is known.
  */
 export function enterSearchRun(rfqId: number): void {
   if (!streamEnabled()) return;
@@ -127,9 +109,8 @@ function publish(evt: SearchProgressEvent): void {
 }
 
 /**
- * Stamp the run envelope (rfqId/t/seq) onto a partial event and publish it.
- * No-ops when the stream is disabled OR no run context is active (an emit with
- * no rfqId can't be attributed to a dashboard, so it is dropped).
+ * Stamp run envelope (rfqId/t/seq) onto a partial event and publish.
+ * No-ops when stream disabled or no run context is active.
  */
 function emitWithCtx(body: SearchProgressBody): void {
   if (!streamEnabled()) return;
@@ -144,11 +125,11 @@ function emitWithCtx(body: SearchProgressBody): void {
   publish(evt);
 }
 
-// Small coercion helpers — telemetry payloads are loosely typed Record<string,unknown>.
+// Coercion helpers — payloads are loosely typed Record<string,unknown>.
 const num = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0);
 const str = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : String(v));
 
-/** Emit the run-open event (resets the client dashboard) and seed the context. */
+/** Emit run-open event; resets the client dashboard. */
 export function emitRunStart(
   itemsTotal: number,
   llmCap: number,
@@ -157,19 +138,19 @@ export function emitRunStart(
   emitWithCtx({ kind: 'run-start', itemsTotal, llmCap, visionCap });
 }
 
-/** Emit a URL-liveness classification (feeds the live/dead/blocked counters). */
+/** Emit URL-liveness classification (feeds live/dead/blocked counters). */
 export function emitLiveness(itemId: number, status: SourceStatus, host: string): void {
   emitWithCtx({ kind: 'liveness', itemId, status, host });
 }
 
-/** Emit a scraper-layer invocation tick (feeds the four left-hand budget bars). */
+/** Emit scraper-layer invocation tick (feeds budget bars). */
 export function emitLayer(itemId: number, layer: LayerId, track?: string): void {
   emitWithCtx({ kind: 'layer', itemId, layer, track });
 }
 
 /**
- * Map a console telemetry record to its typed wire event and publish. Pure
- * side-channel: wrapped so a mapping error can never escape into logSearchStage.
+ * Map a telemetry record to a typed wire event and publish.
+ * Mapping errors never escape into logSearchStage.
  */
 function emitSearchProgress(stage: SearchStage, payload: Record<string, unknown>): void {
   if (!streamEnabled()) return;
@@ -220,7 +201,7 @@ function emitSearchProgress(stage: SearchStage, payload: Record<string, unknown>
           exhausted: Boolean(payload.budget_exhausted),
         });
         break;
-      // 'persist' is folded into 'run-summary' — no dedicated UI event.
+      // 'persist' folds into 'run-summary' — no dedicated UI event.
     }
   } catch {
     /* mapping failure must never break telemetry */
@@ -228,11 +209,9 @@ function emitSearchProgress(stage: SearchStage, payload: Record<string, unknown>
 }
 
 /**
- * Emit a telemetry record to stdout via console.log, prefixed with
- * '[search-telemetry] ', unless process.env.SEARCH_TELEMETRY === 'off'.
- *
- * Always fans the record out to the live dashboard stream FIRST (independently
- * gated), so disabling the console logs does not disable the UI.
+ * Emit a telemetry record to stdout via console.log.
+ * Silenced when SEARCH_TELEMETRY === 'off'.
+ * Always fans out to live dashboard first (independently gated).
  */
 export function logSearchStage(
   stage: SearchStage,

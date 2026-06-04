@@ -1,48 +1,26 @@
-/* ========================================================================
-   HTML Extract: Structured-data (canonical price) layer — Layer 2 of
-   the extraction cascade.
-
-   Operates on real page HTML (not plain text). Parses three structured
-   price sources — JSON-LD, Microdata, and OpenGraph — via cheerio so we
-   read the DOM tree rather than guessing at raw markup with regex.
-
-   Distinct from html-gate.ts, which runs fast regex passes on the raw
-   HTML string. This module runs AFTER the gate passes and produces a
-   single disambiguated price via the shared selectBestPrice util.
-   ======================================================================== */
+// HTML Extract: structured-data price layer (Layer 2).
 
 import * as cheerio from 'cheerio';
 import { selectBestPrice, type PriceCandidate, type SpecTokenInput } from './price-select';
 
-// =============================================
-// Public API
-// =============================================
+// --- Public API ---
 
 /** Canonical price extracted from structured HTML metadata. */
 export interface StructuredExtract {
   price: number;
   currency: string;
-  /** optional: 0..1 confidence of the selected price variant match. */
+  /** 0..1 confidence of the selected price variant. */
   confidence?: number;
 }
 
-// Cap HTML input to avoid runaway cheerio parse on multi-megabyte pages.
+// Cap HTML input to avoid runaway cheerio parse.
 const HTML_BYTE_CAP = 200_000;
 
-// =============================================
-// Helper: normalize a raw price token
-// =============================================
+// --- Helper: normalize a raw price token ---
 
 /**
  * Parse a raw price token with European/US format disambiguation.
  * Returns NaN when the token is not a valid number.
- *
- * Heuristic (robust for 2-decimal currency values):
- *   - Token ends in comma + exactly 2 digits  → European decimal-comma format.
- *     Remove all dots (thousands separators), replace trailing comma with dot.
- *     e.g. "1.234,56" → "1234.56"; "1234,56" → "1234.56"
- *   - Otherwise → US/ISO format: comma is thousands separator, remove it.
- *     e.g. "1,234.56" → "1234.56"; "500,000" → "500000"
  */
 function parsePrice(raw: string): number {
   const t = raw.trim();
@@ -55,28 +33,18 @@ function parsePrice(raw: string): number {
   return parseFloat(t.replace(/,/g, ''));
 }
 
-/**
- * Normalise a currency token: uppercase 3-letter ISO code or ''.
- */
+/** Normalise currency: uppercase 3-letter ISO code or ''. */
 function normCurrency(raw: string | undefined | null): string {
   if (!raw) return '';
   const upper = raw.trim().toUpperCase();
   return /^[A-Z]{3}$/.test(upper) ? upper : '';
 }
 
-// =============================================
-// Source A: JSON-LD
-// =============================================
+// --- Source A: JSON-LD ---
 
 /**
- * Walk a JSON-LD node (object or array) and collect PriceCandidates from
- * Product / Offer / AggregateOffer nodes. Handles nested @graph arrays.
- *
- * For Product nodes with hasVariant array: create one candidate per variant
- * using the variant's name/sku as context for matching.
- *
- * Called per <script type="application/ld+json"> block; wrapped in try/catch
- * by the caller so a malformed block doesn't abort the rest.
+ * Walk a JSON-LD node and collect PriceCandidates from
+ * Product/Offer/AggregateOffer nodes, including per-variant pairing.
  */
 function collectFromJsonLdNode(node: unknown, candidates: PriceCandidate[]): void {
   if (Array.isArray(node)) {
@@ -102,7 +70,7 @@ function collectFromJsonLdNode(node: unknown, candidates: PriceCandidate[]): voi
   const isProduct = /product/i.test(typeStr);
   const isOffer = /offer/i.test(typeStr);       // covers Offer + AggregateOffer
 
-  // Build a context string from name / sku / description on this node.
+  // Build context from name/sku/description on this node.
   const contextParts: string[] = [];
   for (const key of ['name', 'sku', 'description'] as const) {
     const v = obj[key];
@@ -110,11 +78,8 @@ function collectFromJsonLdNode(node: unknown, candidates: PriceCandidate[]): voi
   }
   const nodeContext = contextParts.join(' ').slice(0, 240);
 
-  // For an Offer/AggregateOffer node, pull price directly from this node.
+  // Offer/AggregateOffer: pull price directly; include lowPrice/highPrice.
   if (isOffer) {
-    // AggregateOffer may carry lowPrice and/or highPrice rather than (or alongside) price.
-    // Include highPrice as a candidate so selectBestPrice can pick by spec-token match
-    // rather than always defaulting to the lowest variant price.
     for (const priceKey of ['price', 'lowPrice', 'highPrice']) {
       const rawPrice = obj[priceKey];
       if (rawPrice !== undefined && rawPrice !== null) {
@@ -127,16 +92,15 @@ function collectFromJsonLdNode(node: unknown, candidates: PriceCandidate[]): voi
     }
   }
 
-  // For a Product node, handle variants and recurse into offers.
+  // Product: handle variants and recurse into offers.
   if (isProduct) {
-    // PER-VARIANT PAIRING: if the product has a hasVariant array,
-    // create one candidate per variant using that variant's name/sku as context.
+    // Per-variant pairing: one candidate per hasVariant entry.
     const variants = obj['hasVariant'];
     if (Array.isArray(variants)) {
       for (const variant of variants) {
         if (typeof variant === 'object' && variant !== null) {
           const variantObj = variant as Record<string, unknown>;
-          // Use variant name/sku as context for this variant candidate.
+          // Use variant name/sku as context.
           const variantContext: string[] = [];
           for (const key of ['name', 'sku'] as const) {
             const v = variantObj[key];
@@ -144,7 +108,6 @@ function collectFromJsonLdNode(node: unknown, candidates: PriceCandidate[]): voi
           }
           const variantCtx = variantContext.join(' ').slice(0, 240);
 
-          // If the variant has a price directly, use it.
           for (const priceKey of ['price', 'lowPrice', 'highPrice']) {
             const rawPrice = variantObj[priceKey];
             if (rawPrice !== undefined && rawPrice !== null) {
@@ -159,21 +122,21 @@ function collectFromJsonLdNode(node: unknown, candidates: PriceCandidate[]): voi
       }
     }
 
-    // Also handle offers array: each distinct offer could be a variant.
+    // Offers array: each offer as a potential variant.
     const offers = obj['offers'];
     if (offers !== null && offers !== undefined) {
       if (Array.isArray(offers)) {
-        // Multiple distinct offers: treat each as a potential variant.
+        // Multiple offers: treat each as a variant candidate.
         for (const offer of offers) {
           if (typeof offer === 'object' && offer !== null) {
             const offerObj = offer as Record<string, unknown>;
-            // For each offer in an array, use offer name/sku as variant context.
+            // Use offer name/sku as variant context.
             const offerContext: string[] = [];
             for (const key of ['name', 'sku'] as const) {
               const v = offerObj[key];
               if (typeof v === 'string' && v.trim()) offerContext.push(v.trim());
             }
-            // If no name/sku on the offer itself, fall back to product context.
+            // Fall back to product context if offer has no name/sku.
             const ctx = offerContext.length > 0 ? offerContext.join(' ') : nodeContext;
 
             for (const priceKey of ['price', 'lowPrice', 'highPrice']) {
@@ -189,17 +152,14 @@ function collectFromJsonLdNode(node: unknown, candidates: PriceCandidate[]): voi
           }
         }
       } else {
-        // Single offer object: recurse normally.
+        // Single offer: recurse normally.
         collectFromJsonLdNode(offers, candidates);
       }
     }
   }
 }
 
-/**
- * Source A — JSON-LD: parse every <script type="application/ld+json"> block
- * and collect price candidates from Product/Offer/AggregateOffer nodes.
- */
+/** Source A — JSON-LD: collect price candidates from all ld+json blocks. */
 function collectJsonLd(
   $: cheerio.CheerioAPI,
   candidates: PriceCandidate[],
@@ -211,18 +171,16 @@ function collectJsonLd(
       const parsed: unknown = JSON.parse(raw);
       collectFromJsonLdNode(parsed, candidates);
     } catch {
-      // Malformed JSON-LD — skip this block, continue with remaining ones.
+      // Malformed JSON-LD block — skip.
     }
   });
 }
 
-// =============================================
-// Source B: Microdata
-// =============================================
+// --- Source B: Microdata ---
 
 /**
- * Source B — Microdata: find [itemprop="price"] elements and pair them with a
- * nearby [itemprop="priceCurrency"]. Context = closest itemscope container text.
+ * Source B — Microdata: find [itemprop="price"] elements and
+ * pair with nearby priceCurrency. Context = itemscope text.
  */
 function collectMicrodata(
   $: cheerio.CheerioAPI,
@@ -233,14 +191,14 @@ function collectMicrodata(
       try {
         const $el = $(el);
 
-        // Value: prefer content attribute (meta/link elements), fall back to text.
+        // Prefer content attribute; fall back to text.
         const rawPrice = $el.attr('content') ?? $el.text();
         if (!rawPrice) return;
 
         const value = parsePrice(rawPrice);
         if (isNaN(value) || value <= 0) return;
 
-        // Currency: sibling or nearby [itemprop="priceCurrency"] within the closest itemscope.
+        // Currency from sibling or nearest itemscope.
         let currency = '';
         const $scope = $el.closest('[itemscope]');
         const $currencyEl = $scope.length
@@ -252,7 +210,7 @@ function collectMicrodata(
           currency = normCurrency(rawCurrency);
         }
 
-        // Context: closest itemscope container text, trimmed and capped.
+        // Context: nearest itemscope text, capped.
         const context = ($scope.length ? $scope.text() : '')
           .replace(/\s+/g, ' ')
           .trim()
@@ -260,21 +218,19 @@ function collectMicrodata(
 
         candidates.push({ value, currency, context });
       } catch {
-        // One malformed itemprop node — skip it.
+        // One malformed itemprop — skip it.
       }
     });
   } catch {
-    // Microdata traversal failed entirely — not fatal.
+    // Microdata traversal failed — not fatal.
   }
 }
 
-// =============================================
-// Source C: OpenGraph
-// =============================================
+// --- Source C: OpenGraph ---
 
 /**
- * Source C — OpenGraph: read product:price:amount + product:price:currency meta
- * tags. Context = document <title> text.
+ * Source C — OpenGraph: read product:price:amount + currency.
+ * Context = document <title>.
  */
 function collectOpenGraph(
   $: cheerio.CheerioAPI,
@@ -290,7 +246,7 @@ function collectOpenGraph(
     const rawCurrency = $('meta[property="product:price:currency"]').attr('content');
     const currency = normCurrency(rawCurrency);
 
-    // Use document title as context for disambiguation.
+    // Use document title as context.
     const context = $('title').first().text().replace(/\s+/g, ' ').trim().slice(0, 120);
 
     candidates.push({ value, currency, context });
@@ -299,20 +255,11 @@ function collectOpenGraph(
   }
 }
 
-// =============================================
-// Source D: data-price-amount (Firecrawl JS-rendered DOM)
-// =============================================
+// --- Source D: data-price-amount (Firecrawl JS-rendered DOM) ---
 
 /**
- * Source D — data-price-amount: Magento / WooCommerce rendered-DOM price
- * containers. Firecrawl returns JS-executed HTML where price nodes like
- * <span data-price-amount="5084.93" data-price-type="finalPrice"> are
- * directly accessible in the DOM. A plain fetch leaves these values inside
- * a <script> tag that Source A never sees.
- *
- * Priority: data-price-type="finalPrice" candidates are pushed first
- * (the customer-facing unit price); tier/special prices follow as secondary
- * candidates for selectBestPrice to compare against spec tokens.
+ * Source D — data-price-amount: Magento/WooCommerce rendered-DOM prices.
+ * finalPrice candidates pushed first; tier/special prices follow.
  */
 function collectDataPriceAmount(
   $: cheerio.CheerioAPI,
@@ -333,7 +280,7 @@ function collectDataPriceAmount(
 
         const priceType = $el.attr('data-price-type') ?? '';
 
-        // Context: nearest Schema.org Offer scope or price-box container.
+        // Context: nearest Offer scope or price-box container.
         const $scope = $el.closest('[itemprop="offers"], .price-box, .product-info-price');
         const context = ($scope.length ? $scope.text() : $el.parent().text())
           .replace(/\s+/g, ' ')
@@ -351,25 +298,18 @@ function collectDataPriceAmount(
       }
     });
 
-    // finalPrice candidates lead (most authoritative); tier/special prices follow.
+    // finalPrice leads; tier/special prices follow.
     candidates.push(...final, ...other);
   } catch {
     // Source D failure is not fatal.
   }
 }
 
-// =============================================
-// Structured metadata extraction (supplier name, description, etc.)
-// =============================================
+// --- Structured metadata extraction ---
 
 /**
- * Lightweight metadata fields extracted structurally from page HTML.
- * Used by the orchestrator to skip a per-page LLM call when all fields are present.
- *
- * - supplierName: best vendor/seller name available in structured data.
- * - description:  og:description → meta[name="description"] → JSON-LD Product.description → productName.
- * - siteName:     og:site_name → JSON-LD Organization/WebSite name → ''.
- * - productName:  JSON-LD Product.name → og:title → <title> → ''.
+ * Lightweight metadata extracted structurally from page HTML.
+ * Used to skip per-page LLM calls when all fields are present.
  */
 export interface HtmlMeta {
   supplierName: string;
@@ -378,28 +318,18 @@ export interface HtmlMeta {
   productName: string;
 }
 
-/** Trim, collapse whitespace, and cap a string to ~300 chars. */
+/** Trim, collapse whitespace, cap to ~300 chars. */
 function normMeta(v: string | undefined | null): string {
   if (!v) return '';
   return v.trim().replace(/\s+/g, ' ').slice(0, 300);
 }
 
 /**
- * Walk a JSON-LD node tree and extract supplier/site-name and product metadata.
- * Returns a partial HtmlMeta with fields populated from the best candidates found.
- *
- * Precedence per field (resolved after the full walk, not eagerly):
- *   supplierName: Offer.seller.name → Product.brand.name → top-level Organization.name
- *   siteName:     Organization.name or WebSite.name (top-level or @graph)
- *   productName:  Product.name
- *   description:  Product.description
- *
- * Wrapped in try/catch; on any error returns the partial result accumulated so far.
+ * Walk a JSON-LD node tree; extract supplier/site/product metadata.
+ * Precedence: Offer.seller > Product.brand > Organization for supplierName.
  */
 function extractMetaFromJsonLd(node: unknown): Partial<HtmlMeta> {
-  // Collect candidates at each precedence tier before resolving.
-  // Precedence tiers for supplierName (lower index = higher priority):
-  //   0 = Offer.seller.name, 1 = Product.brand.name, 2 = Organization.name
+  // supplierName precedence tiers: 0=seller, 1=brand, 2=org.
   const supplierTiers: [string, string, string] = ['', '', ''];
   let siteName    = '';
   let productName = '';
@@ -428,17 +358,16 @@ function extractMetaFromJsonLd(node: unknown): Partial<HtmlMeta> {
       const isSite    = typeStr.includes('website');
       const isOffer   = typeStr.includes('offer');
 
-      // Organization / WebSite — siteName candidates (tier 2 for supplierName).
+      // Organization/WebSite → siteName + tier-2 supplierName.
       if (isOrg || isSite) {
         const name = obj['name'];
         if (typeof name === 'string' && name.trim()) {
           if (!siteName) siteName = normMeta(name);
-          // Also fill tier-2 supplierName from org/site name.
           if (!supplierTiers[2]) supplierTiers[2] = normMeta(name);
         }
       }
 
-      // Offer — seller.name is tier-0 (highest priority) for supplierName.
+      // Offer → seller.name is tier-0 for supplierName.
       if (isOffer) {
         const seller = obj['seller'];
         if (typeof seller === 'object' && seller !== null) {
@@ -449,7 +378,7 @@ function extractMetaFromJsonLd(node: unknown): Partial<HtmlMeta> {
         }
       }
 
-      // Product — productName, description, brand.name (tier-1 supplierName).
+      // Product → productName, description, brand.name (tier-1).
       if (isProduct) {
         const name = obj['name'];
         if (typeof name === 'string' && name.trim()) {
@@ -484,7 +413,7 @@ function extractMetaFromJsonLd(node: unknown): Partial<HtmlMeta> {
 
     walk(node);
   } catch {
-    // Malformed structure — return whatever was accumulated.
+    // Malformed structure — return accumulated partial result.
   }
 
   // Resolve supplierName by precedence tier.
@@ -499,16 +428,9 @@ function extractMetaFromJsonLd(node: unknown): Partial<HtmlMeta> {
 }
 
 /**
- * Extract supplier/product metadata structurally from page HTML using cheerio.
- *
- * Sources (in precedence order per field — see HtmlMeta for field rules):
- *   - OpenGraph meta tags (og:site_name, og:title, og:description).
- *   - Standard meta[name="description"].
- *   - JSON-LD (Product, Offer, Organization, WebSite nodes).
- *   - <title> element (productName fallback).
- *
- * Never throws — on any error or empty html all fields return ''.
- * Input is capped to HTML_BYTE_CAP before parsing (same as extractFromHtml).
+ * Extract supplier/product metadata structurally from page HTML.
+ * Sources: OpenGraph → meta[name=description] → JSON-LD → <title>.
+ * Never throws; all fields return '' on error.
  */
 export function extractMetaFromHtml(html: string): HtmlMeta {
   const empty: HtmlMeta = { supplierName: '', description: '', siteName: '', productName: '' };
@@ -516,7 +438,7 @@ export function extractMetaFromHtml(html: string): HtmlMeta {
   if (!html) return empty;
 
   try {
-    // Cap input to bound cheerio parse cost on very large pages.
+    // Cap input to bound cheerio parse cost.
     const htmlChunk = html.slice(0, HTML_BYTE_CAP);
     const $ = cheerio.load(htmlChunk);
 
@@ -541,22 +463,22 @@ export function extractMetaFromHtml(html: string): HtmlMeta {
         if (!jsonLdMeta.productName  && partial.productName)  jsonLdMeta.productName  = partial.productName;
         if (!jsonLdMeta.description  && partial.description)  jsonLdMeta.description  = partial.description;
       } catch {
-        // Malformed JSON-LD block — skip and continue.
+        // Malformed JSON-LD block — skip.
       }
     });
 
     // --- Resolve per-field with stated precedence ---
 
-    // siteName: og:site_name → JSON-LD org/site name → ''.
+    // siteName: og:site_name → JSON-LD org/site → ''.
     const siteName = ogSiteName || jsonLdMeta.siteName || '';
 
     // productName: JSON-LD Product.name → og:title → <title> → ''.
     const productName = jsonLdMeta.productName || ogTitle || titleText || '';
 
-    // description: og:description → meta[name="description"] → JSON-LD Product.description → productName → ''.
+    // description: og:description → meta description → JSON-LD → productName.
     const description = ogDesc || metaDesc || jsonLdMeta.description || productName || '';
 
-    // supplierName: JSON-LD Offer.seller.name → Product.brand.name → Org.name → og:site_name → ''.
+    // supplierName: JSON-LD seller/brand/org → og:site_name → ''.
     const supplierName = jsonLdMeta.supplierName || siteName || '';
 
     return { supplierName, description, siteName, productName };
@@ -566,28 +488,18 @@ export function extractMetaFromHtml(html: string): HtmlMeta {
   }
 }
 
-// =============================================
-// Main: extractFromHtml
-// =============================================
+// --- Main: extractFromHtml ---
 
 /**
- * Parse structured-data price signals out of real page HTML.
- *
- * Sources tried (each independently, in parallel within the same cheerio pass):
- *   A. JSON-LD  — most authoritative; preferred when present. Includes per-variant pairing.
- *   B. Microdata — Schema.org itemprop annotations in the DOM.
- *   C. OpenGraph — product:price:amount / product:price:currency meta tags.
- *
- * All candidates are passed to selectBestPrice for spec-token-aware
- * disambiguation. Returns { price: 0, currency: '', confidence?: number } on any error or when
- * no valid price is found.
+ * Parse structured-data price signals from page HTML.
+ * Sources: A=JSON-LD, B=Microdata, C=OpenGraph, D=data-price-amount.
+ * Returns { price: 0, currency: '' } on error or no price found.
  */
 export function extractFromHtml(html: string, specTokens?: SpecTokenInput[]): StructuredExtract {
-  // Guard: missing input.
   if (!html) return { price: 0, currency: '' };
 
   try {
-    // Cap input to bound cheerio parse cost on very large pages.
+    // Cap input to bound cheerio parse cost.
     const htmlChunk = html.slice(0, HTML_BYTE_CAP);
 
     const $ = cheerio.load(htmlChunk);
@@ -603,7 +515,7 @@ export function extractFromHtml(html: string, specTokens?: SpecTokenInput[]): St
     // Source C: OpenGraph product price meta tags.
     collectOpenGraph($, candidates);
 
-    // Source D: data-price-amount (Firecrawl JS-rendered DOM price containers).
+    // Source D: data-price-amount (Firecrawl JS-rendered DOM).
     collectDataPriceAmount($, candidates);
 
     const best = selectBestPrice(candidates, specTokens);
@@ -621,33 +533,19 @@ export function extractFromHtml(html: string, specTokens?: SpecTokenInput[]): St
   }
 }
 
-// =============================================
-// Firecrawl metadata extraction
-// =============================================
+// --- Firecrawl metadata extraction ---
 
 /**
- * Extract supplier/product metadata from a Firecrawl DocumentMetadata object.
- *
- * Firecrawl strips <meta> and <script> tags from the rendered HTML but pre-parses
- * them into a metadata object. This function reads that object directly, covering
- * both the typed camelCase fields (ogTitle, ogSiteName) emitted by newer SDK
- * versions AND the colon-keyed strings (og:title, og:site_name) returned by the
- * live API (both forms observed in production; we check both to be safe).
- *
- * Field precedence mirrors extractMetaFromHtml:
- *   supplierName : og:site_name → ''
- *   description  : og:description → description → productName → ''
- *   siteName     : og:site_name → ''
- *   productName  : og:title → title → ''
- *
- * Never throws — on any error all fields return ''.
+ * Extract metadata from a Firecrawl DocumentMetadata object.
+ * Checks both camelCase (SDK) and colon-key (live API) forms.
+ * Never throws; all fields return '' on error.
  */
 export function extractMetaFromFirecrawl(metadata: Record<string, unknown>): HtmlMeta {
   const empty: HtmlMeta = { supplierName: '', description: '', siteName: '', productName: '' };
   if (!metadata || typeof metadata !== 'object') return empty;
 
   try {
-    // Read a field trying camelCase first (typed SDK), then colon-key (live API).
+    // Try camelCase (typed SDK) then colon-key (live API).
     const pick = (camel: string, colonKey: string): string =>
       normMeta(
         (metadata[camel] as string | undefined) ??
