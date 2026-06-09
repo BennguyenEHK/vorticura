@@ -24,11 +24,15 @@ const OUT_OF_STOCK_RE = /\b(out\s+of\s+stock|unavailable|discontinued|sold\s+out
 const UNIT_RE = /\b(pack\s+of\s+\d+|box\s+of\s+\d+|each|per\s+unit|single)\b/i;
 const MANUFACTURER_RE = /\b(?:brand|manufacturer|made\s+by)\s*:?\s*([A-Z][a-zA-Z0-9&\s\-]{1,35}?)(?=\s*[-,.|(\n]|$)/m;
 const ORIGIN_RE = /(?:made\s+in|country\s+of\s+origin\s*:?\s*|manufactured\s+in)\s*([A-Z][a-zA-Z\s]{2,24}?)(?=\s*[-.,\n]|$)/mi;
+const EMAIL_RE = /\b[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}\b/;
+const PHONE_RE = /(?:\+?\d[\d\s\-().]{6,}\d)/;
+const SOCIAL_RE = /https?:\/\/(?:www\.)?(?:facebook\.com|instagram\.com|linkedin\.com|twitter\.com|x\.com)\/[^\s"')>]+/i;
+const DELIVERY_RE = /\b(?:ships?\s+in|delivers?\s+in|delivery\s+(?:in|within)|dispatch(?:es)?\s+in|estimated\s+delivery\s*:?)\s*(\d+(?:\s*[-–]\s*\d+)?\s*(?:business\s+)?days?|\d+\s*(?:–|-)\s*\d+\s*weeks?)\b/i;
 
 void PRICE_RE; // declared for completeness, not used directly in extraction
 
-function extractFieldsFromMarkdown(text: string): Partial<Pick<EnrichedSource, 'in_stock' | 'unit' | 'manufacturer' | 'items_origin'>> {
-  const result: Partial<Pick<EnrichedSource, 'in_stock' | 'unit' | 'manufacturer' | 'items_origin'>> = {};
+function extractFieldsFromMarkdown(text: string): Partial<Pick<EnrichedSource, 'in_stock' | 'unit' | 'manufacturer' | 'items_origin' | 'contact_email' | 'contact_phone' | 'social_contact' | 'delivery_days'>> {
+  const result: Partial<Pick<EnrichedSource, 'in_stock' | 'unit' | 'manufacturer' | 'items_origin' | 'contact_email' | 'contact_phone' | 'social_contact' | 'delivery_days'>> = {};
   if (OUT_OF_STOCK_RE.test(text)) result.in_stock = false;
   else if (IN_STOCK_RE.test(text)) result.in_stock = true;
   const unitMatch = text.match(UNIT_RE);
@@ -37,6 +41,14 @@ function extractFieldsFromMarkdown(text: string): Partial<Pick<EnrichedSource, '
   if (mfgMatch) result.manufacturer = mfgMatch[1].trim();
   const originMatch = text.match(ORIGIN_RE);
   if (originMatch) result.items_origin = originMatch[1].trim();
+  const emailMatch = text.match(EMAIL_RE);
+  if (emailMatch) result.contact_email = emailMatch[0];
+  const phoneMatch = text.match(PHONE_RE);
+  if (phoneMatch) result.contact_phone = phoneMatch[0].trim();
+  const socialMatch = text.match(SOCIAL_RE);
+  if (socialMatch) result.social_contact = socialMatch[0];
+  const deliveryMatch = text.match(DELIVERY_RE);
+  if (deliveryMatch) result.delivery_days = deliveryMatch[0].trim();
   return result;
 }
 
@@ -77,8 +89,9 @@ async function planNextQuery(
 
 async function enrichWithMarkdown(source: EnrichedSource): Promise<EnrichedSource> {
   if (source._enriched) return source;
-  if (!source.directUrl) return { ...source, _enriched: true };
-  const fetched = await fetchAsMarkdown(source.directUrl);
+  const pageUrl = source.product_page_url ?? source.directUrl;
+  if (!pageUrl) return { ...source, _enriched: true };
+  const fetched = await fetchAsMarkdown(pageUrl);
   if (!fetched) return { ...source, _enriched: true };
   const fields = extractFieldsFromMarkdown(fetched.markdown);
   return {
@@ -87,6 +100,10 @@ async function enrichWithMarkdown(source: EnrichedSource): Promise<EnrichedSourc
     unit: source.unit ?? fields.unit ?? null,
     manufacturer: source.manufacturer ?? fields.manufacturer ?? null,
     items_origin: source.items_origin ?? fields.items_origin ?? null,
+    contact_email: source.contact_email ?? fields.contact_email ?? null,
+    contact_phone: source.contact_phone ?? fields.contact_phone ?? null,
+    social_contact: source.social_contact ?? fields.social_contact ?? null,
+    delivery_days: source.delivery_days ?? fields.delivery_days ?? null,
     _enriched: true,
   };
 }

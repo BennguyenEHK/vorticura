@@ -1,4 +1,4 @@
-import { fetchAsMarkdown } from './fetch-markdown';
+import { jinaFetch } from './jina-connector';
 import { callModel, extractJson, QWEN_MODEL } from '@/lib/ai-agent/qwen-client';
 import {
   FILL_SHOPPING_METADATA_PROMPT,
@@ -12,6 +12,11 @@ export interface FilledShoppingItem extends ShoppingItem {
   itemDescription: string | null;
   in_stock: boolean | null;
   items_origin: string | null;
+  product_page_url: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  social_contact: string | null;
+  delivery_days: string | null;
 }
 
 export interface EnrichedSource extends FilledShoppingItem {
@@ -19,7 +24,7 @@ export interface EnrichedSource extends FilledShoppingItem {
   _enriched?: boolean;
 }
 
-const META_FIELDS = ['manufacturer', 'itemDescription', 'in_stock', 'items_origin'] as const;
+const META_FIELDS = ['manufacturer', 'itemDescription', 'in_stock', 'items_origin', 'product_page_url', 'contact_email', 'contact_phone', 'social_contact', 'delivery_days'] as const;
 type MetaField = typeof META_FIELDS[number];
 
 interface MetaPatch {
@@ -27,6 +32,11 @@ interface MetaPatch {
   itemDescription?: string | null;
   in_stock?: boolean | null;
   items_origin?: string | null;
+  product_page_url?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  social_contact?: string | null;
+  delivery_days?: string | null;
 }
 
 async function qwenGapFill(
@@ -63,25 +73,35 @@ async function fillOne(
   item: ShoppingItem,
   itemDescription: string,
 ): Promise<FilledShoppingItem | null> {
-  const fetched = await fetchAsMarkdown(item.link);
+  const content = await jinaFetch(item.link);
 
   const filled: FilledShoppingItem = {
     ...item,
-    directUrl: fetched?.finalUrl ?? item.link,
+    directUrl: item.link,
     manufacturer: null,
     itemDescription: null,
     in_stock: null,
     items_origin: null,
+    product_page_url: null,
+    contact_email: null,
+    contact_phone: null,
+    social_contact: null,
+    delivery_days: null,
   };
 
-  if (fetched) {
+  if (content) {
     const missing = META_FIELDS.filter(f => filled[f] == null) as MetaField[];
     if (missing.length > 0) {
-      const patch = await qwenGapFill(missing as string[], filled.directUrl, fetched.markdown);
+      const patch = await qwenGapFill(missing as string[], item.source, content);
       if (patch.manufacturer != null) filled.manufacturer = patch.manufacturer;
       if (patch.itemDescription != null) filled.itemDescription = patch.itemDescription;
       if (patch.in_stock != null) filled.in_stock = patch.in_stock;
       if (patch.items_origin != null) filled.items_origin = patch.items_origin;
+      if (patch.product_page_url != null) filled.product_page_url = patch.product_page_url;
+      if (patch.contact_email != null) filled.contact_email = patch.contact_email;
+      if (patch.contact_phone != null) filled.contact_phone = patch.contact_phone;
+      if (patch.social_contact != null) filled.social_contact = patch.social_contact;
+      if (patch.delivery_days != null) filled.delivery_days = patch.delivery_days;
     }
   }
 
