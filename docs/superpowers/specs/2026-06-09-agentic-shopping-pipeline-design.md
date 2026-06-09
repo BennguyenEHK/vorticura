@@ -66,19 +66,28 @@ fillShoppingMetadata(
   runId?: string
 ): Promise<FilledShoppingItem[]>
 ```
-- Single Qwen3.6 call, `thinking: false`
-- Does three things in one pass:
-  1. Removes obvious outliers (title/source clearly wrong product)
-  2. Fills metadata gaps: `manufacturer`, `itemDescription`, `in_stock`, `items_origin`
-  3. Infers `directUrl` per item from title + source name (Google Shopping link is a redirect)
-- Price field is **read-only** — prompt explicitly forbids overwriting it
-- Returns `FilledShoppingItem[]` (extends `ShoppingItem` + `{ directUrl: string | null }`)
+Mirrors inventory-scanner's `fillShoppingOne` pattern exactly but uses `fetchAsMarkdown`
+instead of Jina. Per item (batched 5 at a time, parallel within batch):
+
+1. `fetchAsMarkdown(item.link)` — Google Shopping link is an HTTP redirect; `fetch()`
+   follows it automatically. Returns `{ markdown, finalUrl }` where `finalUrl` is the
+   redirect destination = the actual product page URL.
+2. `qwenGapFill(missingFields, finalUrl, markdown)` — Qwen3.6 (`thinking: false`) reads
+   the markdown and fills only the missing fields from:
+   `['manufacturer', 'itemDescription', 'in_stock', 'items_origin']`
+3. `applyVerifyGate()` — discard sources whose itemDescription shares zero meaningful
+   words with the RFQ item description (hard discard; manufacturer mismatch is soft flag only)
+
+- `directUrl` = `finalUrl` from the redirect (not inferred by Qwen — resolved by fetch)
+- Price is **never overwritten** — Serper is authoritative
+- Returns `FilledShoppingItem[]` (extends `ShoppingItem` + `{ directUrl: string }`)
 
 ### `fetch-markdown.ts`
 ```
-fetchAsMarkdown(url: string, timeoutMs?: number): Promise<string | null>
+fetchAsMarkdown(url: string, timeoutMs?: number): Promise<{ markdown: string; finalUrl: string } | null>
 ```
 - Productionized port of `tools/agent-test/fetch-to-markdown.ts`
+- Returns **both** the cleaned markdown **and** `response.url` (final URL after redirect)
 - Cheerio noise removal (scripts, nav, ads, related products) → Turndown → markdown
 - `FETCH_MARKDOWN_MAX_CHARS = 12_000` cap (matches inventory-scanner's Jina budget)
 - Default timeout: 15s. Returns `null` on any failure (never throws).
@@ -100,20 +109,29 @@ reviewAttempt(
 ### `agentic-shopping-pipeline.ts`
 ```
 agenticShoppingPipeline(
-  item: RfqItem,
-  itemDescription: string,
+  itemDescription: string,          // company_description from rfq_items (customer raw text)
+  agentItemSummary: AgentItemSummary | null,  // structured AI analysis from analysis-actions
   runId?: string
 ): Promise<{ sources: EnrichedSource[]; rejected: RejectedSource[]; attempts: number }>
 ```
 Main loop orchestrator — see Section 3.
 
+`AgentItemSummary` comes from `analysis-actions.ts` output stored in
+`rfq_items.agent_item_summary`. The pipeline uses:
+- `identification[]` — part numbers, model numbers, exact item identifiers
+- `features[]` — technical specs / differentiators
+- `itemDescription` — the raw customer description text
+
 ### Prompt files (`lib/ai-agent/prompt/`)
-- `fill-shopping-metadata.ts` — system prompt: outlier removal rules, metadata field
-  extraction from shopping result signals, direct URL inference from merchant name + title,
-  explicit rule that price is never overwritten, JSON output schema
+- `fill-shopping-metadata.ts` — system prompt: qwenGapFill rules, which fields to fill
+  (manufacturer / itemDescription / in_stock / items_origin), price-is-read-only rule,
+  JSON patch output schema `{ manufacturer?, itemDescription?, in_stock?, items_origin? }`
 - `shopping-review.ts` — system prompt: match sources against customer description,
   sufficiency criteria (retained ≥ 3, unique sources ≥ 2), rejection rules,
   next_query_hint format, JSON output schema
+- `plan-queries.ts` (existing, modified) — add `buildPlanSingleQueryMessage()` export
+  that accepts `{ itemDescription, identification, features, triedQueries, lastQueryHint }`
+  and includes a RE-SEARCH MODE block when `triedQueries.length > 0`
 
 ---
 
@@ -123,7 +141,7 @@ Main loop orchestrator — see Section 3.
 const TARGET_SOURCES = 3   // B2B context — fewer, higher-quality sources
 const MAX_ATTEMPTS   = 5   // safety cap; primary exit is sufficient=true
 
-agenticShoppingPipeline(item, itemDescription, runId):
+agenticShoppingPipeline(itemDescription, agentItemSummary, runId):
   ctx = { triedQueries: [], lastQueryHint: null }
   allSources: EnrichedSource[] = []
   allRejected: RejectedSource[] = []
@@ -131,7 +149,9 @@ agenticShoppingPipeline(item, itemDescription, runId):
 
   while (true):
     // 1. Plan 1 query — Qwen3.6, thinking: true, temperature escalates on retry
-    query = planNextQuery(item, ctx)
+    //    Receives: raw description + identification[] + features[] from AgentItemSummary
+    //    + triedQueries + lastQueryHint so Qwen avoids repeats and follows the hint
+    query = planNextQuery(itemDescription, agentItemSummary, ctx)
     ctx.triedQueries.push(query)
     publishEvent(runId, { kind: 'search_query', attempt, query })
 
@@ -139,7 +159,9 @@ agenticShoppingPipeline(item, itemDescription, runId):
     rawItems = serperShoppingSearch(query)
     publishEvent(runId, { kind: 'search_urls', engine: 'Serper Shopping', ... })
 
-    // 3. Fill metadata + extract directUrl — Qwen3.6, thinking: false
+    // 3. Fill metadata via Jina-style fetch + Qwen gap-fill — thinking: false
+    //    fetchAsMarkdown follows Google Shopping redirect → real product page
+    //    directUrl = response.url (redirect destination), NOT inferred by Qwen
     filled = fillShoppingMetadata(rawItems, itemDescription, runId)
 
     // 4. Dedup by source name (lowest price wins on collision)
@@ -165,22 +187,30 @@ agenticShoppingPipeline(item, itemDescription, runId):
   return { sources: allSources, rejected: allRejected, attempts: attempt + 1 }
 ```
 
-`planNextQuery` uses `thinking: true` (per spec); temperature starts at 0.2 for
-attempt 0, steps to 0.4 for re-search attempts (same as inventory-scanner pattern).
+`planNextQuery(itemDescription, agentItemSummary, ctx)` — private function inside
+`agentic-shopping-pipeline.ts`. Calls `buildPlanSingleQueryMessage()` from
+`lib/ai-agent/prompt/plan-queries.ts` passing:
+- `itemDescription` (raw customer text)
+- `identification[]` + `features[]` from `agentItemSummary` (part numbers, specs)
+- `ctx.triedQueries` — RE-SEARCH MODE block added when non-empty
+- `ctx.lastQueryHint` — appended as "Data-reviewer hint" when present
+Calls `callQwen()` with `thinking: true`. Temperature: 0.2 on attempt 0, 0.4 on retry.
 
-`enrichWithMarkdown(source)`:
-1. Skip if `source.directUrl` is null or `source._enriched === true`
-2. `fetchAsMarkdown(source.directUrl)` → null on failure → return source unchanged
-3. `extractFromText(markdown)` via `html-extract.ts` regex layer
-4. Merge: regex fields fill null slots only — **price is never overwritten**
-5. Set `source._enriched = true`
+`enrichWithMarkdown(source)` — private function, idempotent:
+1. Skip if `source._enriched === true` (already processed in a prior loop iteration)
+2. `fetchAsMarkdown(source.directUrl)` → `{ markdown, finalUrl } | null`
+3. On null: return source unchanged
+4. `extractFromText(markdown)` via regex layer in `html-extract.ts`
+5. Merge: regex fields fill null slots only — **price is never overwritten**
+6. Set `source._enriched = true`
 
-`EnrichedSource` extends `FilledShoppingItem` with `{ _enriched?: boolean }` flag
-to prevent re-fetching items carried over from prior loop iterations.
+`EnrichedSource` extends `FilledShoppingItem` with `{ _enriched?: boolean }`.
 
-`planNextQuery` is a private function **inside `agentic-shopping-pipeline.ts`**
-(not exported). It uses the existing `lib/ai-agent/prompt/plan-queries.ts` prompt
-adapted for `count: 1` output, calls `callQwen()` with `thinking: true`.
+Note: `fillShoppingMetadata` already fetches each item's page via `fetchAsMarkdown`
+(step 3). `enrichWithMarkdown` (step 5) fetches `source.directUrl` which is that
+same resolved URL — a second fetch. This is intentional: step 3 fetches to fill
+metadata gaps immediately; step 5 re-fetches the now-confirmed URL for deeper regex
+extraction after dedup. Use `_enriched` to skip items already through step 5.
 
 ---
 
@@ -212,7 +242,8 @@ adapted for `count: 1` output, calls `callQwen()` with `thinking: true`.
 | File | Change |
 |------|--------|
 | `lib/ai-agent/ai-router.ts` | Delegate `aiChatCompletion()` body to `callQwen()` |
-| `lib/services/search/query-planner.ts` | Use `callQwen()` instead of `aiChatCompletion()` directly; keep `planQueries()` for non-shopping search paths |
+| `lib/services/search/query-planner.ts` | Use `callQwen()` instead of `aiChatCompletion()` |
+| `lib/ai-agent/prompt/plan-queries.ts` | Add `buildPlanSingleQueryMessage(itemDescription, agentItemSummary, ctx)` export alongside existing `buildPlanUserMessage`; includes RE-SEARCH MODE block + lastQueryHint injection |
 | `lib/services/search/index.ts` | Update re-exports: remove deleted files, add new ones |
 | `lib/actions/supplier-search-actions.ts` | Swap `gatherSourcesForItemParallel()` → `agenticShoppingPipeline()` |
 
