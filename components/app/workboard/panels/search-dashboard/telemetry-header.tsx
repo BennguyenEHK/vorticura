@@ -1,39 +1,46 @@
 // =============================================
-// TELEMETRY HEADER — lower-panel header row
+// TELEMETRY HEADER — compact-strip funnel counter row
 // =============================================
-// Left: section title. Right: total sources extracted + color-coded source
-// health indicators (live / dead / blocked).
+// Left: the neon "Live Telemetry Search" label. Right: the Serper → Jina → Qwen
+// funnel as tabular counters — items processed, then sources found → kept → priced.
 
 'use client';
 
 interface TelemetryHeaderProps {
-  sources: number;
-  live: number;
-  dead: number;
-  blocked: number;
-  timedOut: number;
+  itemsDone: number;
+  itemsTotal: number;
+  sourcesFound: number;
+  sourcesKept: number;
+  sourcesPriced: number;
 }
 
-function StatusDot({ color, count, label }: { color: string; count: number; label: string }) {
+function Counter({ label, value }: { label: string; value: string | number }) {
   return (
     <span className="flex items-center gap-1">
-      <span className={`inline-block h-2 w-2 rounded-full ${color}`} />
-      <span className="tabular-nums">{count}</span>
       <span className="text-muted-foreground">{label}</span>
+      <span className="tabular-nums">{value}</span>
     </span>
   );
 }
 
-export function TelemetryHeader({ sources, live, dead, blocked, timedOut }: TelemetryHeaderProps) {
+export function TelemetryHeader({
+  itemsDone,
+  itemsTotal,
+  sourcesFound,
+  sourcesKept,
+  sourcesPriced,
+}: TelemetryHeaderProps) {
   return (
-    <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
+    <div className="flex w-full items-center justify-between px-3 py-2">
       <span className="micro-label text-neon-cyan animate-neon-flicker">Live Telemetry Search</span>
       <div className="flex items-center gap-3 font-data text-xs text-foreground/80">
-        <span className="tabular-nums">Σ {sources} sources</span>
-        <StatusDot color="bg-neon-emerald" count={live} label="live" />
-        <StatusDot color="bg-red-500" count={dead} label="dead" />
-        <StatusDot color="bg-amber-400" count={blocked} label="blkd" />
-        <StatusDot color="bg-violet-500" count={timedOut} label="t/o" />
+        <Counter label="Items" value={`${itemsDone}/${itemsTotal}`} />
+        <span className="text-muted-foreground/40">·</span>
+        <Counter label="Found" value={sourcesFound} />
+        <span className="text-muted-foreground/40">·</span>
+        <Counter label="Kept" value={sourcesKept} />
+        <span className="text-muted-foreground/40">·</span>
+        <Counter label="Priced" value={sourcesPriced} />
       </div>
     </div>
   );

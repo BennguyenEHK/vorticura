@@ -1,8 +1,9 @@
 // =============================================
-// TEMPORAL PANEL — circular completion ring + isolated elapsed timer
+// TEMPORAL PANEL — compact completion ring + isolated elapsed timer
 // =============================================
-// Upper-right quadrant. The ElapsedTimer is a LEAF with its own 1 Hz interval so
-// the clock tick never re-renders the bars, ring, or log stream.
+// Left cell of the compact upper strip. Horizontal layout (ring + timer side by
+// side) so it fits the short strip without clipping. The ElapsedTimer is a LEAF
+// with its own 1 Hz interval so the clock tick never re-renders the ring or log.
 
 'use client';
 
@@ -16,7 +17,7 @@ function CircularRing({ pct }: { pct: number }) {
   const clamped = Math.min(100, Math.max(0, pct));
   const offset = circumference * (1 - clamped / 100);
   return (
-    <svg viewBox="0 0 120 120" className="w-28 h-28 -rotate-90">
+    <svg viewBox="0 0 120 120" className="w-16 h-16 -rotate-90">
       <circle cx="60" cy="60" r={r} fill="none" strokeWidth="6" className="stroke-border/40" />
       <circle
         cx="60"
@@ -54,21 +55,23 @@ function ElapsedTimer({ startedAt }: { startedAt: number | null }) {
 
 export function TemporalPanel({ pct, startedAt }: { pct: number; startedAt: number | null }) {
   return (
-    <div className="flex h-full w-1/2 flex-col items-center justify-center gap-1.5">
-      <div className="relative">
+    <div className="flex h-full items-center gap-3 px-1">
+      <div className="relative shrink-0">
         <CircularRing pct={pct} />
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="font-data tabular-nums text-2xl text-neon-emerald">
+          <span className="font-data tabular-nums text-sm text-neon-emerald">
             {Math.round(pct)}%
           </span>
         </div>
       </div>
-      <div className="flex items-center gap-1.5 micro-label text-neon-cyan">
-        <Clock className="w-3 h-3" />
-        <ElapsedTimer startedAt={startedAt} />
-        <span>elapsed</span>
+      <div className="flex flex-col gap-0.5">
+        <span className="micro-label text-muted-foreground">total completion</span>
+        <div className="flex items-center gap-1.5 micro-label text-neon-cyan">
+          <Clock className="w-3 h-3" />
+          <ElapsedTimer startedAt={startedAt} />
+          <span>elapsed</span>
+        </div>
       </div>
-      <span className="micro-label text-muted-foreground">total completion</span>
     </div>
   );
 }

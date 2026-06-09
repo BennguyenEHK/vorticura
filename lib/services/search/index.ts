@@ -5,7 +5,18 @@ export { reviewAttempt, type ReviewResult } from './shopping-review';
 export { agenticShoppingPipeline } from './agentic-shopping-pipeline';
 export { lookupMemory, rememberSupplier, type MemoryScope, type MemoryHit } from './supplier-memory';
 export { checkLivenessCached, clearLivenessCache } from './liveness';
-export { logSearchStage, enterSearchRun, emitRunStart, emitLiveness, emitLayer } from './telemetry';
+export {
+  enterSearchRun,
+  emitRunStart,
+  emitQuery,
+  emitSerper,
+  emitExtract,
+  emitDrop,
+  emitDedup,
+  emitReview,
+  emitDensity,
+  emitRunSummary,
+} from './telemetry';
 export { specHash } from './spec-hash';
 
 const HARD_JUNK_PREFIXES = [

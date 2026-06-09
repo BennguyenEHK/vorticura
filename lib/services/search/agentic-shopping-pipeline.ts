@@ -5,6 +5,7 @@ import { fetchAsMarkdown } from './fetch-markdown';
 import { reviewAttempt } from './shopping-review';
 import { callModel, extractJson, QWEN_MODEL } from '@/lib/ai-agent/qwen-client';
 import { PLAN_SINGLE_QUERY_PROMPT, buildPlanSingleQueryMessage } from '@/lib/ai-agent/prompt/plan-queries';
+import { emitQuery, emitSerper, emitDedup, emitReview } from '@/lib/services/search/telemetry';
 import type { AgentItemSummary } from '@/types/preview';
 
 export type { EnrichedSource };
@@ -50,6 +51,14 @@ function extractFieldsFromMarkdown(text: string): Partial<Pick<EnrichedSource, '
   const deliveryMatch = text.match(DELIVERY_RE);
   if (deliveryMatch) result.delivery_days = deliveryMatch[0].trim();
   return result;
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
 }
 
 function deduplicate(sources: EnrichedSource[]): EnrichedSource[] {
@@ -109,6 +118,7 @@ async function enrichWithMarkdown(source: EnrichedSource): Promise<EnrichedSourc
 }
 
 export async function agenticShoppingPipeline(
+  itemId: number,
   itemDescription: string,
   agentItemSummary: AgentItemSummary | null,
   runId?: string,
@@ -126,6 +136,7 @@ export async function agenticShoppingPipeline(
   while (true) {
     const query = await planNextQuery(itemDescription, agentItemSummary, ctx);
     ctx.triedQueries.push(query);
+    emitQuery(itemId, attempt + 1, query);
     console.log(`[shopping-pipeline] attempt=${attempt + 1} query="${query.slice(0, 80)}"`);
 
     const rawItems = await serperShoppingSearch(query).catch(err => {
@@ -133,9 +144,13 @@ export async function agenticShoppingPipeline(
       return [];
     });
 
-    const filled = await fillShoppingMetadata(rawItems, itemDescription);
+    const hosts = Array.from(new Set(rawItems.map(i => i.source || hostOf(i.link))));
+    emitSerper(itemId, rawItems.length, hosts);
+
+    const filled = await fillShoppingMetadata(itemId, rawItems, itemDescription);
     const enriched: EnrichedSource[] = filled.map(f => ({ ...f, unit: null }));
     allSources = deduplicate([...allSources, ...enriched]);
+    emitDedup(itemId, enriched.length, allSources.length);
 
     const limit = pLimit(3);
     allSources = await Promise.all(allSources.map(s => limit(() => enrichWithMarkdown(s))));
@@ -145,6 +160,7 @@ export async function agenticShoppingPipeline(
       itemDescription,
       { triedQueries: ctx.triedQueries, researchAttempt: ctx.researchAttempt },
     );
+    emitReview(itemId, sufficient, retained.length, sufficient ? undefined : (nextQueryHint ?? 'need more priced sources'));
     allSources = retained;
     allRejected.push(...rejected);
     ctx.lastQueryHint = nextQueryHint;

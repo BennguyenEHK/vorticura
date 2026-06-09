@@ -48,44 +48,62 @@ function ringPush(ring: LogLine[], line: LogLine): void {
   if (ring.length > LOG_CAP) ring.splice(0, ring.length - LOG_CAP);
 }
 
-/** Map a wire event to a rendered log line; null = not shown (e.g. layer ticks). */
+/** Map a wire event to a rendered, self-explanatory log line. */
 function toLogLine(e: SearchProgressEvent): LogLine | null {
   switch (e.kind) {
     case 'run-start':
-      return { id: e.seq, tag: 'RUN', text: `search started · ${e.itemsTotal} items`, tone: 'muted' };
-    case 'query-gen':
       return {
-        id: e.seq, tag: 'QUERY-GEN', itemId: e.itemId, tone: 'cyan',
-        text: `a/${e.attempt}  "${e.query}"`,
+        id: e.seq, tag: 'RUN', tone: 'muted',
+        text: `🚀 Supplier search started — generating queries for ${e.itemsTotal} RFQ line items`,
       };
-    case 'raw-search':
+    case 'query':
       return {
-        id: e.seq, tag: 'RAW-SEARCH', itemId: e.itemId, tone: 'sky',
-        text: `${e.snippets} snippets · tavily×${e.tavilyCalls}`,
+        id: e.seq, tag: 'QUERY', itemId: e.itemId, tone: 'cyan',
+        text: `🔍 Item ${e.itemId} attempt ${e.attempt} — searching Google Shopping for "${e.query}"`,
       };
-    case 'extract':
+    case 'serper':
+      return {
+        id: e.seq, tag: 'SERPER', itemId: e.itemId, tone: 'sky',
+        text: `🛒 Serper returned ${e.count} shopping results from ${e.hosts.slice(0, 3).join(', ')}${e.hosts.length > 3 ? '…' : ''} — fetching product pages`,
+      };
+    case 'extract': {
+      const priceLabel = e.price > 0 ? `${e.price} ${e.currency}` : 'quote required';
+      const stockLabel = e.inStock === true ? 'in stock' : e.inStock === false ? 'out of stock' : 'stock unknown';
       return {
         id: e.seq, tag: 'EXTRACT', itemId: e.itemId, tone: 'emerald',
-        text: `✓ ${e.track}  ${e.price > 0 ? `${e.price} ${e.currency}`.trim() : 'quote-required'}  ${e.pageType ?? ''}`.trim(),
+        text: `📤 Extracted from ${e.host}: ${priceLabel} · ${e.manufacturer ?? 'mfr n/a'} · origin ${e.origin ?? 'n/a'} · ${stockLabel}`,
       };
-    case 'liveness':
+    }
+    case 'drop':
       return {
-        id: e.seq, tag: 'LIVENESS', itemId: e.itemId,
-        tone: e.status === 'live' ? 'emerald' : e.status === 'dead' ? 'red' : e.status === 'timeout' ? 'violet' : 'amber',
-        text: `${e.status === 'live' ? '✓' : e.status === 'timeout' ? '⏱' : '✗'} ${e.status}  ${e.host}`,
+        id: e.seq, tag: 'DROP', itemId: e.itemId, tone: 'red',
+        text: `🚫 ${e.host} discarded — its product description matched none of the requested item's keywords`,
       };
+    case 'dedup':
+      return {
+        id: e.seq, tag: 'DEDUP', itemId: e.itemId, tone: 'violet',
+        text: `🧹 +${e.newCount} new pages scraped → ${e.totalCount} unique suppliers kept after dedup`,
+      };
+    case 'review':
+      return e.sufficient
+        ? {
+            id: e.seq, tag: 'REVIEW', itemId: e.itemId, tone: 'emerald',
+            text: `⚖️ Item ${e.itemId} sufficient — ${e.kept} priced sources gathered, stopping the search loop`,
+          }
+        : {
+            id: e.seq, tag: 'REVIEW', itemId: e.itemId, tone: 'amber',
+            text: `↩ Item ${e.itemId} not sufficient${e.reason ? ' — ' + e.reason : ''} — refining the query and retrying`,
+          };
     case 'density':
       return {
         id: e.seq, tag: 'DENSITY', itemId: e.itemId, tone: 'violet',
-        text: `have ${e.have} / need ${e.need}${e.have >= e.need ? '  ✓ floor met' : ''}`,
+        text: `📊 Item ${e.itemId}: gathered ${e.have} of ${e.need} required sources${e.have >= e.need ? ' ✓ floor met' : ''}`,
       };
     case 'run-summary':
       return {
-        id: e.seq, tag: 'RUN', tone: 'muted',
-        text: `done · ${e.itemsTotal} items · ${e.dropped} dropped${e.exhausted ? ' · budget exhausted' : ''}`,
+        id: e.seq, tag: 'DONE', tone: 'muted',
+        text: `🏁 Search complete — ${e.itemsTotal} items processed, ${e.dropped} weak sources dropped${e.exhausted ? ' (budget exhausted)' : ''}`,
       };
-    case 'layer':
-      return null; // invocation ticks feed the bars, not the log
   }
 }
 

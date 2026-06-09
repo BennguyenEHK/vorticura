@@ -6,9 +6,10 @@ import { modifyDatabase, type WriteFailure } from '@/lib/utils/databaseHandler';
 import { agenticShoppingPipeline, isProductPage, type EnrichedSource } from '@/lib/services/search';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
 import {
-  logSearchStage,
   enterSearchRun,
   emitRunStart,
+  emitDensity,
+  emitRunSummary,
 } from '@/lib/services/search/telemetry';
 import { clearLivenessCache } from '@/lib/services/search/liveness';
 import type { AgentItemSummary } from '@/types/preview';
@@ -116,7 +117,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
 
     enterSearchRun(rfq_id ?? 0);
     clearLivenessCache(); // reset per-run liveness cache
-    emitRunStart(itemRows.length, 5, 0);
+    emitRunStart(itemRows.length);
 
     // (3) Per-item agentic shopping pipeline.
     const rawItemResults = await Promise.all(
@@ -132,6 +133,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
           const summary = (row.agentItemSummary as AgentItemSummary | null) ?? null;
 
           const { sources, attempts } = await agenticShoppingPipeline(
+            baseItem.itemId,
             itemDescription,
             summary,
             rfq_id ? String(rfq_id) : undefined,
@@ -141,10 +143,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
             .filter((s) => isProductPage(s.directUrl))
             .map((s) => mapSourceToRow(baseItem.itemId, s));
 
-          logSearchStage('density-check', {
-            item_id: baseItem.itemId, attempt: attempts,
-            query: '(agentic-shopping)', have: rows.length, need: 3, source: 'shopping',
-          });
+          emitDensity(baseItem.itemId, rows.length, 3);
 
           return {
             result: { rows, tavilyCalls: 0, deadUrls: 0, attempts },
@@ -235,20 +234,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
 
     search_telemetry.write_failures = writeFailures;
 
-    logSearchStage('persist', {
-      rfq_id: rfq_id ?? null,
-      table: 'supplierItemStatus',
-      rows: finalItems.length,
-      failures: writeFailures,
-    });
-
-    logSearchStage('run-summary', {
-      rfq_id: rfq_id ?? null,
-      attempts_total, dropped_count,
-      items_total: itemRows.length,
-      rows_written: finalItems.length,
-      write_failures: writeFailures,
-    });
+    emitRunSummary(itemRows.length, dropped_count, false);
 
     return result;
   } catch (error) {

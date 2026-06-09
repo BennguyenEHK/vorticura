@@ -4,6 +4,7 @@ import {
   FILL_SHOPPING_METADATA_PROMPT,
   buildFillShoppingMetadataMessage,
 } from '@/lib/ai-agent/prompt/fill-shopping-metadata';
+import { emitDrop, emitExtract } from '@/lib/services/search/telemetry';
 import type { ShoppingItem } from './serper-shopping';
 
 export interface FilledShoppingItem extends ShoppingItem {
@@ -69,7 +70,16 @@ function shouldDiscard(filled: FilledShoppingItem, itemDescription: string): boo
   return itemWords.every(w => !descWords.has(w));
 }
 
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
 async function fillOne(
+  itemId: number,
   item: ShoppingItem,
   itemDescription: string,
 ): Promise<FilledShoppingItem | null> {
@@ -105,11 +115,25 @@ async function fillOne(
     }
   }
 
-  if (shouldDiscard(filled, itemDescription)) return null;
+  if (shouldDiscard(filled, itemDescription)) {
+    emitDrop(itemId, hostOf(item.link), 'no keyword match with requested item');
+    return null;
+  }
+  emitExtract(
+    itemId,
+    hostOf(item.link),
+    filled.price,
+    filled.currency,
+    filled.manufacturer,
+    filled.items_origin,
+    filled.in_stock,
+    null,
+  );
   return filled;
 }
 
 export async function fillShoppingMetadata(
+  itemId: number,
   items: ShoppingItem[],
   itemDescription: string,
 ): Promise<FilledShoppingItem[]> {
@@ -117,7 +141,7 @@ export async function fillShoppingMetadata(
   const results: FilledShoppingItem[] = [];
   for (let i = 0; i < items.length; i += BATCH) {
     const batch = items.slice(i, i + BATCH);
-    const settled = await Promise.allSettled(batch.map(item => fillOne(item, itemDescription)));
+    const settled = await Promise.allSettled(batch.map(item => fillOne(itemId, item, itemDescription)));
     for (const s of settled) {
       if (s.status === 'fulfilled' && s.value !== null) results.push(s.value);
     }

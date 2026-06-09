@@ -4,23 +4,29 @@
 // Gate: SEARCH_TELEMETRY === 'off' silences console output.
 // SEARCH_PROGRESS_STREAM === 'off' disables the dashboard fan-out.
 // Both sinks are independent; dashboard fan-out is always fail-safe.
+//
+// Mirrors the Serper → Jina → Qwen agentic-shopping flow. Each emit* helper
+// publishes one typed wire event to the dashboard AND (unless silenced) writes a
+// structured console record. The legacy layer/liveness emitters were removed
+// with the L1–L4 cascade.
 
 import { AsyncLocalStorage } from 'async_hooks';
 import { eventBus } from '@/lib/event-bus';
 import type {
   SearchProgressEvent,
   SearchProgressBody,
-  LayerId,
-  SourceStatus,
   DashboardPageType,
 } from '@/types/search-progress';
 
-/** Discrete stages of the supplier-search pipeline. */
+/** Discrete stages of the supplier-search pipeline (console-record tag). */
 export type SearchStage =
-  | 'query-gen'
-  | 'raw-search'
+  | 'run-start'
+  | 'query'
+  | 'serper'
   | 'extract'
-  | 'persist'
+  | 'drop'
+  | 'dedup'
+  | 'review'
   | 'density-check'
   | 'run-summary';
 
@@ -35,12 +41,12 @@ export interface TelemetryRecord {
 const MAX_STRING_LEN = 300;
 
 /** Max element count for any top-level array value. */
-const MAX_ARRAY_LEN = 5;
+const MAX_ARRAY_LEN = 8;
 
 /**
  * Clamp one top-level payload value:
  * - strings > 300 chars truncated to 300 + '…'
- * - arrays > 5 elements trimmed + '…(+N more)' marker
+ * - arrays > 8 elements trimmed + '…(+N more)' marker
  */
 function clampValue(value: unknown): unknown {
   if (typeof value === 'string' && value.length > MAX_STRING_LEN) {
@@ -55,7 +61,7 @@ function clampValue(value: unknown): unknown {
 
 /**
  * Build a telemetry record for the given pipeline stage.
- * Always sets `ts` and `stage`; clamps strings to 300 and arrays to 5.
+ * Always sets `ts` and `stage`; clamps strings to 300 and arrays to 8.
  */
 export function buildTelemetryRecord(
   stage: SearchStage,
@@ -125,99 +131,76 @@ function emitWithCtx(body: SearchProgressBody): void {
   publish(evt);
 }
 
-// Coercion helpers — payloads are loosely typed Record<string,unknown>.
-const num = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0);
-const str = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : String(v));
-
-/** Emit run-open event; resets the client dashboard. */
-export function emitRunStart(
-  itemsTotal: number,
-  llmCap: number,
-  visionCap: number,
-): void {
-  emitWithCtx({ kind: 'run-start', itemsTotal, llmCap, visionCap });
-}
-
-/** Emit URL-liveness classification (feeds live/dead/blocked counters). */
-export function emitLiveness(itemId: number, status: SourceStatus, host: string): void {
-  emitWithCtx({ kind: 'liveness', itemId, status, host });
-}
-
-/** Emit scraper-layer invocation tick (feeds budget bars). */
-export function emitLayer(itemId: number, layer: LayerId, track?: string): void {
-  emitWithCtx({ kind: 'layer', itemId, layer, track });
-}
-
-/**
- * Map a telemetry record to a typed wire event and publish.
- * Mapping errors never escape into logSearchStage.
- */
-function emitSearchProgress(stage: SearchStage, payload: Record<string, unknown>): void {
-  if (!streamEnabled()) return;
-  try {
-    switch (stage) {
-      case 'query-gen':
-        emitWithCtx({
-          kind: 'query-gen',
-          itemId: num(payload.item_id),
-          attempt: num(payload.attempt),
-          query: str(payload.query),
-          round: payload.round as number | undefined,
-        });
-        break;
-      case 'raw-search':
-        emitWithCtx({
-          kind: 'raw-search',
-          itemId: num(payload.item_id),
-          snippets: num(payload.snippets),
-          tavilyCalls: num(payload.tavilyCalls),
-        });
-        break;
-      case 'extract':
-        emitWithCtx({
-          kind: 'extract',
-          itemId: num(payload.item_id),
-          track: str(payload.track),
-          price: num(payload.bidder_unit_price),
-          currency: str(payload.currency_code),
-          sourceUrl: str(payload.source_url),
-          pageType: (payload.page_type as DashboardPageType | null) ?? null,
-        });
-        break;
-      case 'density-check':
-        emitWithCtx({
-          kind: 'density',
-          itemId: num(payload.item_id),
-          have: num(payload.have),
-          need: num(payload.need),
-          round: payload.round as number | undefined,
-        });
-        break;
-      case 'run-summary':
-        emitWithCtx({
-          kind: 'run-summary',
-          itemsTotal: num(payload.items_total),
-          dropped: num(payload.dropped_count),
-          exhausted: Boolean(payload.budget_exhausted),
-        });
-        break;
-      // 'persist' folds into 'run-summary' — no dedicated UI event.
-    }
-  } catch {
-    /* mapping failure must never break telemetry */
-  }
-}
-
-/**
- * Emit a telemetry record to stdout via console.log.
- * Silenced when SEARCH_TELEMETRY === 'off'.
- * Always fans out to live dashboard first (independently gated).
- */
-export function logSearchStage(
-  stage: SearchStage,
-  payload: Record<string, unknown>,
-): void {
-  emitSearchProgress(stage, payload);
+/** Console sink — structured record, silenced by SEARCH_TELEMETRY=off. */
+function logConsole(stage: SearchStage, payload: Record<string, unknown>): void {
   if (process.env.SEARCH_TELEMETRY === 'off') return;
   console.log('[search-telemetry] ' + JSON.stringify(buildTelemetryRecord(stage, payload)));
+}
+
+// ---------------------------------------------
+// Public emit helpers — one per dashboard event.
+// Each fans out to the live dashboard AND the console (independently gated).
+// ---------------------------------------------
+
+/** Run-open — resets the client dashboard. */
+export function emitRunStart(itemsTotal: number): void {
+  emitWithCtx({ kind: 'run-start', itemsTotal });
+  logConsole('run-start', { itemsTotal });
+}
+
+/** AI-generated Google-Shopping query for one item attempt. */
+export function emitQuery(itemId: number, attempt: number, query: string): void {
+  emitWithCtx({ kind: 'query', itemId, attempt, query });
+  logConsole('query', { item_id: itemId, attempt, query });
+}
+
+/** What Serper.dev returned: count + the result hosts. */
+export function emitSerper(itemId: number, count: number, hosts: string[]): void {
+  emitWithCtx({ kind: 'serper', itemId, count, hosts });
+  logConsole('serper', { item_id: itemId, count, hosts });
+}
+
+/** One source enriched by Jina + Qwen gap-fill. */
+export function emitExtract(
+  itemId: number,
+  host: string,
+  price: number,
+  currency: string,
+  manufacturer: string | null,
+  origin: string | null,
+  inStock: boolean | null,
+  pageType: DashboardPageType | null = null,
+): void {
+  emitWithCtx({ kind: 'extract', itemId, host, price, currency, manufacturer, origin, inStock, pageType });
+  logConsole('extract', { item_id: itemId, host, price, currency, manufacturer, origin, in_stock: inStock });
+}
+
+/** A source discarded because it did not match the requested item. */
+export function emitDrop(itemId: number, host: string, reason: string): void {
+  emitWithCtx({ kind: 'drop', itemId, host, reason });
+  logConsole('drop', { item_id: itemId, host, reason });
+}
+
+/** Dedup funnel after an attempt: new pages scraped → unique kept. */
+export function emitDedup(itemId: number, newCount: number, totalCount: number): void {
+  emitWithCtx({ kind: 'dedup', itemId, newCount, totalCount });
+  logConsole('dedup', { item_id: itemId, newCount, totalCount });
+}
+
+/** AI reviewer verdict for an item: stop (sufficient) or retry. */
+export function emitReview(itemId: number, sufficient: boolean, kept: number, reason?: string): void {
+  emitWithCtx({ kind: 'review', itemId, sufficient, kept, reason });
+  logConsole('review', { item_id: itemId, sufficient, kept, reason });
+}
+
+/** Per-item density floor check (have vs need). */
+export function emitDensity(itemId: number, have: number, need: number): void {
+  emitWithCtx({ kind: 'density', itemId, have, need });
+  logConsole('density-check', { item_id: itemId, have, need });
+}
+
+/** Run end summary. */
+export function emitRunSummary(itemsTotal: number, dropped: number, exhausted: boolean): void {
+  emitWithCtx({ kind: 'run-summary', itemsTotal, dropped, exhausted });
+  logConsole('run-summary', { items_total: itemsTotal, dropped_count: dropped, budget_exhausted: exhausted });
 }
