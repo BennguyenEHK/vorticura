@@ -285,6 +285,9 @@ async function fetchPreviewByType(
             requires_quote: item.requiresQuote === true,
             // Item-level identification (shared across all supplier rows of an item)
             item_identification: identificationByItem.get(Number(item.itemId)) ?? null,
+            // Supplier-level provenance (per-supplier — read directly from supplier_item_status)
+            item_origin: (item.itemOrigin as string | null) ?? null,
+            manufacturer: (item.manufacturer as string | null) ?? null,
           };
         }),
         rfq_id: rfqId,

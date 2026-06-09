@@ -42,6 +42,8 @@ interface ItemSourceRow {
   page_type: string;              // 'product' | 'tech_spec'
   extraction_confidence: string;  // provenance label
   item_identification?: string[];
+  item_origin?: string | null;
+  manufacturer?: string | null;
 }
 
 // --- Helpers ---

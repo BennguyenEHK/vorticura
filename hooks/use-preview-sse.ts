@@ -245,6 +245,8 @@ export function transformResultToDocument(result: ProcessorResult): DocumentData
             item_identification: Array.isArray(item.item_identification)
               ? (item.item_identification as string[])
               : null,
+            item_origin: (item.item_origin as string | null) ?? null,
+            manufacturer: (item.manufacturer as string | null) ?? null,
           };
         }),
       };

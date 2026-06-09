@@ -153,6 +153,9 @@ export interface SupplierSearchDocumentData {
     // Item-level identification (from rfq_items.agent_item_summary.identification) —
     // same for every supplier row of an item; rendered in the parent item row.
     item_identification: string[] | null;
+    // Item-level provenance (from rfq_items) — same for every supplier row of an item.
+    item_origin: string | null;
+    manufacturer: string | null;
   }>;
 }
 

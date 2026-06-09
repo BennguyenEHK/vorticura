@@ -503,6 +503,27 @@ export function SupplierSearchDocument({ data }: SupplierSearchDocumentProps) {
                 }
               </div>
 
+              {/* Product Provenance */}
+              {(selectedSupplier.item_origin || selectedSupplier.manufacturer) && (
+                <div>
+                  <h3 className="text-[11px] font-semibold text-gray-400 mb-1">Product Provenance</h3>
+                  <div className="space-y-1">
+                    {selectedSupplier.manufacturer && (
+                      <p className="text-[11px] text-gray-300">
+                        <span className="text-gray-500">Manufacturer:</span>{' '}
+                        <span className="text-purple-300">{selectedSupplier.manufacturer}</span>
+                      </p>
+                    )}
+                    {selectedSupplier.item_origin && (
+                      <p className="text-[11px] text-gray-300">
+                        <span className="text-gray-500">Origin:</span>{' '}
+                        <span className="text-cyan-300">{selectedSupplier.item_origin}</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Logistics & Contact */}
               <div>
                 <h3 className="text-[11px] font-semibold text-gray-400 mb-1">Logistics & Contact</h3>

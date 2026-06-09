@@ -465,6 +465,10 @@ export const supplierItemStatus = pgTable('supplier_item_status', {
   pageType: varchar('page_type', { length: 12 }).default('product'), // 'product' | 'tech_spec'
   extractionConfidence: varchar('extraction_confidence', { length: 16 }), // 'manual' | 'manual+llm' | 'llm' | ''
 
+  // Supplier product provenance (per-supplier — same item may ship from different origins)
+  itemOrigin: varchar('item_origin', { length: 150 }),
+  manufacturer: varchar('manufacturer', { length: 255 }),
+
   // Supplier contact information
   contactEmail: varchar('contact_email', { length: 255 }),  // Supplier's contact email
   contactPhone: varchar('contact_phone', { length: 50 }),   // Supplier's contact phone
