@@ -1,7 +1,20 @@
+import pLimit from 'p-limit';
+
 export interface ModelMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
 }
+
+// Global concurrency gate for ALL Qwen inference (HF + RunPod). HF allows 10
+// "units" of concurrent inference per user and each Qwen3.6-35B request costs 2
+// → only 5 can run at once. Parallel search (RAG_CONCURRENCY items × batched
+// metadata fills) fans out far past that and trips HTTP 429
+// "concurrency limit exceeded". This module-level limiter caps in-flight calls
+// below the ceiling (default 4 → 8 units, leaving headroom) so callers can keep
+// their natural fan-out; excess calls queue instead of erroring. Tune via
+// QWEN_MAX_CONCURRENCY.
+const QWEN_MAX_CONCURRENCY = Number(process.env.QWEN_MAX_CONCURRENCY) || 4;
+const qwenLimit = pLimit(QWEN_MAX_CONCURRENCY);
 
 export interface CallModelParams {
   model?: string;
@@ -27,6 +40,40 @@ export function extractThinking(raw: string): { thinking: string | null; text: s
   };
 }
 
+/**
+ * Best-effort repair of JSON truncated mid-structure (e.g. the model hit
+ * max_tokens, cutting output off partway through). Closes an unterminated
+ * string, drops a dangling trailing comma / "key": with no value, then appends
+ * the missing closing brackets in LIFO order. Returns the repaired string, or
+ * null if it still does not parse. Last-resort fallback only — well-formed JSON
+ * never reaches it.
+ */
+function closeTruncatedJson(s: string): string | null {
+  const closers: string[] = [];
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{') closers.push('}');
+    else if (ch === '[') closers.push(']');
+    else if (ch === '}' || ch === ']') closers.pop();
+  }
+  let out = s;
+  if (inString) out += '"';                       // close an unterminated string
+  out = out.replace(/,\s*$/, '');                 // drop a trailing comma
+  out = out.replace(/,?\s*"[^"]*"\s*:\s*$/, '');  // drop a dangling "key": with no value
+  out = out.replace(/,\s*$/, '');                 // and any comma that strip exposed
+  for (let i = closers.length - 1; i >= 0; i--) out += closers[i];
+  try { JSON.parse(out); return out; } catch { return null; }
+}
+
 export function extractJson<T>(raw: string): T | null {
   const cleaned = stripThinking(raw).trim();
   try { return JSON.parse(cleaned) as T; } catch { /* fall through */ }
@@ -35,6 +82,14 @@ export function extractJson<T>(raw: string): T | null {
   const end = noFence.lastIndexOf('}');
   if (start !== -1 && end > start) {
     try { return JSON.parse(noFence.slice(start, end + 1)) as T; } catch { /* fall through */ }
+  }
+  // Last resort: response was likely truncated mid-structure (model hit
+  // max_tokens). Repair by closing any open string/brackets and retry.
+  if (start !== -1) {
+    const repaired = closeTruncatedJson(noFence.slice(start));
+    if (repaired !== null) {
+      try { return JSON.parse(repaired) as T; } catch { /* fall through */ }
+    }
   }
   return null;
 }
@@ -64,13 +119,23 @@ async function tryRunPod(payload: Record<string, unknown>): Promise<string | nul
   });
   if (!res.ok) throw new Error(`RunPod HTTP ${res.status}`);
   const data = await res.json() as {
-    choices?: { message: { content?: string | null; reasoning_content?: string | null } }[];
+    choices?: { finish_reason?: string; message: { content?: string | null; reasoning_content?: string | null } }[];
   };
-  const msg = data.choices?.[0]?.message;
-  return msg ? buildRawContent(msg) : null;
+  const choice = data.choices?.[0];
+  if (choice?.finish_reason === 'length') {
+    console.warn(`[qwen-client] RunPod response truncated: finish_reason=length, max_tokens=${payload.max_tokens}. JSON may be incomplete.`);
+  }
+  return choice?.message ? buildRawContent(choice.message) : null;
 }
 
-async function getModelContent(params: CallModelParams): Promise<string> {
+// Public entry — every call routes through the global concurrency gate so the
+// total number of simultaneous HF/RunPod requests never exceeds the per-user
+// unit ceiling, regardless of how many callers fan out in parallel.
+function getModelContent(params: CallModelParams): Promise<string> {
+  return qwenLimit(() => getModelContentInner(params));
+}
+
+async function getModelContentInner(params: CallModelParams): Promise<string> {
   const {
     model = QWEN_MODEL,
     messages,
@@ -105,9 +170,15 @@ async function getModelContent(params: CallModelParams): Promise<string> {
       throw new Error(`HF HTTP ${res.status}${errBody ? ` — ${errBody.slice(0, 200)}` : ''}`);
     }
     const data = await res.json() as {
-      choices?: { message: { content?: string | null; reasoning_content?: string | null } }[];
+      choices?: { finish_reason?: string; message: { content?: string | null; reasoning_content?: string | null } }[];
     };
-    if (data.choices?.[0]) return buildRawContent(data.choices[0].message);
+    const choice = data.choices?.[0];
+    if (choice) {
+      if (choice.finish_reason === 'length') {
+        console.warn(`[qwen-client] response truncated: finish_reason=length, max_tokens=${payload.max_tokens}. JSON may be incomplete — raise the call's maxTokens or reduce batch size.`);
+      }
+      return buildRawContent(choice.message);
+    }
     throw new Error('HF returned no choices');
   } catch (err) {
     console.error('[qwen-client] HF failed → RunPod fallback:', err instanceof Error ? err.message : err);

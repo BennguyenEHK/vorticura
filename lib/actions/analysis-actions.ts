@@ -393,9 +393,16 @@ function normalizeAgentItemSummary(entry: Record<string, unknown>): AgentItemSum
   };
 }
 
+// Items enriched per LLM call. The enrich prompt emits 5 axes × up to 4 bullets
+// per item; batching small keeps each response's JSON well under the model's
+// token ceiling so it never truncates mid-object, regardless of RFQ size.
+const ENRICH_BATCH_SIZE = 3;
+
 /**
- * One LLM call enriches ALL items with a 4-axis functional summary.
- * Returns a Map keyed by item_id; items the model omitted simply won't be in it.
+ * Enriches ALL items with a 4-axis functional summary, batched across multiple
+ * LLM calls (ENRICH_BATCH_SIZE items each) so output never truncates on large
+ * RFQs. Returns a Map keyed by item_id; items the model omitted — or a whole
+ * chunk that failed — simply won't be in it (per-chunk failures are isolated).
  */
 async function enrichItemSummaries(
   analysisContent: string,
@@ -411,17 +418,32 @@ async function enrichItemSummaries(
     uom: it.company_requirement.uom || 'EA',
   }));
 
-  const raw = await aiChatCompletion<{ items?: Array<Record<string, unknown>> }>(
-    ENRICH_ITEMS_PROMPT,
-    buildEnrichItemsUserMessage(analysisContent, payload),
-    1200,
-  );
+  // Split into small chunks; process sequentially to avoid HF rate-limit bursts.
+  const chunks: (typeof payload)[] = [];
+  for (let i = 0; i < payload.length; i += ENRICH_BATCH_SIZE) {
+    chunks.push(payload.slice(i, i + ENRICH_BATCH_SIZE));
+  }
 
-  const arr = Array.isArray(raw?.items) ? raw.items : [];
-  for (const entry of arr) {
-    const id = Number(entry.item_id);
-    if (!Number.isFinite(id)) continue;
-    result.set(id, normalizeAgentItemSummary(entry));
+  for (const chunk of chunks) {
+    try {
+      const raw = await aiChatCompletion<{ items?: Array<Record<string, unknown>> }>(
+        ENRICH_ITEMS_PROMPT,
+        buildEnrichItemsUserMessage(analysisContent, chunk),
+        1400,
+      );
+      const arr = Array.isArray(raw?.items) ? raw.items : [];
+      for (const entry of arr) {
+        const id = Number(entry.item_id);
+        if (!Number.isFinite(id)) continue;
+        result.set(id, normalizeAgentItemSummary(entry));
+      }
+    } catch (err) {
+      // Isolated: a failed chunk only loses its own items, not the whole RFQ.
+      console.warn(
+        `[Analysis] enrich chunk failed (items ${chunk.map((c) => c.item_id).join(',')}), skipping:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
   }
   return result;
 }
