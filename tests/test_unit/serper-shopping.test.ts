@@ -1,36 +1,22 @@
-import { describe, it, expect } from 'vitest';
-import { parseShoppingPrice, parseShoppingItem } from '@/lib/services/search/serper-shopping';
+import assert from 'assert';
+import { parseShoppingPrice, parseShoppingItem } from '../../lib/services/search/serper-shopping.js';
 
-describe('parseShoppingPrice', () => {
-  it('parses USD dollar sign', () => {
-    expect(parseShoppingPrice('$49.99')).toEqual({ price: 49.99, currency: 'USD' });
-  });
-  it('parses Vietnamese dong', () => {
-    expect(parseShoppingPrice('₫37,084')).toEqual({ price: 37084, currency: 'VND' });
-  });
-  it('parses EUR', () => {
-    expect(parseShoppingPrice('€12.50')).toEqual({ price: 12.50, currency: 'EUR' });
-  });
-  it('parses ISO prefix', () => {
-    expect(parseShoppingPrice('AUD 89.50')).toEqual({ price: 89.50, currency: 'AUD' });
-  });
-  it('returns null for empty string', () => {
-    expect(parseShoppingPrice('')).toBeNull();
-  });
-  it('returns null for non-numeric', () => {
-    expect(parseShoppingPrice('call for price')).toBeNull();
-  });
-});
+console.log('Testing parseShoppingPrice...');
+assert.deepStrictEqual(parseShoppingPrice('$49.99'), { price: 49.99, currency: 'USD' });
+assert.deepStrictEqual(parseShoppingPrice('₫37,084'), { price: 37084, currency: 'VND' });
+assert.deepStrictEqual(parseShoppingPrice('€12.50'), { price: 12.50, currency: 'EUR' });
+assert.deepStrictEqual(parseShoppingPrice('AUD 89.50'), { price: 89.50, currency: 'AUD' });
+assert.strictEqual(parseShoppingPrice(''), null);
+assert.strictEqual(parseShoppingPrice('call for price'), null);
+console.log('✓ parseShoppingPrice passed');
 
-describe('parseShoppingItem', () => {
-  it('maps a valid item', () => {
-    const result = parseShoppingItem({
-      title: 'M8 Hex Nut', source: 'Bolt Depot',
-      link: 'https://google.com/shopping/redirect', price: '$2.99',
-    });
-    expect(result).toMatchObject({ source: 'Bolt Depot', price: 2.99, currency: 'USD' });
-  });
-  it('returns null when price is missing', () => {
-    expect(parseShoppingItem({ title: 'X', source: 'Y', link: 'Z', price: '' })).toBeNull();
-  });
-});
+console.log('Testing parseShoppingItem...');
+const item = parseShoppingItem({ title: 'M8 Hex Nut', source: 'Bolt Depot', link: 'https://google.com/shopping/redirect', price: '$2.99' });
+assert(item !== null);
+assert.strictEqual(item.source, 'Bolt Depot');
+assert.strictEqual(item.price, 2.99);
+assert.strictEqual(item.currency, 'USD');
+assert.strictEqual(parseShoppingItem({ title: 'X', source: 'Y', link: 'Z', price: '' }), null);
+console.log('✓ parseShoppingItem passed');
+
+console.log('✓ serper-shopping.test passed');
