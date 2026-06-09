@@ -36,8 +36,15 @@ function applyEvent(s: SearchDashboardState, e: SearchProgressEvent): void {
       break;
     case 'drop':
     case 'dedup':
-    case 'review':
       // No scalar state change — these drive the log narrative only.
+      break;
+    case 'review':
+      if (e.sufficient) {
+        // Optimistic mark: increment itemsDone immediately on sufficient review.
+        // The subsequent density event from processSupplierSearch will overwrite
+        // with the actual row count once the full pipeline completes.
+        s.density[e.itemId] = { have: 3, need: 3 };
+      }
       break;
     case 'density':
       s.density[e.itemId] = { have: e.have, need: e.need };
