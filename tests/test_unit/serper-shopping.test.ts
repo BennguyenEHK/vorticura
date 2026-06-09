@@ -13,9 +13,9 @@ console.log('✓ parseShoppingPrice passed');
 console.log('Testing parseShoppingItem...');
 const item = parseShoppingItem({ title: 'M8 Hex Nut', source: 'Bolt Depot', link: 'https://google.com/shopping/redirect', price: '$2.99' });
 assert(item !== null);
-assert.strictEqual(item.source, 'Bolt Depot');
-assert.strictEqual(item.price, 2.99);
-assert.strictEqual(item.currency, 'USD');
+assert.strictEqual(item!.source, 'Bolt Depot');
+assert.strictEqual(item!.price, 2.99);
+assert.strictEqual(item!.currency, 'USD');
 assert.strictEqual(parseShoppingItem({ title: 'X', source: 'Y', link: 'Z', price: '' }), null);
 console.log('✓ parseShoppingItem passed');
 
