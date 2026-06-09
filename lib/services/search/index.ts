@@ -3,7 +3,6 @@ export { fetchAsMarkdown, FETCH_MARKDOWN_MAX_CHARS } from './fetch-markdown';
 export { fillShoppingMetadata, type FilledShoppingItem, type EnrichedSource } from './fill-shopping-metadata';
 export { reviewAttempt, type ReviewResult } from './shopping-review';
 export { agenticShoppingPipeline } from './agentic-shopping-pipeline';
-export { getCachedSearch, setCachedSearch } from './cache';
 export { lookupMemory, rememberSupplier, type MemoryScope, type MemoryHit } from './supplier-memory';
 export { checkLivenessCached, clearLivenessCache } from './liveness';
 export { logSearchStage, enterSearchRun, emitRunStart, emitLiveness, emitLayer } from './telemetry';

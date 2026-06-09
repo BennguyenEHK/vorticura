@@ -18,7 +18,7 @@
 import { getData, updateData, insertData } from '@/lib/db/queries';
 import { buildSupplierItemStatusPayload } from '@/lib/utils/databaseHandler';
 import { aiChatCompletion } from '@/lib/ai-agent/ai-router';
-import { SUPPLIER_RESPOND_SYSTEM_PROMPT } from '@/lib/ai-agent/hf-client';
+import { RESPOND_SERVICES_PROMPT as SUPPLIER_RESPOND_SYSTEM_PROMPT } from '@/lib/ai-agent/prompt';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
 import type { WorkspaceContext } from '@/lib/middleware/workspace-context';
 
