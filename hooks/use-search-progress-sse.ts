@@ -69,15 +69,17 @@ function toLogLine(e: SearchProgressEvent): LogLine | null {
     case 'extract': {
       const priceLabel = e.price > 0 ? `${e.price} ${e.currency}` : 'quote required';
       const stockLabel = e.inStock === true ? 'in stock' : e.inStock === false ? 'out of stock' : 'stock unknown';
+      const layerTag = e.layer ? `[${e.layer}] ` : '';
+      const verb = e.layer === 'fetch-markdown' ? 'Enriched' : 'Extracted';
       return {
         id: e.seq, tag: 'EXTRACT', itemId: e.itemId, tone: 'emerald',
-        text: `📤 Extracted from ${e.host}: ${priceLabel} · ${e.manufacturer ?? 'mfr n/a'} · origin ${e.origin ?? 'n/a'} · ${stockLabel}`,
+        text: `📤 ${layerTag}${verb} from ${e.host}: ${priceLabel} · ${e.manufacturer ?? 'mfr n/a'} · origin ${e.origin ?? 'n/a'} · ${stockLabel}`,
       };
     }
     case 'drop':
       return {
         id: e.seq, tag: 'DROP', itemId: e.itemId, tone: 'red',
-        text: `🚫 ${e.host} discarded — its product description matched none of the requested item's keywords`,
+        text: `🚫 ${e.layer ? `[${e.layer}] ` : ''}${e.host} discarded — its product description matched none of the requested item's keywords`,
       };
     case 'dedup':
       return {

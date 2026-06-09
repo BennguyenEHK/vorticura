@@ -10,7 +10,7 @@ export async function jinaFetch(url: string): Promise<string | null> {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         Accept: 'text/plain',
-        'X-Return-Format': 'text',
+        'X-Return-Format': 'markdown',
         'X-Token-Budget': JINA_TOKEN_BUDGET,
       },
       signal: AbortSignal.timeout(JINA_TIMEOUT_MS),

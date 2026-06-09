@@ -160,7 +160,7 @@ export function emitSerper(itemId: number, count: number, hosts: string[]): void
   logConsole('serper', { item_id: itemId, count, hosts });
 }
 
-/** One source enriched by Jina + Qwen gap-fill. */
+/** One source enriched by the specified extraction layer. */
 export function emitExtract(
   itemId: number,
   host: string,
@@ -170,15 +170,16 @@ export function emitExtract(
   origin: string | null,
   inStock: boolean | null,
   pageType: DashboardPageType | null = null,
+  layer?: string,
 ): void {
-  emitWithCtx({ kind: 'extract', itemId, host, price, currency, manufacturer, origin, inStock, pageType });
-  logConsole('extract', { item_id: itemId, host, price, currency, manufacturer, origin, in_stock: inStock });
+  emitWithCtx({ kind: 'extract', itemId, host, price, currency, manufacturer, origin, inStock, pageType, layer });
+  logConsole('extract', { item_id: itemId, host, layer, price, currency, manufacturer, origin, in_stock: inStock });
 }
 
 /** A source discarded because it did not match the requested item. */
-export function emitDrop(itemId: number, host: string, reason: string): void {
-  emitWithCtx({ kind: 'drop', itemId, host, reason });
-  logConsole('drop', { item_id: itemId, host, reason });
+export function emitDrop(itemId: number, host: string, reason: string, layer?: string): void {
+  emitWithCtx({ kind: 'drop', itemId, host, reason, layer });
+  logConsole('drop', { item_id: itemId, host, layer, reason });
 }
 
 /** Dedup funnel after an attempt: new pages scraped → unique kept. */

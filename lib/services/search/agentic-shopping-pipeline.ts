@@ -5,7 +5,7 @@ import { fetchAsMarkdown } from './fetch-markdown';
 import { reviewAttempt } from './shopping-review';
 import { callModel, extractJson, QWEN_MODEL } from '@/lib/ai-agent/qwen-client';
 import { PLAN_SINGLE_QUERY_PROMPT, buildPlanSingleQueryMessage } from '@/lib/ai-agent/prompt/plan-queries';
-import { emitQuery, emitSerper, emitDedup, emitReview } from '@/lib/services/search/telemetry';
+import { emitQuery, emitSerper, emitDedup, emitReview, emitExtract } from '@/lib/services/search/telemetry';
 import type { AgentItemSummary } from '@/types/preview';
 
 export type { EnrichedSource };
@@ -96,14 +96,14 @@ async function planNextQuery(
   }
 }
 
-async function enrichWithMarkdown(source: EnrichedSource): Promise<EnrichedSource> {
+async function enrichWithMarkdown(source: EnrichedSource, itemId: number): Promise<EnrichedSource> {
   if (source._enriched) return source;
   const pageUrl = source.product_page_url ?? source.directUrl;
   if (!pageUrl) return { ...source, _enriched: true };
   const fetched = await fetchAsMarkdown(pageUrl);
   if (!fetched) return { ...source, _enriched: true };
   const fields = extractFieldsFromMarkdown(fetched.markdown);
-  return {
+  const enriched: EnrichedSource = {
     ...source,
     in_stock: source.in_stock ?? fields.in_stock ?? null,
     unit: source.unit ?? fields.unit ?? null,
@@ -115,6 +115,17 @@ async function enrichWithMarkdown(source: EnrichedSource): Promise<EnrichedSourc
     delivery_days: source.delivery_days ?? fields.delivery_days ?? null,
     _enriched: true,
   };
+  // Emit only when this layer actually contributed at least one new field.
+  const addedAny =
+    (fields.in_stock != null && source.in_stock == null) ||
+    (fields.unit != null && source.unit == null) ||
+    (fields.manufacturer != null && source.manufacturer == null) ||
+    (fields.items_origin != null && source.items_origin == null);
+  if (addedAny) {
+    const displayHost = source.source || hostOf(source.product_page_url ?? source.directUrl);
+    emitExtract(itemId, displayHost, enriched.price, enriched.currency, enriched.manufacturer, enriched.items_origin, enriched.in_stock, null, 'fetch-markdown');
+  }
+  return enriched;
 }
 
 export async function agenticShoppingPipeline(
@@ -153,7 +164,7 @@ export async function agenticShoppingPipeline(
     emitDedup(itemId, enriched.length, allSources.length);
 
     const limit = pLimit(3);
-    allSources = await Promise.all(allSources.map(s => limit(() => enrichWithMarkdown(s))));
+    allSources = await Promise.all(allSources.map(s => limit(() => enrichWithMarkdown(s, itemId))));
 
     const { sufficient, retained, rejected, nextQueryHint } = await reviewAttempt(
       allSources,
@@ -171,5 +182,19 @@ export async function agenticShoppingPipeline(
     attempt++;
   }
 
+  // Fallback: if every review pass wiped allSources, promote the best rejected candidates
+  // so at least some results reach the DB rather than silently writing nothing.
+  if (allSources.length === 0 && allRejected.length > 0) {
+    // Take up to TARGET_SOURCES rejected candidates sorted by price ascending (cheapest first).
+    allSources = allRejected
+      .filter(r => r.price > 0)
+      .sort((a, b) => a.price - b.price)
+      .slice(0, TARGET_SOURCES);
+    if (allSources.length > 0) {
+      console.warn(`[shopping-pipeline] item=${itemId} review rejected everything — falling back to ${allSources.length} best rejected candidates`);
+    }
+  }
+
+  console.log(`[shopping-pipeline] item=${itemId} done: sources=${allSources.length} rejected=${allRejected.length} attempts=${attempt + 1}`);
   return { sources: allSources, rejected: allRejected, attempts: attempt + 1 };
 }

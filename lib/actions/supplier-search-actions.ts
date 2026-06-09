@@ -143,6 +143,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
             .filter((s) => isProductPage(s.directUrl))
             .map((s) => mapSourceToRow(baseItem.itemId, s));
 
+          console.log(`[supplier-search] item=${baseItem.itemId} pipeline: sources=${sources.length} rows_after_filter=${rows.length}`);
           emitDensity(baseItem.itemId, rows.length, 3);
 
           return {
@@ -176,7 +177,7 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
     }));
 
     const totalDropped = beforeUrlGuards.length - productPageItems.length;
-    console.log(`[supplier-search] done rfq_id=${rfq_id} returned=${finalItems.length} dropped=${totalDropped}`);
+    console.log(`[supplier-search] done rfq_id=${rfq_id} returned=${finalItems.length} dropped=${totalDropped} (beforeUrlGuards=${beforeUrlGuards.length} productPageItems=${productPageItems.length})`);
 
     // Aggregate telemetry.
     const attempts_total = rawItemResults.reduce((sum, r) => sum + r.result.attempts, 0);

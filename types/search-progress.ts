@@ -59,9 +59,11 @@ export type SearchProgressBody =
       origin: string | null;
       inStock: boolean | null;
       pageType: DashboardPageType | null;
+      /** Which extraction layer produced this event: 'jina-qwen' | 'fetch-markdown' */
+      layer?: string;
     }
   // A source thrown out because it did not match the requested item.
-  | { kind: 'drop'; itemId: number; host: string; reason: string }
+  | { kind: 'drop'; itemId: number; host: string; reason: string; layer?: string }
   // Dedup funnel after an attempt: new pages scraped → unique kept.
   | { kind: 'dedup'; itemId: number; newCount: number; totalCount: number }
   // The AI reviewer's verdict for an item: stop (sufficient) or retry.

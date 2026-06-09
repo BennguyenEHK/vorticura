@@ -115,19 +115,21 @@ async function fillOne(
     }
   }
 
+  const displayHost = item.source || hostOf(item.link);
   if (shouldDiscard(filled, itemDescription)) {
-    emitDrop(itemId, hostOf(item.link), 'no keyword match with requested item');
+    emitDrop(itemId, displayHost, 'no keyword match with requested item', 'jina-qwen');
     return null;
   }
   emitExtract(
     itemId,
-    hostOf(item.link),
+    displayHost,
     filled.price,
     filled.currency,
     filled.manufacturer,
     filled.items_origin,
     filled.in_stock,
     null,
+    'jina-qwen',
   );
   return filled;
 }
