@@ -42,3 +42,25 @@ export function isProductPage(url: string): boolean {
     return false;
   }
 }
+
+/**
+ * Pick the URL to persist for a vetted shopping offer.
+ *
+ * Serper's /shopping `link` is ALWAYS a `google.com/search?ibp=oshop` redirect —
+ * never a merchant product URL — so `isProductPage` rejects 100% of them (path
+ * `/search`). Using it to GATE offers silently drops every result. Instead we use
+ * it only to UPGRADE the URL: prefer the merchant product page Qwen extracted from
+ * the page body when it looks like a real product URL, otherwise fall back to the
+ * (always-present) shopping redirect, which still resolves to the live offer.
+ *
+ * Relevance is already enforced upstream (keyword filter + AI reviewer), so an
+ * offer is never dropped here for its URL shape — only when it has no URL at all.
+ */
+export function bestSourceUrl(
+  productPageUrl: string | null | undefined,
+  directUrl: string | null | undefined,
+): string {
+  const ppu = (productPageUrl ?? '').trim();
+  if (ppu && isProductPage(ppu)) return ppu;
+  return (directUrl ?? '').trim() || ppu;
+}

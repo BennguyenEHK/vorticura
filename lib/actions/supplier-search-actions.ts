@@ -3,7 +3,7 @@
 import pLimit from 'p-limit';
 import { getData } from '@/lib/db/queries';
 import { modifyDatabase, type WriteFailure } from '@/lib/utils/databaseHandler';
-import { agenticShoppingPipeline, isProductPage, type EnrichedSource } from '@/lib/services/search';
+import { agenticShoppingPipeline, bestSourceUrl, type EnrichedSource } from '@/lib/services/search';
 import type { ProcessorInput, ProcessorResult } from '@/lib/utils/validator';
 import {
   enterSearchRun,
@@ -63,7 +63,7 @@ function mapSourceToRow(itemId: number, s: EnrichedSource): ItemSourceRow {
     item_id: itemId,
     supplier_id: 0,
     supplier_name: s.source,
-    source_url: s.directUrl,
+    source_url: bestSourceUrl(s.product_page_url, s.directUrl),
     status: 'active',
     delivery_time: '',
     bidder_description: s.itemDescription ?? s.title,
@@ -139,11 +139,12 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
             rfq_id ? String(rfq_id) : undefined,
           );
 
-          const rows = sources
-            .filter((s) => isProductPage(s.directUrl))
-            .map((s) => mapSourceToRow(baseItem.itemId, s));
+          // Every source here is a priced, AI-reviewed shopping offer → persist it.
+          // mapSourceToRow picks the best available URL (merchant page or the Serper
+          // shopping redirect); rows are only excluded later if they carry NO URL.
+          const rows = sources.map((s) => mapSourceToRow(baseItem.itemId, s));
 
-          console.log(`[supplier-search] item=${baseItem.itemId} pipeline: sources=${sources.length} rows_after_filter=${rows.length}`);
+          console.log(`[supplier-search] item=${baseItem.itemId} pipeline: sources=${sources.length} rows=${rows.length}`);
           emitDensity(baseItem.itemId, rows.length, 3);
 
           return {
@@ -157,8 +158,10 @@ export async function processSupplierSearch(input: ProcessorInput): Promise<Proc
 
     const beforeUrlGuards: ItemSourceRow[] = rawItemResults.flatMap((r) => r.result.rows);
 
-    // URL guard: drop rows without a real product page URL.
-    const productPageItems = beforeUrlGuards.filter((r) => isProductPage(r.source_url));
+    // Keep every vetted offer that carries a usable URL. (The old isProductPage
+    // path-heuristic was removed here: Serper shopping links are google.com/search
+    // redirects, so it dropped 100% of offers — the root cause of the empty writes.)
+    const productPageItems = beforeUrlGuards.filter((r) => r.source_url !== '');
 
     // (4) Assign supplier_id deterministically (item_id ASC, stable sort).
     const merged = [...productPageItems];

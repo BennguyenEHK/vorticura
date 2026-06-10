@@ -23,6 +23,7 @@ function applyEvent(s: SearchDashboardState, e: SearchProgressEvent): void {
       s.itemsTotal = e.itemsTotal;
       s.finished = false;
       s.density = {};
+      s.reviewedDone = {};
       break;
     case 'query':
       s.queriesFired += 1;
@@ -39,12 +40,10 @@ function applyEvent(s: SearchDashboardState, e: SearchProgressEvent): void {
       // No scalar state change — these drive the log narrative only.
       break;
     case 'review':
-      if (e.sufficient) {
-        // Optimistic mark: increment itemsDone immediately on sufficient review.
-        // The subsequent density event from processSupplierSearch will overwrite
-        // with the actual row count once the full pipeline completes.
-        s.density[e.itemId] = { have: 3, need: 3 };
-      }
+      // A "sufficient" verdict means the search loop finished this item. Record it
+      // separately from density so the per-item density event (which carries the raw
+      // source count for the bars) can never clobber the item's done status.
+      if (e.sufficient) s.reviewedDone[e.itemId] = true;
       break;
     case 'density':
       s.density[e.itemId] = { have: e.have, need: e.need };
@@ -55,14 +54,18 @@ function applyEvent(s: SearchDashboardState, e: SearchProgressEvent): void {
   }
 }
 
-/** Items that have reached (or exceeded) their density floor. */
-function countItemsAtFloor(s: SearchDashboardState): number {
-  let n = 0;
+/**
+ * Items considered done: those the reviewer deemed sufficient OR that reached
+ * their density floor. Unioned so neither signal can undo the other.
+ */
+function countItemsDone(s: SearchDashboardState): number {
+  const done = new Set<number>();
+  for (const id of Object.keys(s.reviewedDone)) done.add(Number(id));
   for (const id of Object.keys(s.density)) {
     const d = s.density[Number(id)];
-    if (d.have >= d.need) n += 1;
+    if (d.have >= d.need) done.add(Number(id));
   }
-  return n;
+  return done.size;
 }
 
 export function dashboardReducer(
@@ -75,6 +78,7 @@ export function dashboardReducer(
   const next: SearchDashboardState = {
     ...state,
     density: { ...state.density },
+    reviewedDone: { ...state.reviewedDone },
   };
 
   let sawSummary = false;
@@ -83,7 +87,7 @@ export function dashboardReducer(
     if (e.kind === 'run-summary') sawSummary = true;
   }
 
-  next.itemsDone = countItemsAtFloor(next);
+  next.itemsDone = countItemsDone(next);
   // MONOTONIC completion: density-floor coverage, snapped to 100 on summary.
   const floorPct = next.itemsTotal > 0 ? Math.round((next.itemsDone / next.itemsTotal) * 100) : 0;
   next.overallPct = sawSummary ? 100 : Math.max(state.overallPct, floorPct);

@@ -108,6 +108,8 @@ export interface SearchDashboardState {
   // INTERNAL — not rendered directly
   queriesFired: number;
   density: Record<number, { have: number; need: number }>;
+  /** Items the AI reviewer deemed sufficient — counted as done regardless of density. */
+  reviewedDone: Record<number, true>;
 }
 
 /** Fresh zeroed state — also the shape the reducer resets to on 'run-start'. */
@@ -123,5 +125,6 @@ export function initialDashboardState(): SearchDashboardState {
     sourcesPriced: 0,
     queriesFired: 0,
     density: {},
+    reviewedDone: {},
   };
 }
