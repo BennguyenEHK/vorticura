@@ -40,8 +40,9 @@ export function WorkboardProvider({ children }: { children: ReactNode }) {
       const saved = localStorage.getItem(WORKBOARD_LAYOUT_STORAGE_KEY);
       if (saved) {
         const { previewWidthPercent: pw, aiChatHeightPercent: ah } = JSON.parse(saved);
-        if (typeof pw === "number") setPreviewWidthPct(pw);
-        if (typeof ah === "number") setAIChatHeightPct(ah);
+        // Clamp on read so tampered/corrupted storage can't break the layout
+        if (typeof pw === "number") setPreviewWidthPct(Math.min(85, Math.max(30, pw)));
+        if (typeof ah === "number") setAIChatHeightPct(Math.min(50, Math.max(20, ah)));
       }
     } catch {
       // Corrupted storage — silently use defaults
