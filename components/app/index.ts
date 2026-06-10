@@ -13,8 +13,5 @@ export { DashboardTopBar } from "./topbar";
 // Dashboard card components
 export * from "./dashboard";
 
-// Workspace panel components
-export * from "./workspace";
-
 // Sidebar context provider
 export { SidebarProvider, useSidebar } from "./sidebar-provider";
