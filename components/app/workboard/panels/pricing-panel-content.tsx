@@ -13,9 +13,8 @@
 // - Apply/Reset actions with API integration
 
 import { useEffect } from "react";
-import { Loader2, AlertCircle, Undo2, Redo2, X } from "lucide-react";
+import { Loader2, AlertCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { usePreview } from "@/hooks/preview-context";
 import {
   PricingPanelProvider,
   usePricingPanel,
@@ -47,9 +46,6 @@ interface PricingPanelContentProps {
 function PricingPanelInner({ className = "" }: { className?: string }) {
   // Get state from context
   const { isLoading, error, items, warning, clearWarning } = usePricingPanel();
-  const { state: previewState, actions: previewActions } = usePreview();
-  const canUndo = previewState.history.length > 0;
-  const canRedo = previewState.future.length > 0;
 
   // Loading state
   if (isLoading) {
@@ -94,35 +90,11 @@ function PricingPanelInner({ className = "" }: { className?: string }) {
   return (
     <div className={`p-3 h-full flex flex-col ${className}`}>
       {/* Header section */}
-      <div className="mb-3 flex items-start justify-between">
-        <div>
-          <h3 className="text-sm font-medium text-foreground">Pricing Variables</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Configure per-item pricing with formula calculation
-          </p>
-        </div>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => previewActions.undo()}
-            disabled={!canUndo}
-            title={canUndo ? "Undo" : "Nothing to undo"}
-          >
-            <Undo2 className="w-3.5 h-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => previewActions.redo()}
-            disabled={!canRedo}
-            title={canRedo ? "Redo" : "Nothing to redo"}
-          >
-            <Redo2 className="w-3.5 h-3.5" />
-          </Button>
-        </div>
+      <div className="mb-3">
+        <h3 className="text-sm font-medium text-foreground">Pricing Variables</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Configure per-item pricing with formula calculation
+        </p>
       </div>
 
       {/* Search bar */}

@@ -8,7 +8,7 @@
 // Falls back to static placeholder list when no RFQ is loaded (e.g., dashboard).
 
 import { useState, useCallback } from "react";
-import { CheckCircle2, Circle, ArrowRight, Clock, Loader2, Undo2, Redo2 } from "lucide-react";
+import { CheckCircle2, Circle, ArrowRight, Clock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePreview } from "@/hooks/preview-context";
 import { useWorkflow } from "@/hooks/workflow-context";
@@ -33,10 +33,7 @@ export function WorkflowPanelContent({ className = "" }: { className?: string })
   const { steps }                                     = useWorkflow();   // live steps from context
   const rfqCtx                                        = useRFQContext();
   const rfqId                                         = rfqCtx?.rfqId;
-  const { state: previewState, actions: previewActions } = usePreview();
-
-  const canUndo = previewState.history.length > 0;
-  const canRedo = previewState.future.length > 0;
+  const { state: previewState } = usePreview();
 
   // Creates a DB audit snapshot when the user manually accepts a completed step
   const handleAccept = useCallback(async (step: WorkflowStep) => {
@@ -66,22 +63,9 @@ export function WorkflowPanelContent({ className = "" }: { className?: string })
 
   return (
     <div className={`p-4 h-full flex flex-col ${className}`}>
-      {/* Header + undo/redo controls */}
-      <div className="mb-4 flex items-start justify-between">
-        <div>
-          <h3 className="text-sm font-medium text-foreground">Current Stage</h3>
-          <p className="text-xs text-muted-foreground mt-1">Track RFQ processing progress</p>
-        </div>
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-7 w-7"
-            onClick={() => previewActions.undo()} disabled={!canUndo} title="Undo">
-            <Undo2 className="w-3.5 h-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7"
-            onClick={() => previewActions.redo()} disabled={!canRedo} title="Redo">
-            <Redo2 className="w-3.5 h-3.5" />
-          </Button>
-        </div>
+      <div className="mb-4">
+        <h3 className="text-sm font-medium text-foreground">Current Stage</h3>
+        <p className="text-xs text-muted-foreground mt-1">Track RFQ processing progress</p>
       </div>
 
       {/* Step list */}
