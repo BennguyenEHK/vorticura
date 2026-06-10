@@ -1,19 +1,13 @@
+// components/app/workboard/index.ts
 // =============================================
 // Workboard Components Barrel Export
 // =============================================
-// Central export file for workboard panel system
 
-// Context provider for workboard state management
+// Context provider + hook
 export { WorkboardProvider, useWorkboard } from "./workboard-provider";
 
-// Main grid layout component
-export { WorkboardGrid } from "./workboard-grid";
+// Main layout shell (replaces WorkboardGrid)
+export { WorkboardLayout } from "./workboard-layout";
 
-// Generic resizable/draggable panel wrapper
-export { WorkboardPanel } from "./workboard-panel";
-
-// Drop zone for AI Chat FAB
-export { WorkboardDropZone } from "./workboard-drop-zone";
-
-// Panel header with drag handle and controls
-export { PanelHeader } from "./panel-header";
+// Horizontal step progress component for workspace header
+export { WorkflowStepper } from "./workflow-stepper";
