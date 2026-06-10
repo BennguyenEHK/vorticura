@@ -10,7 +10,7 @@
 // right; everything aligned to the same baseline rule.
 
 import { useState, useEffect, useCallback } from "react";
-import { Search, Bell, ChevronDown, Moon, Sun, Menu } from "lucide-react";
+import { Search, Bell, ChevronDown, Moon, Sun, Menu, Sparkles } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ import { useSidebar } from "@/components/app/sidebar-provider";
 import { CommsHubTrigger, CommsHubDropdown } from "@/components/app/comms-hub";
 import { useCommsSSE, type CommsNotification } from "@/hooks/use-comms-sse";
 import { NotificationToast } from "@/components/app/notification-toast";
+import { useAIChat } from "@/components/app/ai-chat/ai-chat-provider";
 
 // =============================================
 // Top Bar Component
@@ -40,6 +41,8 @@ export function DashboardTopBar() {
   const { toggleSidebar } = useSidebar();
   // Notification state
   const [notifications, setNotifications] = useState<CommsNotification[]>([]);
+  // AI Assistant pane toggle (controls RightColumn AI pane from topbar)
+  const { state: aiChat, toggleOpen: toggleAI } = useAIChat();
 
   // Wait for hydration to complete before resolving theme icon
   useEffect(() => {
@@ -150,6 +153,25 @@ export function DashboardTopBar() {
                 onClose={() => setCommsOpen(false)}
               />
             </div>
+
+            {/* AI Assistant toggle — Sparkles icon, active state uses default variant */}
+            <Button
+              variant={aiChat.isOpen ? "default" : "ghost"}
+              size="icon"
+              onClick={toggleAI}
+              className="h-9 w-9 relative"
+              aria-label={aiChat.isOpen ? "Close AI Assistant" : "Open AI Assistant"}
+              title="AI Assistant"
+            >
+              <Sparkles className="h-4 w-4" />
+              {/* Unread dot — neon-cyan accent when there are unread messages */}
+              {aiChat.unreadCount > 0 && (
+                <span
+                  className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-neon-cyan"
+                  aria-hidden="true"
+                />
+              )}
+            </Button>
 
             {/* Notifications — bell with a small ember dot for unread */}
             <Button
