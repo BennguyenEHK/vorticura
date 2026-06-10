@@ -4,7 +4,7 @@ import {
   FILL_SHOPPING_METADATA_PROMPT,
   buildFillShoppingMetadataMessage,
 } from '@/lib/ai-agent/prompt/fill-shopping-metadata';
-import { emitDrop, emitExtract } from '@/lib/services/search/telemetry';
+import { emitExtract } from '@/lib/services/search/telemetry';
 import type { ShoppingItem } from './serper-shopping';
 
 export interface FilledShoppingItem extends ShoppingItem {
@@ -58,18 +58,6 @@ async function qwenGapFill(
   return extractJson<MetaPatch>(raw) ?? {};
 }
 
-function significantWords(s: string): string[] {
-  return s.toLowerCase().split(/\s+/).filter(w => w.length > 3);
-}
-
-function shouldDiscard(filled: FilledShoppingItem, itemDescription: string): boolean {
-  if (!filled.itemDescription) return false;
-  const descWords = new Set(significantWords(filled.itemDescription));
-  const itemWords = significantWords(itemDescription);
-  if (itemWords.length === 0) return false;
-  return itemWords.every(w => !descWords.has(w));
-}
-
 function hostOf(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, '');
@@ -82,7 +70,7 @@ async function fillOne(
   itemId: number,
   item: ShoppingItem,
   itemDescription: string,
-): Promise<FilledShoppingItem | null> {
+): Promise<FilledShoppingItem> {
   const content = await jinaFetch(item.link);
 
   const filled: FilledShoppingItem = {
@@ -116,10 +104,6 @@ async function fillOne(
   }
 
   const displayHost = item.source || hostOf(item.link);
-  if (shouldDiscard(filled, itemDescription)) {
-    emitDrop(itemId, displayHost, 'no keyword match with requested item', 'jina-qwen');
-    return null;
-  }
   emitExtract(
     itemId,
     displayHost,
@@ -145,7 +129,7 @@ export async function fillShoppingMetadata(
     const batch = items.slice(i, i + BATCH);
     const settled = await Promise.allSettled(batch.map(item => fillOne(itemId, item, itemDescription)));
     for (const s of settled) {
-      if (s.status === 'fulfilled' && s.value !== null) results.push(s.value);
+      if (s.status === 'fulfilled') results.push(s.value);
     }
   }
   return results;

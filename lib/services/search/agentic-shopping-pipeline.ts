@@ -5,7 +5,7 @@ import { fetchAsMarkdown } from './fetch-markdown';
 import { reviewAttempt } from './shopping-review';
 import { callModel, extractJson, QWEN_MODEL } from '@/lib/ai-agent/qwen-client';
 import { PLAN_SINGLE_QUERY_PROMPT, buildPlanSingleQueryMessage } from '@/lib/ai-agent/prompt/plan-queries';
-import { emitQuery, emitSerper, emitDedup, emitReview, emitExtract } from '@/lib/services/search/telemetry';
+import { emitQuery, emitSerper, emitDedup, emitReview, emitExtract, emitDrop } from '@/lib/services/search/telemetry';
 import type { AgentItemSummary } from '@/types/preview';
 
 export type { EnrichedSource };
@@ -100,6 +100,19 @@ async function enrichWithMarkdown(source: EnrichedSource, itemId: number): Promi
   if (source._enriched) return source;
   const pageUrl = source.product_page_url ?? source.directUrl;
   if (!pageUrl) return { ...source, _enriched: true };
+
+  // Skip the HTTP fetch when jina-qwen already populated every field this layer can fill.
+  const needsFetch =
+    source.in_stock == null ||
+    source.unit == null ||
+    source.manufacturer == null ||
+    source.items_origin == null ||
+    source.contact_email == null ||
+    source.contact_phone == null ||
+    source.social_contact == null ||
+    source.delivery_days == null;
+  if (!needsFetch) return { ...source, _enriched: true };
+
   const fetched = await fetchAsMarkdown(pageUrl);
   if (!fetched) return { ...source, _enriched: true };
   const fields = extractFieldsFromMarkdown(fetched.markdown);
@@ -120,7 +133,11 @@ async function enrichWithMarkdown(source: EnrichedSource, itemId: number): Promi
     (fields.in_stock != null && source.in_stock == null) ||
     (fields.unit != null && source.unit == null) ||
     (fields.manufacturer != null && source.manufacturer == null) ||
-    (fields.items_origin != null && source.items_origin == null);
+    (fields.items_origin != null && source.items_origin == null) ||
+    (fields.contact_email != null && source.contact_email == null) ||
+    (fields.contact_phone != null && source.contact_phone == null) ||
+    (fields.social_contact != null && source.social_contact == null) ||
+    (fields.delivery_days != null && source.delivery_days == null);
   if (addedAny) {
     const displayHost = source.source || hostOf(source.product_page_url ?? source.directUrl);
     emitExtract(itemId, displayHost, enriched.price, enriched.currency, enriched.manufacturer, enriched.items_origin, enriched.in_stock, null, 'fetch-markdown');
@@ -172,6 +189,11 @@ export async function agenticShoppingPipeline(
       { triedQueries: ctx.triedQueries, researchAttempt: ctx.researchAttempt },
     );
     emitReview(itemId, sufficient, retained.length, sufficient ? undefined : (nextQueryHint ?? 'need more priced sources'));
+    for (const r of rejected) {
+      const reason = r.reason?.trim()
+        || 'AI review could not confirm any relevance match for this source';
+      emitDrop(itemId, r.source || hostOf(r.product_page_url ?? r.directUrl ?? ''), reason, 'review');
+    }
     allSources = retained;
     allRejected.push(...rejected);
     ctx.lastQueryHint = nextQueryHint;

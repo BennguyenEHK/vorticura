@@ -27,11 +27,12 @@ A specific, actionable hint for the next search. Examples:
 - "search by material grade and dimensions rather than brand"
 
 ## Output format (strict JSON, no markdown)
-{"sufficient": true|false, "retained_ids": [0, 2, 3], "rejected_ids": [{"id": 1, "reason": "completely different product"}], "next_query_hint": "...or null"}
+{"sufficient": true|false, "retained_ids": [0, 2, 3], "rejected_ids": [{"id": 1, "reason": "source sells drilling equipment, not the requested M8 hex nut"}], "next_query_hint": "...or null"}
 
 RULES:
 - retained_ids + rejected_ids must account for ALL indices 0 to N-1
 - next_query_hint must be null when sufficient: true
+- Each rejection reason must be a clear sentence of 10–15 words describing exactly why the source was excluded
 - Return ONLY valid JSON`;
 
 export function buildShoppingReviewMessage(

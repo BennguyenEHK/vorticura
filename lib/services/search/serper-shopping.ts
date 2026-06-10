@@ -54,7 +54,7 @@ export async function serperShoppingSearch(query: string): Promise<ShoppingItem[
   const res = await fetch('https://google.serper.dev/shopping', {
     method: 'POST',
     headers: { 'X-API-KEY': key, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ q: query.trim(), num: 7 }),
+    body: JSON.stringify({ q: query.trim(), num: 7, gl: 'vn' }),
     signal: AbortSignal.timeout(15_000),
   });
   if (!res.ok) throw new Error(`Serper shopping failed: ${res.status} ${res.statusText}`);

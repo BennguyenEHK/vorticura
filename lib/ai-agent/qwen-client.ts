@@ -111,7 +111,7 @@ async function tryRunPod(payload: Record<string, unknown>): Promise<string | nul
   const rpModel = process.env.RUNPOD_REASONING_MODEL;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (process.env.RUNPOD_API_KEY) headers.Authorization = `Bearer ${process.env.RUNPOD_API_KEY}`;
-  const res = await fetch(`${url}/chat/completions`, {
+  const res = await fetch(`${url}/v1/chat/completions`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ ...payload, ...(rpModel ? { model: rpModel } : {}) }),
