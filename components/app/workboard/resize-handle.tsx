@@ -49,9 +49,9 @@ export function ResizeHandle({ direction, onResize, className = "" }: ResizeHand
       onMouseDown={handleMouseDown}
       className={`
         flex-shrink-0 group relative
-        ${isH ? "w-[5px] cursor-col-resize" : "h-[5px] cursor-row-resize"}
-        bg-rule-strong
-        hover:bg-neon-cyan/25 active:bg-neon-cyan/45
+        ${isH ? "w-2 cursor-col-resize" : "h-2 cursor-row-resize"}
+        bg-transparent
+        hover:bg-neon-cyan/15 active:bg-neon-cyan/35
         transition-colors duration-100
         ${className}
       `}

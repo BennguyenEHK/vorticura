@@ -42,30 +42,32 @@ export function RightColumn() {
   return (
     <div
       ref={containerRef}
-      className="flex flex-col h-full overflow-hidden border-l border-rule-strong"
+      className="flex flex-col h-full overflow-hidden"
     >
-      {/* AI Chat pane — top */}
+      {/* AI Chat pane — top; framed card with neon-glow hover on its border */}
       {aiChat.isOpen && (
         <div
           style={{ height: bothOpen ? `${aiChatHeightPercent}%` : "100%" }}
-          className="flex flex-col overflow-hidden min-h-0 flex-shrink-0"
+          className="flex flex-col overflow-hidden min-h-0 flex-shrink-0
+                     border border-rule-strong rounded-sm bg-vellum panel-neon-hover"
         >
           <AIChatPanel />
         </div>
       )}
 
-      {/* Vertical resize handle — only when both panes are open */}
+      {/* Vertical resize handle — transparent 8px drag zone between the two panes */}
       {bothOpen && (
         <ResizeHandle direction="vertical" onResize={handleVerticalResize} />
       )}
 
-      {/* Pricing pane — bottom */}
+      {/* Pricing pane — bottom; framed card with neon-glow hover on its border */}
       {pricingOpen && (
         <div
           style={{
             height: bothOpen ? `${100 - aiChatHeightPercent}%` : "100%",
           }}
-          className="flex flex-col overflow-hidden min-h-0 flex-1"
+          className="flex flex-col overflow-hidden min-h-0 flex-1
+                     border border-rule-strong rounded-sm bg-vellum panel-neon-hover"
         >
           <PricingPanelContent rfqId={activeRfqId} />
         </div>

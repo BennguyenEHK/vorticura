@@ -44,20 +44,21 @@ export function WorkboardLayout({ className = "" }: WorkboardLayoutProps) {
       {/* Seeds WorkflowContext + PreviewContext with DB data on mount */}
       <WorkspacePreviewHydrator />
 
-      {/* Dot-matrix ambient background via .workboard-grid utility class */}
+      {/* Dot-matrix ambient background; p-2 creates breathing room around panel frames */}
       <div
         ref={containerRef}
-        className={`workboard-grid flex overflow-hidden ${className}`}
+        className={`workboard-grid flex overflow-hidden p-2 ${className}`}
       >
-        {/* Preview pane — left side, expands to full width when right column is closed */}
+        {/* Preview pane — framed card with neon-glow hover on its border */}
         <div
           style={{ width: rightColumnOpen ? `${previewWidthPercent}%` : "100%" }}
-          className="flex flex-col overflow-hidden min-w-0 transition-[width] duration-200 ease-out"
+          className="flex flex-col overflow-hidden min-w-0 transition-[width] duration-200 ease-out
+                     border border-rule-strong rounded-sm bg-vellum panel-neon-hover"
         >
           <PreviewPanelContent />
         </div>
 
-        {/* Horizontal resize handle — only visible when right column is open */}
+        {/* Horizontal resize handle — transparent 8px drag zone between panels */}
         {rightColumnOpen && (
           <ResizeHandle
             direction="horizontal"
@@ -65,7 +66,7 @@ export function WorkboardLayout({ className = "" }: WorkboardLayoutProps) {
           />
         )}
 
-        {/* Right column — AI chat + pricing vertical stack */}
+        {/* Right column — contains individually-framed AI + pricing panels */}
         {rightColumnOpen && (
           <div
             style={{ width: `${100 - previewWidthPercent}%` }}
